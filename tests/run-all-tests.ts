@@ -508,6 +508,71 @@ async function runTestSuite() {
     'Test 22: Public leaderboard item contains countryCode (US)'
   );
 
+  // TEST 23: Live Activity Feed strictly excludes hidden or zero-bid listings
+  console.log('\n--- Test Case 23: Live Activity Feed filtering ---');
+  // Create an activity event for a hidden listing
+  const hiddenListing = await prisma.listing.create({
+    data: {
+      title: 'Test Hidden Startup',
+      destinationUrl: 'https://test-hidden-activity.com',
+      canonicalUrl: 'test-hidden-activity.com',
+      destinationType: 'website',
+      description: 'Hidden listing test',
+      categoryId: testCategory.id,
+      verifiedBid: 100,
+      status: 'hidden',
+    },
+  });
+
+  await prisma.activityEvent.create({
+    data: {
+      listingId: hiddenListing.id,
+      type: 'new_entry',
+      title: hiddenListing.title,
+      destinationType: 'website',
+      amount: 100,
+      rank: 99,
+      message: 'Test hidden activity message',
+    },
+  });
+
+  // Create an activity event for an active listing with verified bid
+  const activeListing = await prisma.listing.create({
+    data: {
+      title: 'Test Active Activity Startup',
+      destinationUrl: 'https://test-active-activity.com',
+      canonicalUrl: 'test-active-activity.com',
+      destinationType: 'website',
+      description: 'Active listing test',
+      categoryId: testCategory.id,
+      verifiedBid: 500,
+      status: 'active',
+    },
+  });
+
+  await prisma.activityEvent.create({
+    data: {
+      listingId: activeListing.id,
+      type: 'new_entry',
+      title: activeListing.title,
+      destinationType: 'website',
+      amount: 500,
+      rank: 1,
+      message: 'Test active activity message',
+    },
+  });
+
+  const { GET: activityGET } = await import('../src/app/api/activity/route');
+  const activityRes = await activityGET();
+  const activityData = await activityRes.json();
+  const hiddenInFeed = activityData.activities.some((a: { listingId: string }) => a.listingId === hiddenListing.id);
+  const activeInFeed = activityData.activities.some((a: { listingId: string }) => a.listingId === activeListing.id);
+
+  assert(
+    !hiddenInFeed && activeInFeed && activityRes.status === 200,
+    'Test 23: Live Activity feed strictly excludes hidden listings and includes active verified listings'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
   await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } });
