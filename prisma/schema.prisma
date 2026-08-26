@@ -1,5 +1,5 @@
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -33,7 +33,8 @@ model Listing {
   verifiedBid     Int             @default(0) @map("verified_bid") // Amount in cents (USD)
   currency        String          @default("usd")
   clickCount      Int             @default(0) @map("click_count")
-  status          String          @default("active") // active, hidden, flagged
+  status          String          @default("active") // active, hidden, flagged, pending_payment
+  isSpecial       Boolean         @default(false) @map("is_special") // Admin special / promotional listing
   
   // Optional social links
   socialWebsite   String?         @map("social_website")
