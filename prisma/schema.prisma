@@ -1,0 +1,137 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  icon      String?
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  listings  Listing[]
+
+  @@map("categories")
+}
+
+model Listing {
+  id              String          @id @default(cuid())
+  destinationUrl  String          @map("destination_url")
+  canonicalUrl    String          @unique @map("canonical_url")
+  destinationType String          @default("website") @map("destination_type") // website, instagram, youtube, x, other
+  title           String
+  description     String
+  logoUrl         String?         @map("logo_url")
+  categoryId      String          @map("category_id")
+  category        Category        @relation(fields: [categoryId], references: [id])
+  verifiedBid     Int             @default(0) @map("verified_bid") // Amount in cents (USD)
+  currency        String          @default("usd")
+  clickCount      Int             @default(0) @map("click_count")
+  status          String          @default("active") // active, hidden, flagged
+  
+  // Optional social links
+  socialWebsite   String?         @map("social_website")
+  socialInstagram String?         @map("social_instagram")
+  socialYoutube   String?         @map("social_youtube")
+  socialX         String?         @map("social_x")
+
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  bidReachedAt    DateTime        @default(now()) @map("bid_reached_at")
+
+  bids            Bid[]
+  payments        Payment[]
+  activityEvents  ActivityEvent[]
+  clicks          Click[]
+
+  @@index([verifiedBid(sort: Desc), bidReachedAt(sort: Asc)])
+  @@index([categoryId, verifiedBid(sort: Desc), bidReachedAt(sort: Asc)])
+  @@index([canonicalUrl])
+  @@index([status])
+  @@map("listings")
+}
+
+model Bid {
+  id              String    @id @default(cuid())
+  listingId       String    @map("listing_id")
+  listing         Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  amount          Int       // Incremental amount charged in cents
+  previousBid     Int       @default(0) @map("previous_bid") // Total bid in cents before this bid
+  newTotalBid     Int       @map("new_total_bid") // Total verified bid in cents after this bid
+  currency        String    @default("usd")
+  paymentProvider String    @default("cashfree") @map("payment_provider")
+  paymentId       String?   @map("payment_id") // Provider checkout session, order ID or payment ID
+  status          String    @default("pending") // pending, completed, failed, canceled
+  bidderEmail     String?   @map("bidder_email")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  payments        Payment[]
+
+  @@index([listingId])
+  @@index([paymentId])
+  @@map("bids")
+}
+
+model Payment {
+  id                String    @id @default(cuid())
+  listingId         String    @map("listing_id")
+  listing           Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  bidId             String?   @map("bid_id")
+  bid               Bid?      @relation(fields: [bidId], references: [id], onDelete: SetNull)
+  provider          String    @default("cashfree")
+  providerPaymentId String    @unique @map("provider_payment_id") // Cashfree Order ID or Payment ID for idempotency
+  amount            Int       // Amount in cents
+  currency          String    @default("usd")
+  status            String    // succeeded, failed, canceled, refunded
+  metadata          String?   // JSON string
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@index([listingId])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
+
+model ActivityEvent {
+  id              String    @id @default(cuid())
+  listingId       String    @map("listing_id")
+  listing         Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  type            String    // new_entry, climbed_rank, took_first, outbid
+  title           String
+  destinationType String    @default("website") @map("destination_type")
+  amount          Int       // in cents
+  rank            Int
+  message         String
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@index([listingId])
+  @@map("activity_events")
+}
+
+model Click {
+  id        String    @id @default(cuid())
+  listingId String    @map("listing_id")
+  listing   Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  ipHash    String    @map("ip_hash")
+  userAgent String?   @map("user_agent")
+  referrer  String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([listingId, createdAt])
+  @@index([ipHash, listingId, createdAt])
+  @@map("clicks")
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  role      String    @default("user") // admin, user
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@map("users")
+}
