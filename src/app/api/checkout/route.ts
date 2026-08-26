@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { validateAndFormatUrl, normalizeCanonicalUrl, detectDestinationType, sanitizeText } from '@/lib/url-utils';
-import { paymentProvider } from '@/lib/payments/cashfree-provider';
+import { razorpayProvider } from '@/lib/payments/razorpay-provider';
 import { MINIMUM_BID_CENTS, MINIMUM_INCREMENT_CENTS } from '@/lib/ranking';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { z } from 'zod';
@@ -187,18 +187,18 @@ export async function POST(request: NextRequest) {
         previousBid: currentVerifiedBidCents,
         newTotalBid: finalTargetTotalCents,
         currency: 'usd',
-        paymentProvider: 'cashfree',
+        paymentProvider: 'razorpay',
         status: 'pending',
         bidderEmail: data.bidderEmail || null,
       },
     });
 
-    // 4. Create Cashfree Checkout Order Session
+    // 4. Create Razorpay Checkout Order Session
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const successUrl = `${appUrl}/bid/success?session_id={CHECKOUT_SESSION_ID}&listing_id=${listing.id}`;
+    const successUrl = `${appUrl}/bid/success?session_id=${pendingBid.id}&listing_id=${listing.id}&bid_id=${pendingBid.id}`;
     const cancelUrl = `${appUrl}/bid/cancelled?listing_id=${listing.id}`;
 
-    const checkoutSession = await paymentProvider.createCheckoutSession({
+    const checkoutSession = await razorpayProvider.createCheckoutSession({
       listingId: listing.id,
       bidId: pendingBid.id,
       title: listing.title,
@@ -218,9 +218,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      provider: 'razorpay',
       checkoutUrl: checkoutSession.checkoutUrl,
       sessionId: checkoutSession.sessionId,
+      orderId: checkoutSession.orderId || checkoutSession.sessionId,
+      keyId: checkoutSession.keyId,
+      amount: chargeAmountCents,
+      currency: checkoutSession.currency || 'USD',
       listingId: listing.id,
+      listingTitle: listing.title,
       bidId: pendingBid.id,
       chargeAmountCents,
       targetTotalBidCents: finalTargetTotalCents,

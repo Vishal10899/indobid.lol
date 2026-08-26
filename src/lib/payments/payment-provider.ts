@@ -13,6 +13,11 @@ export interface CreateCheckoutParams {
 export interface CheckoutSessionResult {
   sessionId: string;
   checkoutUrl: string;
+  orderId?: string;
+  keyId?: string;
+  amount?: number;
+  currency?: string;
+  provider?: string;
 }
 
 export interface WebhookEventPayload {

@@ -5,11 +5,13 @@ export class RazorpayProvider implements PaymentProvider {
   private keyId: string;
   private keySecret: string;
   private webhookSecret: string;
+  private currency: string;
 
   constructor() {
-    this.keyId = process.env.RAZORPAY_KEY_ID || '';
-    this.keySecret = process.env.RAZORPAY_KEY_SECRET || '';
-    this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+    this.keyId = process.env.RAZORPAY_KEY_ID?.trim() || '';
+    this.keySecret = process.env.RAZORPAY_KEY_SECRET?.trim() || '';
+    this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || '';
+    this.currency = (process.env.RAZORPAY_CURRENCY?.trim() || 'USD').toUpperCase();
   }
 
   async createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult> {
@@ -18,6 +20,11 @@ export class RazorpayProvider implements PaymentProvider {
       const dummyOrderId = `order_${params.bidId.substring(0, 14)}`;
       return {
         sessionId: dummyOrderId,
+        orderId: dummyOrderId,
+        keyId: this.keyId || 'rzp_test_placeholder',
+        amount: params.chargeAmountCents,
+        currency: this.currency,
+        provider: 'razorpay',
         checkoutUrl: `${params.successUrl}&session_id=${dummyOrderId}`,
       };
     }
@@ -25,8 +32,8 @@ export class RazorpayProvider implements PaymentProvider {
     try {
       const authHeader = `Basic ${Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64')}`;
       const payload = {
-        amount: params.chargeAmountCents, // amount in smallest currency unit (cents or paise)
-        currency: 'USD',
+        amount: params.chargeAmountCents, // amount in smallest currency unit (cents / paise)
+        currency: this.currency,
         receipt: params.bidId.substring(0, 40),
         notes: {
           listingId: params.listingId,
@@ -55,6 +62,11 @@ export class RazorpayProvider implements PaymentProvider {
       const order = await response.json();
       return {
         sessionId: order.id,
+        orderId: order.id,
+        keyId: this.keyId,
+        amount: params.chargeAmountCents,
+        currency: this.currency,
+        provider: 'razorpay',
         checkoutUrl: `${params.successUrl}&session_id=${order.id}`,
       };
     } catch (error) {
@@ -98,7 +110,7 @@ export class RazorpayProvider implements PaymentProvider {
           listingId: notes.listingId,
           bidId: notes.bidId,
           amountCents: paymentEntity?.amount || orderEntity?.amount,
-          currency: paymentEntity?.currency || 'USD',
+          currency: paymentEntity?.currency || this.currency,
           customerEmail: paymentEntity?.email,
           metadata: notes,
           rawEvent: event,
@@ -112,3 +124,5 @@ export class RazorpayProvider implements PaymentProvider {
     }
   }
 }
+
+export const razorpayProvider = new RazorpayProvider();

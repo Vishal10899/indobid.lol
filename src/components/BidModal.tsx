@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ArrowRight, Minus, Plus, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
+import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
 
 interface Category {
   id: string;
@@ -208,7 +209,17 @@ export function BidModal({
         throw new Error(data.error || 'Failed to initialize checkout');
       }
 
-      window.location.href = data.checkoutUrl;
+      await launchRazorpayCheckout({
+        keyId: data.keyId,
+        orderId: data.orderId || data.sessionId,
+        amount: data.amount || data.chargeAmountCents,
+        currency: data.currency || 'USD',
+        listingId: data.listingId,
+        bidId: data.bidId,
+        listingTitle: data.listingTitle || title,
+        bidderEmail: bidderEmail || undefined,
+        checkoutUrl: data.checkoutUrl,
+      });
     } catch (err) {
       console.error('Modal checkout error:', err);
       setError(err instanceof Error ? err.message : 'Failed to redirect to checkout');
@@ -263,8 +274,9 @@ export function BidModal({
             <div className="flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg p-1">
               <button
                 type="button"
-                onClick={() => handleAdjustBid(-25)}
+                onClick={() => handleAdjustBid(-1)}
                 className="w-7 h-7 rounded bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
+                aria-label="Decrease bid by $1"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -276,14 +288,15 @@ export function BidModal({
                   value={targetBidDollars > 0 ? targetBidDollars.toLocaleString() : ''}
                   onChange={handleDirectBidChange}
                   className="w-20 bg-transparent text-[var(--text-primary)] font-bold text-base text-center focus:outline-none"
-                  placeholder="0"
+                  placeholder="2"
                 />
               </div>
 
               <button
                 type="button"
-                onClick={() => handleAdjustBid(25)}
+                onClick={() => handleAdjustBid(1)}
                 className="w-7 h-7 rounded bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
+                aria-label="Increase bid by $1"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>

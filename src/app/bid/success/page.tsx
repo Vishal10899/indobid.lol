@@ -30,8 +30,10 @@ interface VerifiedData {
 
 function SuccessContent() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('session_id') || '';
+  const sessionId = searchParams.get('session_id') || searchParams.get('order_id') || '';
   const listingId = searchParams.get('listing_id') || '';
+  const bidId = searchParams.get('bid_id') || '';
+  const paymentId = searchParams.get('payment_id') || '';
 
   const [data, setData] = useState<VerifiedData | null>(null);
   const [pollCount, setPollCount] = useState(0);
@@ -41,7 +43,13 @@ function SuccessContent() {
 
     const checkStatus = async () => {
       try {
-        const res = await fetch(`/api/checkout/status?session_id=${sessionId}&listing_id=${listingId}`);
+        const query = new URLSearchParams();
+        if (sessionId) query.set('session_id', sessionId);
+        if (listingId) query.set('listing_id', listingId);
+        if (bidId) query.set('bid_id', bidId);
+        if (paymentId) query.set('payment_id', paymentId);
+
+        const res = await fetch(`/api/checkout/status?${query.toString()}`);
         if (res.ok) {
           const json = await res.json();
           if (json.verified) {
@@ -60,7 +68,7 @@ function SuccessContent() {
     interval = setInterval(checkStatus, 2500);
 
     return () => clearInterval(interval);
-  }, [sessionId, listingId]);
+  }, [sessionId, listingId, bidId, paymentId]);
 
   const isVerified = data?.verified;
   const dollars = data?.verifiedBidCents ? data.verifiedBidCents / 100 : 0;

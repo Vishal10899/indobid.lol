@@ -27,10 +27,12 @@ export function Footer() {
         </div>
 
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-[var(--text-muted)]">
-          <div>
-            &copy; {new Date().getFullYear()} indobid.lol. Public attention marketplace.
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>&copy; {new Date().getFullYear()} indobid.lol</span>
+            <span>·</span>
+            <span className="text-[var(--text-secondary)] font-normal">Built by Vishal Kumar</span>
           </div>
-          <div className="flex items-center space-x-1.5 text-emerald-600 font-medium">
+          <div className="flex items-center space-x-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>Secure checkout</span>
           </div>

@@ -11,7 +11,7 @@ export async function GET() {
         _count: {
           select: {
             listings: {
-              where: { status: 'active' },
+              where: { status: 'active', verifiedBid: { gt: 0 } },
             },
           },
         },

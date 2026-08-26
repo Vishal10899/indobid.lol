@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Trophy, ExternalLink, MousePointerClick, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
+import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
 
 export interface LeaderboardItemData {
   id: string;
@@ -73,7 +74,16 @@ export function LeaderboardCard({ item, onCustomOutbid }: LeaderboardCardProps) 
         throw new Error(data.error || 'Failed to initialize checkout');
       }
 
-      window.location.href = data.checkoutUrl;
+      await launchRazorpayCheckout({
+        keyId: data.keyId,
+        orderId: data.orderId || data.sessionId,
+        amount: data.amount || data.chargeAmountCents,
+        currency: data.currency || 'USD',
+        listingId: data.listingId || item.id,
+        bidId: data.bidId,
+        listingTitle: item.title,
+        checkoutUrl: data.checkoutUrl,
+      });
     } catch (err) {
       console.error('Direct outbid error:', err);
       setError(err instanceof Error ? err.message : 'Error starting checkout');

@@ -76,6 +76,7 @@ export interface LeaderboardResult {
 /**
  * Fetch leaderboard with deterministic sorting:
  * ORDER BY verified_bid DESC, bid_reached_at ASC
+ * STRICT DEFENSIVE CONDITION: Only verified active listings with verifiedBid > 0 are returned.
  */
 export async function getLeaderboard({
   categorySlug,
@@ -90,8 +91,11 @@ export async function getLeaderboard({
 }): Promise<LeaderboardResult> {
   const skip = (page - 1) * limit;
 
-  // Build where clause
-  const where: Prisma.ListingWhereInput = {};
+  // Build where clause: Must have verifiedBid > 0 and status === 'active'
+  const where: Prisma.ListingWhereInput = {
+    verifiedBid: { gt: 0 },
+  };
+
   if (!includeHidden) {
     where.status = 'active';
   }
@@ -106,12 +110,12 @@ export async function getLeaderboard({
     }
   }
 
-  // Count total active listings
+  // Count total active verified listings
   const total = await prisma.listing.count({ where });
 
   // Get current active #1 listing globally to calculate minimumToTakeFirst
   const globalFirst = await prisma.listing.findFirst({
-    where: { status: 'active' },
+    where: { status: 'active', verifiedBid: { gt: 0 } },
     orderBy: [
       { verifiedBid: 'desc' },
       { bidReachedAt: 'asc' },
@@ -212,6 +216,7 @@ export async function estimateRank({
   const globalHigherCount = await prisma.listing.count({
     where: {
       status: 'active',
+      verifiedBid: { gt: 0 },
       id: excludeListingId ? { not: excludeListingId } : undefined,
       OR: [
         { verifiedBid: { gt: bidAmountCents } },
@@ -227,6 +232,7 @@ export async function estimateRank({
     const categoryHigherCount = await prisma.listing.count({
       where: {
         status: 'active',
+        verifiedBid: { gt: 0 },
         categoryId,
         id: excludeListingId ? { not: excludeListingId } : undefined,
         OR: [
@@ -242,6 +248,7 @@ export async function estimateRank({
   const numberOne = await prisma.listing.findFirst({
     where: {
       status: 'active',
+      verifiedBid: { gt: 0 },
       id: excludeListingId ? { not: excludeListingId } : undefined,
     },
     orderBy: [
@@ -261,6 +268,7 @@ export async function estimateRank({
     const aheadListing = await prisma.listing.findFirst({
       where: {
         status: 'active',
+        verifiedBid: { gt: 0 },
         id: excludeListingId ? { not: excludeListingId } : undefined,
         OR: [
           { verifiedBid: { gt: bidAmountCents } },
@@ -300,7 +308,7 @@ export async function getListingRanks(listingId: string): Promise<{ globalRank: 
     select: { verifiedBid: true, bidReachedAt: true, categoryId: true, status: true },
   });
 
-  if (!target || target.status !== 'active') {
+  if (!target || target.status !== 'active' || target.verifiedBid <= 0) {
     return { globalRank: 0, categoryRank: 0 };
   }
 
@@ -308,6 +316,7 @@ export async function getListingRanks(listingId: string): Promise<{ globalRank: 
   const globalCount = await prisma.listing.count({
     where: {
       status: 'active',
+      verifiedBid: { gt: 0 },
       OR: [
         { verifiedBid: { gt: target.verifiedBid } },
         {
@@ -323,6 +332,7 @@ export async function getListingRanks(listingId: string): Promise<{ globalRank: 
   const categoryCount = await prisma.listing.count({
     where: {
       status: 'active',
+      verifiedBid: { gt: 0 },
       categoryId: target.categoryId,
       OR: [
         { verifiedBid: { gt: target.verifiedBid } },

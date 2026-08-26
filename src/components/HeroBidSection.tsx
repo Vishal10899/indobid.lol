@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, ArrowRight, Minus, Plus, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
+import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
 
 interface Category {
   id: string;
@@ -192,7 +193,16 @@ export function HeroBidSection({
         throw new Error(data.error || 'Failed to initialize checkout session');
       }
 
-      window.location.href = data.checkoutUrl;
+      await launchRazorpayCheckout({
+        keyId: data.keyId,
+        orderId: data.orderId || data.sessionId,
+        amount: data.amount || data.chargeAmountCents,
+        currency: data.currency || 'USD',
+        listingId: data.listingId,
+        bidId: data.bidId,
+        listingTitle: data.listingTitle || url,
+        checkoutUrl: data.checkoutUrl,
+      });
     } catch (err) {
       console.error('Checkout error:', err);
       setError(err instanceof Error ? err.message : 'Error starting checkout');
@@ -238,9 +248,9 @@ export function HeroBidSection({
             <div className="flex items-center space-x-1.5 bg-[var(--bg-surface)] p-1 rounded-xl border border-[var(--border-color)] self-start sm:self-auto">
               <button
                 type="button"
-                onClick={() => handleAdjustBid(-25)}
+                onClick={() => handleAdjustBid(-1)}
                 className="w-8 h-8 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-primary)] flex items-center justify-center transition border border-[var(--border-color)] cursor-pointer"
-                aria-label="Decrease bid"
+                aria-label="Decrease bid by $1"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -252,54 +262,19 @@ export function HeroBidSection({
                   value={targetDollars > 0 ? targetDollars.toLocaleString() : ''}
                   onChange={handleDirectBidChange}
                   className="w-20 sm:w-24 bg-transparent text-[var(--text-primary)] font-bold text-lg focus:outline-none text-center"
-                  placeholder="0"
+                  placeholder="2"
                 />
               </div>
 
               <button
                 type="button"
-                onClick={() => handleAdjustBid(25)}
+                onClick={() => handleAdjustBid(1)}
                 className="w-8 h-8 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-primary)] flex items-center justify-center transition border border-[var(--border-color)] cursor-pointer"
-                aria-label="Increase bid"
+                aria-label="Increase bid by $1"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
-          </div>
-
-          {/* Quick Presets */}
-          <div className="flex items-center flex-wrap gap-1.5 py-3">
-            <span className="text-xs text-[var(--text-secondary)] font-medium mr-1">Presets:</span>
-            {minToTakeFirstDollars > 0 && highestBidCents > 0 && (
-              <button
-                type="button"
-                onClick={() => setTargetDollars(minToTakeFirstDollars)}
-                className="px-2.5 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-semibold transition cursor-pointer"
-              >
-                Take #1 (${minToTakeFirstDollars.toLocaleString()})
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => handleAdjustBid(25)}
-              className="px-2.5 py-1 rounded-md bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] text-xs font-medium transition cursor-pointer"
-            >
-              +$25
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAdjustBid(100)}
-              className="px-2.5 py-1 rounded-md bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] text-xs font-medium transition cursor-pointer"
-            >
-              +$100
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAdjustBid(500)}
-              className="px-2.5 py-1 rounded-md bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] text-xs font-medium transition cursor-pointer"
-            >
-              +$500
-            </button>
           </div>
 
           {/* Form */}

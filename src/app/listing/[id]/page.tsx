@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: ListingPageProps): Promise<Me
     include: { category: true },
   });
 
-  if (!listing) {
+  if (!listing || listing.status !== 'active' || listing.verifiedBid <= 0) {
     return {
       title: 'Listing Not Found — indobid.lol',
     };
@@ -64,7 +64,7 @@ export default async function ListingPage({ params, searchParams }: ListingPageP
     },
   });
 
-  if (!listing) {
+  if (!listing || listing.status !== 'active' || listing.verifiedBid <= 0) {
     notFound();
   }
 

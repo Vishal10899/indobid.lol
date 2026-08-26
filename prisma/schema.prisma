@@ -12,10 +12,11 @@ model Category {
   name      String
   slug      String    @unique
   icon      String?
-  sortOrder Int       @default(0)
-  createdAt DateTime  @default(now())
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
   listings  Listing[]
 
+  @@index([sortOrder(sort: Asc)])
   @@map("categories")
 }
 
@@ -49,10 +50,11 @@ model Listing {
   activityEvents  ActivityEvent[]
   clicks          Click[]
 
-  @@index([verifiedBid(sort: Desc), bidReachedAt(sort: Asc)])
-  @@index([categoryId, verifiedBid(sort: Desc), bidReachedAt(sort: Asc)])
+  // High-performance composite indexes for global & category leaderboard ordering
+  @@index([status, verifiedBid(sort: Desc), bidReachedAt(sort: Asc)])
+  @@index([categoryId, status, verifiedBid(sort: Desc), bidReachedAt(sort: Asc)])
   @@index([canonicalUrl])
-  @@index([status])
+  @@index([status, createdAt(sort: Desc)])
   @@map("listings")
 }
 
@@ -72,8 +74,9 @@ model Bid {
 
   payments        Payment[]
 
-  @@index([listingId])
+  @@index([listingId, createdAt(sort: Desc)])
   @@index([paymentId])
+  @@index([status, createdAt])
   @@map("bids")
 }
 
@@ -84,15 +87,17 @@ model Payment {
   bidId             String?   @map("bid_id")
   bid               Bid?      @relation(fields: [bidId], references: [id], onDelete: SetNull)
   provider          String    @default("cashfree")
-  providerPaymentId String    @unique @map("provider_payment_id") // Cashfree Order ID or Payment ID for idempotency
+  providerPaymentId String    @unique @map("provider_payment_id") // Provider Order ID or Payment ID for idempotency
   amount            Int       // Amount in cents
   currency          String    @default("usd")
   status            String    // succeeded, failed, canceled, refunded
   metadata          String?   // JSON string
   createdAt         DateTime  @default(now()) @map("created_at")
 
-  @@index([listingId])
+  @@index([listingId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
   @@index([providerPaymentId])
+  @@index([status])
   @@map("payments")
 }
 
@@ -109,7 +114,7 @@ model ActivityEvent {
   createdAt       DateTime  @default(now()) @map("created_at")
 
   @@index([createdAt(sort: Desc)])
-  @@index([listingId])
+  @@index([listingId, createdAt(sort: Desc)])
   @@map("activity_events")
 }
 
