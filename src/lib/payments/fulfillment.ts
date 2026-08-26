@@ -79,7 +79,8 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
   }
 
   // Execute ACID database transaction
-  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+  const result = await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
     // Re-verify inside transaction to guard against concurrent webhook triggers
     const txPaymentCheck = await tx.payment.findUnique({
       where: { providerPaymentId },
@@ -248,13 +249,18 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
       },
     });
 
-    return {
-      alreadyProcessed: false,
-      listingId: updatedListing.id,
-      newVerifiedBid: updatedListing.verifiedBid,
-      newRank,
-    };
-  });
+      return {
+        alreadyProcessed: false,
+        listingId: updatedListing.id,
+        newVerifiedBid: updatedListing.verifiedBid,
+        newRank,
+      };
+    },
+    {
+      maxWait: 10000,
+      timeout: 20000,
+    }
+  );
 
   return {
     success: true,

@@ -358,7 +358,7 @@ export function BidModal({
           </div>
 
           {/* Category & Country */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="block font-semibold text-[var(--text-primary)] text-xs mb-1">
                 Category
@@ -366,7 +366,7 @@ export function BidModal({
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -383,7 +383,7 @@ export function BidModal({
               <select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
               >
                 {POPULAR_COUNTRIES.map((c) => (
                   <option key={c.code} value={c.code}>

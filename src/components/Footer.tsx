@@ -4,7 +4,7 @@ import { Trophy, ShieldCheck } from 'lucide-react';
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--border-color)] bg-[var(--bg-section)] py-8 text-xs text-[var(--text-secondary)]">
+    <footer className="border-t border-[var(--border-color)] bg-[var(--bg-section)] pt-8 pb-[max(2rem,env(safe-area-inset-bottom))] text-xs text-[var(--text-secondary)]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-4 border-b border-[var(--border-color)]">
           <div className="flex items-center space-x-2.5">

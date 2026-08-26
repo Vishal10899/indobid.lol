@@ -218,28 +218,28 @@ export function HeroBidSection({
   const estimatedRank = estimation?.estimatedGlobalRank || 1;
 
   return (
-    <section className="pt-8 pb-10 sm:pt-12 sm:pb-14 bg-[var(--bg-section)] border-b border-[var(--border-color)]">
+    <section className="pt-6 pb-8 sm:pt-10 sm:pb-12 bg-[var(--bg-section)] border-b border-[var(--border-color)]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
         {/* Headline */}
-        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-[var(--text-primary)]">
+        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-[var(--text-primary)]">
           Pay more. Rank higher.
         </h1>
-        <p className="mt-2 text-sm sm:text-base text-[var(--text-secondary)] max-w-xl mx-auto">
+        <p className="mt-1.5 text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto">
           Public visibility determined by verified cumulative bids.
         </p>
 
-        {/* Compact Bid / Submission Panel */}
-        <div className="mt-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 sm:p-6 shadow-2xs text-left max-w-3xl mx-auto">
-          {/* Top: Stepper & Target Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border-color)]">
+        {/* Compact Bid / Submission Card */}
+        <div className="mt-5 sm:mt-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 sm:p-5 shadow-2xs text-left max-w-2xl mx-auto">
+          {/* Top: Target Rank + Compact Stepper */}
+          <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-[var(--border-color)]">
             <div>
-              <div className="text-xs font-semibold text-[var(--text-secondary)] uppercase tracking-wide">
+              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
                 Target Bid
               </div>
-              <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
+              <div className="text-base sm:text-lg font-bold text-[var(--text-primary)] mt-0.5">
                 {estimatedRank === 1 ? (
                   <span className="text-amber-500 flex items-center">
-                    <Trophy className="w-4 h-4 mr-1 text-amber-500" /> Rank #1 Global
+                    <Trophy className="w-4 h-4 mr-1 text-amber-500 shrink-0" /> Rank #1 Global
                   </span>
                 ) : (
                   <span>Rank #{estimatedRank}</span>
@@ -248,7 +248,7 @@ export function HeroBidSection({
             </div>
 
             {/* Stepper Control */}
-            <div className="flex items-center space-x-1.5 bg-[var(--bg-surface)] p-1 rounded-xl border border-[var(--border-color)] self-start sm:self-auto">
+            <div className="flex items-center space-x-1 bg-[var(--bg-surface)] p-1 rounded-xl border border-[var(--border-color)]">
               <button
                 type="button"
                 onClick={() => handleAdjustBid(-1)}
@@ -258,13 +258,13 @@ export function HeroBidSection({
                 <Minus className="w-3.5 h-3.5" />
               </button>
 
-              <div className="flex items-center px-2 font-mono">
-                <span className="text-[var(--text-secondary)] font-semibold text-base mr-0.5">$</span>
+              <div className="flex items-center px-1 font-mono">
+                <span className="text-[var(--text-secondary)] font-semibold text-sm sm:text-base mr-0.5">$</span>
                 <input
                   type="text"
                   value={targetDollars > 0 ? targetDollars.toLocaleString() : ''}
                   onChange={handleDirectBidChange}
-                  className="w-20 sm:w-24 bg-transparent text-[var(--text-primary)] font-bold text-lg focus:outline-none text-center"
+                  className="w-14 sm:w-20 bg-transparent text-[var(--text-primary)] font-bold text-base sm:text-lg focus:outline-none text-center"
                   placeholder="2"
                 />
               </div>
@@ -281,42 +281,42 @@ export function HeroBidSection({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-3 pt-1">
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-              {/* Destination URL */}
-              <div className="sm:col-span-6">
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                  Destination URL
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://yourstartup.com or @handle"
-                    required
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-sm focus:outline-none transition"
-                  />
-                  {lookupLoading && (
-                    <div className="absolute right-3 top-2.5 text-xs text-[var(--text-muted)] animate-spin">⟳</div>
-                  )}
-                  {urlLookup?.destinationType && (
-                    <div className="absolute right-3 top-2.5 text-[var(--text-secondary)]">
-                      <PlatformIcon type={urlLookup.destinationType} className="w-4 h-4" />
-                    </div>
-                  )}
-                </div>
+          <form onSubmit={handleSubmit} className="space-y-3 pt-3">
+            {/* Destination URL */}
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                Destination URL
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  placeholder="https://yourstartup.com or @handle"
+                  required
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
+                />
+                {lookupLoading && (
+                  <div className="absolute right-3 top-2.5 text-xs text-[var(--text-muted)] animate-spin">⟳</div>
+                )}
+                {urlLookup?.destinationType && (
+                  <div className="absolute right-3 top-2 text-[var(--text-secondary)]">
+                    <PlatformIcon type={urlLookup.destinationType} className="w-4 h-4" />
+                  </div>
+                )}
               </div>
+            </div>
 
-              {/* Category */}
-              <div className="sm:col-span-3">
+            {/* Category & Country in compact 2-column layout */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
                 <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
                   Category
                 </label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-sm focus:outline-none transition cursor-pointer"
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
                 >
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -326,15 +326,14 @@ export function HeroBidSection({
                 </select>
               </div>
 
-              {/* Country */}
-              <div className="sm:col-span-3">
+              <div>
                 <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
                   Country
                 </label>
                 <select
                   value={countryCode}
                   onChange={(e) => setCountryCode(e.target.value)}
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-sm focus:outline-none transition cursor-pointer"
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
                 >
                   {POPULAR_COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -359,33 +358,35 @@ export function HeroBidSection({
               </div>
             )}
 
-            {/* Compact Information Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-              <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                <div className="text-[11px] text-[var(--text-secondary)] font-medium">Estimated rank</div>
-                <div className="text-sm sm:text-base font-bold text-[var(--text-primary)] mt-0.5">
-                  #{estimatedRank}
+            {/* Compact Summary: 2-column Primary Stats + Secondary Detail Line */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                  <div className="text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-medium">Estimated rank</div>
+                  <div className="text-base sm:text-lg font-bold text-amber-500 mt-0.5">
+                    #{estimatedRank}
+                  </div>
+                </div>
+
+                <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
+                  <div className="text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-medium">Pay today</div>
+                  <div className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
+                    ${chargeAmountDollars.toLocaleString()}
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                <div className="text-[11px] text-[var(--text-secondary)] font-medium">Total bid</div>
-                <div className="text-sm sm:text-base font-bold text-[var(--text-primary)] mt-0.5 font-mono">
-                  ${targetDollars.toLocaleString()}
+              {/* Secondary detail line */}
+              <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] px-1 pt-0.5">
+                <div>
+                  <span>Total bid: </span>
+                  <strong className="text-[var(--text-primary)] font-mono">${targetDollars.toLocaleString()}</strong>
                 </div>
-              </div>
-
-              <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                <div className="text-[11px] text-[var(--text-secondary)] font-medium">Pay today</div>
-                <div className="text-sm sm:text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
-                  ${chargeAmountDollars.toLocaleString()}
-                </div>
-              </div>
-
-              <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                <div className="text-[11px] text-[var(--text-secondary)] font-medium">Ahead of</div>
-                <div className="text-xs font-medium text-[var(--text-primary)] truncate mt-1">
-                  {estimation?.competitorAhead ? estimation.competitorAhead.title : 'None (Top #1)'}
+                <div className="truncate max-w-[150px] sm:max-w-[200px] text-right">
+                  <span>Ahead of: </span>
+                  <strong className="text-[var(--text-primary)] truncate">
+                    {estimation?.competitorAhead ? estimation.competitorAhead.title : 'None (Top #1)'}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -397,11 +398,11 @@ export function HeroBidSection({
               </div>
             )}
 
-            {/* Clean Main CTA: "Bid Now" */}
+            {/* Clean Main CTA: "Bid Now →" */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm rounded-xl shadow-2xs transition flex items-center justify-center space-x-1.5 cursor-pointer mt-2 disabled:opacity-60"
+              className="w-full py-3 px-5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm sm:text-base rounded-xl shadow-2xs transition flex items-center justify-center space-x-1.5 cursor-pointer mt-2 disabled:opacity-60"
             >
               {loading ? (
                 <>
