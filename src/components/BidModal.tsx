@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { X, ArrowRight, Minus, Plus, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
+import { POPULAR_COUNTRIES, DEFAULT_COUNTRY_CODE } from '@/lib/countries';
 
 interface Category {
   id: string;
@@ -36,6 +37,7 @@ export function BidModal({
   const [title, setTitle] = useState(initialData?.title || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [categoryId, setCategoryId] = useState(initialData?.categoryId || '');
+  const [countryCode, setCountryCode] = useState<string>(DEFAULT_COUNTRY_CODE);
   const [targetBidDollars, setTargetBidDollars] = useState<number>(initialData?.targetBidDollars || 2);
   const [logoUrl, setLogoUrl] = useState(initialData?.logoUrl || '');
   const [bidderEmail, setBidderEmail] = useState('');
@@ -198,6 +200,7 @@ export function BidModal({
           title: title || undefined,
           description: description || undefined,
           categoryId,
+          countryCode,
           targetTotalBidDollars: targetBidDollars,
           logoUrl: logoUrl || undefined,
           bidderEmail: bidderEmail || undefined,
@@ -339,22 +342,23 @@ export function BidModal({
             </div>
           </div>
 
-          {/* Title & Category */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div>
-              <label className="block font-semibold text-[var(--text-primary)] text-xs mb-1">
-                Title / Product Name
-              </label>
-              <input
-                type="text"
-                maxLength={100}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Acme SaaS"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
-              />
-            </div>
+          {/* Title */}
+          <div>
+            <label className="block font-semibold text-[var(--text-primary)] text-xs mb-1">
+              Title / Product Name
+            </label>
+            <input
+              type="text"
+              maxLength={100}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Acme SaaS"
+              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
+            />
+          </div>
 
+          {/* Category & Country */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
               <label className="block font-semibold text-[var(--text-primary)] text-xs mb-1">
                 Category
@@ -367,6 +371,23 @@ export function BidModal({
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[var(--text-primary)] text-xs mb-1">
+                Country
+              </label>
+              <select
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer"
+              >
+                {POPULAR_COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.flag} {c.name}
                   </option>
                 ))}
               </select>

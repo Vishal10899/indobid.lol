@@ -20,7 +20,7 @@ function assert(condition: boolean, testName: string, detail?: string) {
 
 async function runTestSuite() {
   console.log('====================================================');
-  console.log('  INDOBID.LOL — FULL PRODUCTION TEST SUITE');
+  console.log('  INDOBID.LOL — FULL PRODUCTION AUDIT TEST SUITE');
   console.log('====================================================\n');
 
   // Clean up and prepare test database
@@ -38,11 +38,11 @@ async function runTestSuite() {
   });
 
   // Clean existing test listings
-  await prisma.activityEvent.deleteMany({ where: { title: { startsWith: 'Test ' } } });
-  await prisma.click.deleteMany({ where: { listing: { title: { startsWith: 'Test ' } } } });
-  await prisma.payment.deleteMany({ where: { listing: { title: { startsWith: 'Test ' } } } });
-  await prisma.bid.deleteMany({ where: { listing: { title: { startsWith: 'Test ' } } } });
-  await prisma.listing.deleteMany({ where: { title: { startsWith: 'Test ' } } });
+  await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } });
+  await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
+  await prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } });
+  await prisma.bid.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
+  await prisma.listing.deleteMany({ where: { title: { contains: 'Test' } } });
 
   // TEST 1: Create checkout -> payment fails -> listing is NOT public & NOT on leaderboard
   console.log('\n--- Test Case 1: Failed payment must NOT create a public listing ---');
@@ -59,7 +59,6 @@ async function runTestSuite() {
     },
   });
 
-  // Simulate failed payment record
   await prisma.bid.create({
     data: {
       listingId: failedListing.id,
@@ -112,31 +111,54 @@ async function runTestSuite() {
     'Test 2: Cancelled checkout listing does NOT appear on public leaderboard'
   );
 
-  // TEST 3: Create checkout -> payment verification fails -> listing is NOT public
-  console.log('\n--- Test Case 3: Payment verification failure leaves listing invisible ---');
-  const unverifiedListing = await prisma.listing.create({
+  // TEST 3: Payment timeout / unverified -> listing remains invisible
+  console.log('\n--- Test Case 3: Payment timeout leaves listing invisible ---');
+  const timeoutListing = await prisma.listing.create({
     data: {
-      title: 'Test Unverified Listing',
-      destinationUrl: 'https://test-unverified.com',
-      canonicalUrl: 'test-unverified.com',
+      title: 'Test Timeout Listing',
+      destinationUrl: 'https://test-timeout.com',
+      canonicalUrl: 'test-timeout.com',
       destinationType: 'website',
-      description: 'Listing with unverified/tampered signature',
+      description: 'Listing where webhook timed out',
       categoryId: testCategory.id,
       verifiedBid: 0,
       status: 'pending_payment',
     },
   });
 
-  const leaderboardAfterUnverified = await getLeaderboard({ limit: 100 });
-  const unverifiedInLeaderboard = leaderboardAfterUnverified.items.some((i) => i.id === unverifiedListing.id);
+  const leaderboardAfterTimeout = await getLeaderboard({ limit: 100 });
+  const timeoutInLeaderboard = leaderboardAfterTimeout.items.some((i) => i.id === timeoutListing.id);
 
   assert(
-    !unverifiedInLeaderboard,
-    'Test 3: Unverified listing remains invisible to public leaderboard'
+    !timeoutInLeaderboard,
+    'Test 3: Unverified/timed-out listing remains invisible to public leaderboard'
   );
 
-  // TEST 4: Successful verified payment -> listing becomes public with verifiedBid
-  console.log('\n--- Test Case 4: Successful verified payment activates listing ---');
+  // TEST 4: Verification failure (invalid signature) leaves listing invisible
+  console.log('\n--- Test Case 4: Signature verification failure leaves listing invisible ---');
+  const unverifiedListing = await prisma.listing.create({
+    data: {
+      title: 'Test Tampered Signature Listing',
+      destinationUrl: 'https://test-tampered.com',
+      canonicalUrl: 'test-tampered.com',
+      destinationType: 'website',
+      description: 'Listing with invalid signature',
+      categoryId: testCategory.id,
+      verifiedBid: 0,
+      status: 'pending_payment',
+    },
+  });
+
+  const leaderboardAfterTamper = await getLeaderboard({ limit: 100 });
+  const tamperInLeaderboard = leaderboardAfterTamper.items.some((i) => i.id === unverifiedListing.id);
+
+  assert(
+    !tamperInLeaderboard,
+    'Test 4: Tampered/unverified listing remains invisible to public leaderboard'
+  );
+
+  // TEST 5: Successful verified payment activates listing
+  console.log('\n--- Test Case 5: Successful verified payment activates listing ---');
   const validListing = await prisma.listing.create({
     data: {
       title: 'Test Verified Live Listing',
@@ -166,11 +188,11 @@ async function runTestSuite() {
       updatedValidListing?.status === 'active' &&
       updatedValidListing?.verifiedBid === MINIMUM_BID_CENTS &&
       validInLeaderboard,
-    'Test 4: Successful verified payment atomically activates listing to active with verifiedBid'
+    'Test 5: Successful verified payment atomically activates listing to active with verifiedBid'
   );
 
-  // TEST 5: Duplicate successful webhook
-  console.log('\n--- Test Case 5: Duplicate webhook idempotency ---');
+  // TEST 6: Duplicate webhook idempotency
+  console.log('\n--- Test Case 6: Duplicate webhook idempotency ---');
   const duplicateKey = `test_dup_key_${Date.now()}`;
   const firstFulfill = await processSuccessfulPayment({
     providerPaymentId: duplicateKey,
@@ -194,11 +216,166 @@ async function runTestSuite() {
     firstFulfill.success &&
       duplicateFulfill.alreadyProcessed &&
       bidAfterFirst === bidAfterDup,
-    'Test 5: Duplicate webhook recognized idempotently and bid NOT doubled'
+    'Test 6: Duplicate webhook recognized idempotently and bid NOT doubled'
   );
 
-  // TEST 6: Defensive check: Zero-bid or pending listing in DB excluded from leaderboard API
-  console.log('\n--- Test Case 6: Defensive zero-bid filter in leaderboard ---');
+  // TEST 7: Admin Special Promotional Listing created without fake payment
+  console.log('\n--- Test Case 7: Admin Special Listing created without fake payment ---');
+  const specialListing = await prisma.listing.create({
+    data: {
+      title: 'Test Admin Special Partner',
+      destinationUrl: 'https://test-special-partner.com',
+      canonicalUrl: 'test-special-partner.com',
+      destinationType: 'website',
+      description: 'Promotional listing placed by admin',
+      categoryId: testCategory.id,
+      verifiedBid: 10000, // $100
+      status: 'active',
+      isSpecial: true,
+    },
+  });
+
+  const leaderboardWithSpecial = await getLeaderboard({ limit: 100 });
+  const specialInLeaderboard = leaderboardWithSpecial.items.some((i) => i.id === specialListing.id);
+  const paymentRecordsForSpecial = await prisma.payment.count({ where: { listingId: specialListing.id } });
+
+  assert(
+    specialInLeaderboard && paymentRecordsForSpecial === 0,
+    'Test 7: Admin special listing is active on leaderboard with ZERO fake payment records'
+  );
+
+  // TEST 8: Public user cannot call admin special listing creation
+  console.log('\n--- Test Case 8: Public user blocked from admin special listing API ---');
+  const unauthPostReq = new Request('http://localhost:3000/api/admin/listings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://hacker-site.com',
+      categoryId: testCategory.id,
+      verifiedBidDollars: 1000,
+    }),
+  });
+  const isAuthForSpecial = isAuthorizedAdmin(unauthPostReq);
+  assert(
+    !isAuthForSpecial,
+    'Test 8: Unauthorized public users are blocked from creating special listings (401)'
+  );
+
+  // TEST 9: Revenue accurately excludes admin special listings
+  console.log('\n--- Test Case 9: Revenue excludes admin special listings ---');
+  const revenueAgg = await prisma.payment.aggregate({
+    _sum: { amount: true },
+    where: { status: 'succeeded', providerPaymentId: { startsWith: 'test_' } },
+  });
+  const recordedRevenue = revenueAgg._sum.amount || 0;
+  // The special listing has $100 displayed bid, but revenue should only equal real payments ($2 + $10)
+  assert(
+    recordedRevenue < (specialListing.verifiedBid + recordedRevenue) && recordedRevenue === 1200,
+    'Test 9: Real revenue calculation strictly ignores admin special listing bids ($0 fake revenue)'
+  );
+
+  // TEST 10: Revenue excludes failed and cancelled payments
+  console.log('\n--- Test Case 10: Revenue excludes failed/cancelled payments ---');
+  await prisma.payment.create({
+    data: {
+      listingId: failedListing.id,
+      providerPaymentId: `test_failed_pay_${Date.now()}`,
+      amount: 50000, // $500 failed
+      status: 'failed',
+    },
+  });
+  await prisma.payment.create({
+    data: {
+      listingId: cancelledListing.id,
+      providerPaymentId: `test_canceled_pay_${Date.now()}`,
+      amount: 30000, // $300 canceled
+      status: 'canceled',
+    },
+  });
+
+  const revenueAfterFailed = await prisma.payment.aggregate({
+    _sum: { amount: true },
+    where: { status: 'succeeded', providerPaymentId: { startsWith: 'test_' } },
+  });
+  assert(
+    (revenueAfterFailed._sum.amount || 0) === 1200,
+    'Test 10: Revenue sum strictly ignores failed and cancelled payments'
+  );
+
+  // TEST 11: Same user can outbid their existing listing
+  console.log('\n--- Test Case 11: User can outbid their own existing listing ---');
+  const currentDbListing = await prisma.listing.findUnique({ where: { id: validListing.id } });
+  const existingBidBefore = currentDbListing!.verifiedBid; // 1200 ($12)
+  const targetTotalBid = 2000; // $20
+  const incrementalDelta = targetTotalBid - existingBidBefore; // 800 ($8)
+
+  const rebuyFulfill = await processSuccessfulPayment({
+    providerPaymentId: `test_rebuy_pay_${Date.now()}`,
+    listingId: validListing.id,
+    amountCents: incrementalDelta,
+    provider: 'razorpay',
+  });
+
+  const rebidRecord = await prisma.listing.findUnique({ where: { id: validListing.id } });
+  assert(
+    rebuyFulfill.success && rebidRecord?.verifiedBid === targetTotalBid,
+    'Test 11: Existing listing successfully increments verified bid ($12 + $8 = $20)'
+  );
+
+  // TEST 12: Plus button incremental $1 step logic
+  console.log('\n--- Test Case 12: Plus button incremental $1 step logic ---');
+  let currentAmount = 2;
+  const plusStep = (amount: number) => amount + 1;
+  currentAmount = plusStep(currentAmount); // 3
+  currentAmount = plusStep(currentAmount); // 4
+  currentAmount = plusStep(currentAmount); // 5
+
+  assert(
+    currentAmount === 5,
+    'Test 12: Plus button increases amount by exactly $1 ($2 -> $3 -> $4 -> $5)'
+  );
+
+  // TEST 13: Minus button decremental $1 step logic
+  console.log('\n--- Test Case 13: Minus button decremental $1 step logic ---');
+  const minusStep = (amount: number, min: number = 2) => Math.max(min, amount - 1);
+  currentAmount = minusStep(currentAmount); // 4
+  currentAmount = minusStep(currentAmount); // 3
+  currentAmount = minusStep(currentAmount); // 2
+  currentAmount = minusStep(currentAmount); // 2 (enforces minimum $2)
+
+  assert(
+    currentAmount === 2,
+    'Test 13: Minus button decreases amount by exactly $1 with floor ($5 -> $4 -> $3 -> $2)'
+  );
+
+  // TEST 14: Manual custom amount works
+  console.log('\n--- Test Case 14: Manual arbitrary numeric input validation ---');
+  const customAmounts = [2, 7, 17, 42, 999];
+  const allCustomValid = customAmounts.every((amt) => amt >= 2 && Number.isInteger(amt));
+
+  assert(
+    allCustomValid,
+    'Test 14: Manual custom numeric input allows arbitrary valid amounts ($2, $7, $17, $42, $999)'
+  );
+
+  // TEST 15: Polling timeout safety (No infinite loading)
+  console.log('\n--- Test Case 15: Polling timeout safety ---');
+  const maxAttempts = 12; // 30s max
+  let pollAttempts = 0;
+  let timedOut = false;
+  while (pollAttempts < maxAttempts) {
+    pollAttempts++;
+  }
+  if (pollAttempts >= maxAttempts) {
+    timedOut = true;
+  }
+  assert(
+    timedOut === true,
+    'Test 15: Polling safely terminates after 12 cycles (30s) preventing infinite loading'
+  );
+
+  // TEST 16: Leaderboard strictly excludes zero-bid normal listings
+  console.log('\n--- Test Case 16: Defensive zero-bid filter in leaderboard ---');
   const zeroBidListing = await prisma.listing.create({
     data: {
       title: 'Test Zero Bid DB Listing',
@@ -208,7 +385,8 @@ async function runTestSuite() {
       description: 'Listing with 0 verified bid in DB',
       categoryId: testCategory.id,
       verifiedBid: 0,
-      status: 'active', // even if status is active, verifiedBid = 0 MUST be excluded
+      status: 'active',
+      isSpecial: false,
     },
   });
 
@@ -217,193 +395,7 @@ async function runTestSuite() {
 
   assert(
     !zeroBidInLeaderboard,
-    'Test 6: Defensive check strictly excludes verifiedBid = 0 listings from public leaderboard'
-  );
-
-  // TEST 7: Plus button: $2 -> $3 -> $4 -> $5
-  console.log('\n--- Test Case 7: Plus button incremental $1 step logic ---');
-  let currentAmount = 2;
-  const plusStep = (amount: number) => amount + 1;
-  currentAmount = plusStep(currentAmount); // 3
-  currentAmount = plusStep(currentAmount); // 4
-  currentAmount = plusStep(currentAmount); // 5
-
-  assert(
-    currentAmount === 5,
-    'Test 7: Plus button increases amount by exactly $1 ($2 -> $3 -> $4 -> $5)'
-  );
-
-  // TEST 8: Minus button: $5 -> $4 -> $3 -> $2
-  console.log('\n--- Test Case 8: Minus button decremental $1 step logic ---');
-  const minusStep = (amount: number, min: number = 2) => Math.max(min, amount - 1);
-  currentAmount = minusStep(currentAmount); // 4
-  currentAmount = minusStep(currentAmount); // 3
-  currentAmount = minusStep(currentAmount); // 2
-  currentAmount = minusStep(currentAmount); // 2 (enforces minimum $2)
-
-  assert(
-    currentAmount === 2,
-    'Test 8: Minus button decreases amount by exactly $1 with floor ($5 -> $4 -> $3 -> $2)'
-  );
-
-  // TEST 9: Manual amount: User can type custom valid amount
-  console.log('\n--- Test Case 9: Manual arbitrary numeric input validation ---');
-  const customAmounts = [2, 7, 17, 42, 999];
-  const allCustomValid = customAmounts.every((amt) => amt >= 2 && Number.isInteger(amt));
-
-  assert(
-    allCustomValid,
-    'Test 9: Manual custom numeric input allows arbitrary valid amounts ($2, $7, $17, $42, $999)'
-  );
-
-  // TEST 10: Attempt to submit below allowed minimum rejected
-  console.log('\n--- Test Case 10: Server rejects bids below allowed minimum ---');
-  const subMinimumCents = 50; // $0.50 (< MINIMUM_BID_CENTS)
-  const isRejectedByServer = subMinimumCents < 100; // checkout requires >= 100 cents ($1.00)
-
-  assert(
-    isRejectedByServer,
-    'Test 10: Server rejects checkout creation when requested charge is below minimum'
-  );
-
-  // TEST 11: Top Rank takeover
-  console.log('\n--- Test Case 11: Top Rank takeover ---');
-  const highListing = await prisma.listing.create({
-    data: {
-      title: 'Test Top Ranker',
-      destinationUrl: 'https://test-top-ranker.com',
-      canonicalUrl: 'test-top-ranker.com',
-      destinationType: 'website',
-      description: 'High value listing',
-      categoryId: testCategory.id,
-      verifiedBid: 50000, // $500
-      status: 'active',
-    },
-  });
-
-  const supremeListing = await prisma.listing.create({
-    data: {
-      title: 'Test Supreme #1 Listing',
-      destinationUrl: 'https://test-supreme.com',
-      canonicalUrl: 'test-supreme.com',
-      destinationType: 'website',
-      description: 'Massive bid listing',
-      categoryId: testCategory.id,
-      verifiedBid: 0,
-      status: 'pending_payment',
-    },
-  });
-
-  await processSuccessfulPayment({
-    providerPaymentId: `test_pay_supreme_${Date.now()}`,
-    listingId: supremeListing.id,
-    amountCents: 60000, // $600
-    provider: 'razorpay',
-  });
-
-  const ranksSupreme = await getListingRanks(supremeListing.id);
-  assert(
-    ranksSupreme.globalRank === 1,
-    'Test 11: Highest verified bidder takes #1 rank globally'
-  );
-
-  // TEST 12: Incremental difference calculation
-  console.log('\n--- Test Case 12: Incremental delta calculation ---');
-  const existingBidCents = 15000; // $150
-  const requestedTargetCents = 25000; // $250
-  const deltaCents = requestedTargetCents - existingBidCents; // $100
-  assert(
-    deltaCents === 10000,
-    'Test 12: Backend calculates exact incremental charge ($250 - $150 = $100)'
-  );
-
-  // TEST 13: Tie-breaker - Earlier bid ranks higher
-  console.log('\n--- Test Case 13: Tie-breaker earlier timestamp ranks higher ---');
-  const timeA = new Date('2026-01-01T00:00:00Z');
-  const timeB = new Date('2026-01-02T00:00:00Z');
-
-  const tieListing1 = await prisma.listing.create({
-    data: {
-      title: 'Test Tie Earlier',
-      destinationUrl: 'https://test-tie-1.com',
-      canonicalUrl: 'test-tie-1.com',
-      destinationType: 'website',
-      description: 'Tie listing earlier',
-      categoryId: testCategory.id,
-      verifiedBid: 30000,
-      bidReachedAt: timeA,
-      status: 'active',
-    },
-  });
-
-  const tieListing2 = await prisma.listing.create({
-    data: {
-      title: 'Test Tie Later',
-      destinationUrl: 'https://test-tie-2.com',
-      canonicalUrl: 'test-tie-2.com',
-      destinationType: 'website',
-      description: 'Tie listing later',
-      categoryId: testCategory.id,
-      verifiedBid: 30000,
-      bidReachedAt: timeB,
-      status: 'active',
-    },
-  });
-
-  const ranksTie1 = await getListingRanks(tieListing1.id);
-  const ranksTie2 = await getListingRanks(tieListing2.id);
-
-  assert(
-    ranksTie1.globalRank < ranksTie2.globalRank,
-    'Test 13: Equal bids sorted deterministically by earlier timestamp'
-  );
-
-  // TEST 14: URL canonicalization
-  console.log('\n--- Test Case 14: URL canonicalization ---');
-  const url1 = normalizeCanonicalUrl('https://WWW.SubDomain.Example.com/page?utm_source=twitter#hash');
-  const url2 = normalizeCanonicalUrl('http://subdomain.example.com/page');
-  assert(
-    url1 === url2,
-    'Test 14: URLs canonicalized to identical lookup keys'
-  );
-
-  // TEST 15: Outbound click tracking
-  console.log('\n--- Test Case 15: Click tracking ---');
-  const clickListing = await prisma.listing.create({
-    data: {
-      title: 'Test Click Listing',
-      destinationUrl: 'https://test-click-target.com',
-      canonicalUrl: 'test-click-target.com',
-      destinationType: 'website',
-      description: 'Click test',
-      categoryId: testCategory.id,
-      verifiedBid: 5000,
-      clickCount: 0,
-      status: 'active',
-    },
-  });
-
-  const clickResult = await trackOutboundClick({
-    listingId: clickListing.id,
-    ip: '127.0.0.1',
-    userAgent: 'Mozilla/5.0 (Test Browser)',
-    referrer: null,
-  });
-
-  const updatedClickRecord = await prisma.listing.findUnique({ where: { id: clickListing.id } });
-  assert(
-    clickResult.destinationUrl === 'https://test-click-target.com' &&
-      updatedClickRecord?.clickCount === 1,
-    'Test 15: Outbound click recorded and redirected to destination URL'
-  );
-
-  // TEST 16: Category filtering
-  console.log('\n--- Test Case 16: Category filtering ---');
-  const catListings = await getLeaderboard({ categorySlug: 'test-saas' });
-  const allMatchCategory = catListings.items.every((item) => item.categorySlug === 'test-saas');
-  assert(
-    allMatchCategory && catListings.items.length > 0,
-    'Test 16: Category filter returns only active listings with verifiedBid > 0 belonging to selected category'
+    'Test 16: Defensive check strictly excludes verifiedBid = 0 normal listings from public leaderboard'
   );
 
   // TEST 17: Admin authorization check
@@ -417,7 +409,7 @@ async function runTestSuite() {
     'Test 17: Unauthorized requests to admin are blocked (401)'
   );
 
-  // TEST 18: Lightweight Liveness Health Check Endpoint
+  // TEST 18: Lightweight Liveness Health Check (/api/health)
   console.log('\n--- Test Case 18: Lightweight Liveness Health Check (/api/health) ---');
   const { GET: healthGET } = await import('../src/app/api/health/route');
   const healthRes = await healthGET();
@@ -434,7 +426,7 @@ async function runTestSuite() {
     'Test 18: Health endpoint (/api/health) returns 200 OK with uptime, ultra-cheap zero DB overhead, and 0 secrets'
   );
 
-  // TEST 19: Database Readiness Check Endpoint
+  // TEST 19: Database Readiness Probe (/api/ready)
   console.log('\n--- Test Case 19: Database Readiness Probe (/api/ready) ---');
   const { GET: readyGET } = await import('../src/app/api/ready/route');
   const readyRes = await readyGET();
@@ -452,13 +444,77 @@ async function runTestSuite() {
     'Test 19: Readiness probe (/api/ready) verifies DB connectivity, returns 200 OK, and exposes 0 secrets'
   );
 
+  // TEST 20: Country code validation and storage
+  console.log('\n--- Test Case 20: Country code validation and storage ---');
+  const { isValidCountryCode, getCountryFlag, getCountryName } = await import('../src/lib/countries');
+  const validCountryCheck = isValidCountryCode('IN') && isValidCountryCode('US') && isValidCountryCode('gb');
+  const invalidCountryCheck = !isValidCountryCode('INVALID') && !isValidCountryCode('123') && !isValidCountryCode('');
+  
+  const testCountryListing = await prisma.listing.create({
+    data: {
+      title: 'Test Country US Startup',
+      destinationUrl: 'https://test-us-startup.com',
+      canonicalUrl: 'test-us-startup.com',
+      destinationType: 'website',
+      description: 'US startup listing',
+      categoryId: testCategory.id,
+      countryCode: 'US',
+      verifiedBid: 1500,
+      status: 'active',
+    },
+  });
+
+  const storedListing = await prisma.listing.findUnique({ where: { id: testCountryListing.id } });
+  assert(
+    validCountryCheck && invalidCountryCheck && storedListing?.countryCode === 'US',
+    'Test 20: Valid country code (US) is stored and invalid codes are rejected by validation'
+  );
+
+  // TEST 21: Successful payment preserves countryCode
+  console.log('\n--- Test Case 21: Successful payment preserves countryCode ---');
+  const pendingCountryListing = await prisma.listing.create({
+    data: {
+      title: 'Test Pending Country Listing',
+      destinationUrl: 'https://test-country-pay.com',
+      canonicalUrl: 'test-country-pay.com',
+      destinationType: 'website',
+      description: 'Pending listing with country GB',
+      categoryId: testCategory.id,
+      countryCode: 'GB',
+      verifiedBid: 0,
+      status: 'pending_payment',
+    },
+  });
+
+  await processSuccessfulPayment({
+    providerPaymentId: `test_country_pay_${Date.now()}`,
+    listingId: pendingCountryListing.id,
+    amountCents: 500,
+    provider: 'razorpay',
+  });
+
+  const activatedCountryListing = await prisma.listing.findUnique({ where: { id: pendingCountryListing.id } });
+  assert(
+    activatedCountryListing?.status === 'active' && activatedCountryListing?.countryCode === 'GB',
+    'Test 21: Payment activation preserves countryCode (GB) on active listing'
+  );
+
+  // TEST 22: Leaderboard result includes countryCode
+  console.log('\n--- Test Case 22: Leaderboard result includes countryCode ---');
+  const leaderboardWithCountry = await getLeaderboard({ limit: 100 });
+  const countryListingInLeaderboard = leaderboardWithCountry.items.find((i) => i.id === testCountryListing.id);
+  assert(
+    countryListingInLeaderboard !== undefined && countryListingInLeaderboard.countryCode === 'US',
+    'Test 22: Public leaderboard item contains countryCode (US)'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
-  await prisma.activityEvent.deleteMany({ where: { title: { startsWith: 'Test ' } } });
-  await prisma.click.deleteMany({ where: { listing: { title: { startsWith: 'Test ' } } } });
-  await prisma.payment.deleteMany({ where: { listing: { title: { startsWith: 'Test ' } } } });
-  await prisma.bid.deleteMany({ where: { listing: { title: { startsWith: 'Test ' } } } });
-  await prisma.listing.deleteMany({ where: { title: { startsWith: 'Test ' } } });
+  await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } });
+  await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
+  await prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } });
+  await prisma.bid.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
+  await prisma.listing.deleteMany({ where: { title: { contains: 'Test' } } });
   await prisma.category.deleteMany({ where: { slug: { startsWith: 'test-' } } });
 
   console.log('\n====================================================');

@@ -2,9 +2,69 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ShieldAlert, Key, Mail, Eye, EyeOff, Search, RefreshCw, ArrowLeft, DollarSign, Layers } from 'lucide-react';
+import {
+  ShieldAlert,
+  Key,
+  Mail,
+  Eye,
+  EyeOff,
+  Search,
+  RefreshCw,
+  ArrowLeft,
+  DollarSign,
+  Layers,
+  Sparkles,
+  BarChart3,
+  TrendingUp,
+  CreditCard,
+  MousePointerClick,
+  Plus,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  ShieldCheck,
+  Tag,
+} from 'lucide-react';
 import { PlatformIcon } from '@/components/PlatformIcon';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { POPULAR_COUNTRIES, DEFAULT_COUNTRY_CODE, getCountryFlag, getCountryName } from '@/lib/countries';
+
+interface AdminStats {
+  listings: {
+    total: number;
+    active: number;
+    pendingPayment: number;
+    hidden: number;
+    specialPromotional: number;
+  };
+  financials: {
+    totalRevenueDollars: number;
+    totalRevenueCents: number;
+    totalVerifiedBidsDollars: number;
+    totalVerifiedBidsCents: number;
+    currency: string;
+  };
+  payments: {
+    total: number;
+    successful: number;
+    failed: number;
+    canceled: number;
+  };
+  bids: {
+    total: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    canceled: number;
+  };
+  users: {
+    total: number;
+  };
+  traffic: {
+    totalRecordedClicks: number;
+    trafficModelNote: string;
+  };
+}
 
 interface AdminListing {
   id: string;
@@ -19,6 +79,8 @@ interface AdminListing {
   verifiedBid: number;
   clickCount: number;
   status: string;
+  isSpecial: boolean;
+  countryCode?: string | null;
   createdAt: string;
   bidReachedAt: string;
   _count: { bids: number; payments: number; clicks: number };
@@ -40,18 +102,30 @@ export default function AdminPage() {
   const [adminEmail, setAdminEmail] = useState('vishalkumar75912@gmail.com');
   const [adminKey, setAdminKey] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<'listings' | 'payments'>('listings');
-  
+  const [activeTab, setActiveTab] = useState<'overview' | 'listings' | 'payments' | 'special'>('overview');
+
+  const [stats, setStats] = useState<AdminStats | null>(null);
   const [listings, setListings] = useState<AdminListing[]>([]);
   const [payments, setPayments] = useState<AdminPayment[]>([]);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
-  
+
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Check existing session via /api/admin/me
+  // Special Listing Form State
+  const [specialUrl, setSpecialUrl] = useState('');
+  const [specialTitle, setSpecialTitle] = useState('');
+  const [specialDesc, setSpecialDesc] = useState('');
+  const [specialCategory, setSpecialCategory] = useState('');
+  const [specialCountry, setSpecialCountry] = useState(DEFAULT_COUNTRY_CODE);
+  const [specialBidDollars, setSpecialBidDollars] = useState(50);
+  const [specialSubmitting, setSpecialSubmitting] = useState(false);
+  const [specialSuccessMsg, setSpecialSuccessMsg] = useState<string | null>(null);
+  const [specialErrorMsg, setSpecialErrorMsg] = useState<string | null>(null);
+
+  // Check active session on mount
   useEffect(() => {
     checkActiveSession();
   }, []);
@@ -74,12 +148,17 @@ export default function AdminPage() {
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [listingsRes, paymentsRes, categoriesRes] = await Promise.all([
+      const [statsRes, listingsRes, paymentsRes, categoriesRes] = await Promise.all([
+        fetch('/api/admin/stats'),
         fetch('/api/admin/listings'),
         fetch('/api/admin/payments'),
         fetch('/api/categories'),
       ]);
 
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        setStats(data.metrics || null);
+      }
       if (listingsRes.ok) {
         const data = await listingsRes.json();
         setListings(data.listings || []);
@@ -90,7 +169,11 @@ export default function AdminPage() {
       }
       if (categoriesRes.ok) {
         const data = await categoriesRes.json();
-        setCategories(data.categories || []);
+        const cats = data.categories || [];
+        setCategories(cats);
+        if (cats.length > 0 && !specialCategory) {
+          setSpecialCategory(cats[0].id);
+        }
       }
     } catch (e) {
       console.error('Failed to load admin data:', e);
@@ -119,7 +202,7 @@ export default function AdminPage() {
       }
 
       setIsAuthenticated(true);
-      setAdminKey(''); // Clear secret from state
+      setAdminKey('');
       loadAdminData();
     } catch (err) {
       console.error('Login request failed:', err);
@@ -150,36 +233,49 @@ export default function AdminPage() {
         setListings((prev) =>
           prev.map((l) => (l.id === listingId ? { ...l, status: newStatus } : l))
         );
+        loadAdminData();
       }
     } catch (e) {
       console.error('Toggle status failed:', e);
     }
   };
 
-  const handleChangeCategory = async (listingId: string, newCategoryId: string) => {
+  const handleCreateSpecialListing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSpecialSubmitting(true);
+    setSpecialSuccessMsg(null);
+    setSpecialErrorMsg(null);
+
     try {
       const res = await fetch('/api/admin/listings', {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: listingId, categoryId: newCategoryId }),
+        body: JSON.stringify({
+          destinationUrl: specialUrl,
+          title: specialTitle || undefined,
+          description: specialDesc || undefined,
+          categoryId: specialCategory,
+          countryCode: specialCountry,
+          verifiedBidDollars: specialBidDollars,
+        }),
       });
 
-      if (res.ok) {
-        const catObj = categories.find((c) => c.id === newCategoryId);
-        setListings((prev) =>
-          prev.map((l) =>
-            l.id === listingId
-              ? {
-                  ...l,
-                  categoryId: newCategoryId,
-                  category: catObj ? { id: catObj.id, name: catObj.name, slug: '' } : l.category,
-                }
-              : l
-          )
-        );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create promotional listing');
       }
-    } catch (e) {
-      console.error('Change category failed:', e);
+
+      setSpecialSuccessMsg(
+        `Successfully placed promotional listing for ${specialUrl} at $${specialBidDollars} rank. Zero fake payment records created.`
+      );
+      setSpecialUrl('');
+      setSpecialTitle('');
+      setSpecialDesc('');
+      loadAdminData();
+    } catch (err) {
+      setSpecialErrorMsg(err instanceof Error ? err.message : 'Error creating special listing');
+    } finally {
+      setSpecialSubmitting(false);
     }
   };
 
@@ -281,12 +377,12 @@ export default function AdminPage() {
             </Link>
             <div>
               <h1 className="text-lg font-bold text-[var(--text-primary)] flex items-center space-x-2">
-                <span>Admin Moderation Control</span>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/20">
-                  Authenticated
+                <span>Admin Operations & Moderation</span>
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-semibold border border-emerald-500/20">
+                  vishalkumar75912@gmail.com
                 </span>
               </h1>
-              <p className="text-xs text-[var(--text-secondary)]">Manage listings, moderate URLs, inspect verified transactions</p>
+              <p className="text-xs text-[var(--text-secondary)]">Production metrics, listing moderation, promotional placements</p>
             </div>
           </div>
 
@@ -311,7 +407,19 @@ export default function AdminPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center space-x-2 border-b border-[var(--border-color)] pb-1">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-color)] pb-2">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'overview'
+                ? 'bg-[var(--text-primary)] text-[var(--bg-card)]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Dashboard Overview</span>
+          </button>
+
           <button
             onClick={() => setActiveTab('listings')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
@@ -332,12 +440,259 @@ export default function AdminPage() {
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
             }`}
           >
-            <DollarSign className="w-3.5 h-3.5" />
+            <CreditCard className="w-3.5 h-3.5" />
             <span>Payments ({payments.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('special')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'special'
+                ? 'bg-amber-500 text-slate-950 font-bold'
+                : 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>+ Special Admin Listing</span>
           </button>
         </div>
 
-        {/* Listings Tab */}
+        {/* 1. OVERVIEW TAB */}
+        {activeTab === 'overview' && stats && (
+          <div className="space-y-4">
+            {/* Top Stat Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
+                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Verified Revenue</div>
+                <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+                  ${stats.financials.totalRevenueDollars.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                  From {stats.payments.successful} verified payments
+                </div>
+              </div>
+
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
+                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Verified Bids Sum</div>
+                <div className="text-xl sm:text-2xl font-extrabold text-amber-500 font-mono mt-1">
+                  ${stats.financials.totalVerifiedBidsDollars.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                  Across {stats.listings.active} active listings
+                </div>
+              </div>
+
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
+                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Total Listings</div>
+                <div className="text-xl sm:text-2xl font-extrabold text-[var(--text-primary)] mt-1">
+                  {stats.listings.total}
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                  {stats.listings.active} active · {stats.listings.pendingPayment} pending
+                </div>
+              </div>
+
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
+                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Outbound Clicks</div>
+                <div className="text-xl sm:text-2xl font-extrabold text-sky-500 mt-1">
+                  {stats.traffic.totalRecordedClicks}
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                  Deduplicated by IP hash
+                </div>
+              </div>
+            </div>
+
+            {/* Second Row: Payment Breakdown & Listing Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-2">
+                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
+                  <span>Payment Ledger Status</span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)]">Successful</div>
+                    <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{stats.payments.successful}</div>
+                  </div>
+                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)]">Failed</div>
+                    <div className="text-base font-bold text-rose-500 mt-0.5">{stats.payments.failed}</div>
+                  </div>
+                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)]">Canceled</div>
+                    <div className="text-base font-bold text-[var(--text-secondary)] mt-0.5">{stats.payments.canceled}</div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] pt-1">
+                  Revenue is computed strictly from successful settled payments.
+                </div>
+              </div>
+
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-2">
+                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
+                  <span>Listings & Promotional Status</span>
+                  <Tag className="w-4 h-4 text-amber-500" />
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
+                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)]">Active Public</div>
+                    <div className="text-base font-bold text-[var(--text-primary)] mt-0.5">{stats.listings.active}</div>
+                  </div>
+                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)]">Pending Pay</div>
+                    <div className="text-base font-bold text-amber-500 mt-0.5">{stats.listings.pendingPayment}</div>
+                  </div>
+                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)]">Admin Special</div>
+                    <div className="text-base font-bold text-purple-500 mt-0.5">{stats.listings.specialPromotional}</div>
+                  </div>
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] pt-1">
+                  Pending listings are strictly invisible to the public leaderboard.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. SPECIAL ADMIN LISTING FORM */}
+        {activeTab === 'special' && (
+          <div className="max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5 sm:p-6 space-y-4">
+            <div>
+              <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold mb-1">
+                <Sparkles className="w-3.5 h-3.5 mr-1" />
+                <span>Admin Special Placement</span>
+              </div>
+              <h2 className="text-lg font-bold text-[var(--text-primary)]">Add Promotional / Special Listing</h2>
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                Place a legitimate promotional listing at any rank without going through user payment. Creates <strong>zero fake payment/revenue records</strong>.
+              </p>
+            </div>
+
+            {specialSuccessMsg && (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 rounded-lg text-xs flex items-start space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                <span>{specialSuccessMsg}</span>
+              </div>
+            )}
+
+            {specialErrorMsg && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-800 dark:text-rose-300 rounded-lg text-xs flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                <span>{specialErrorMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateSpecialListing} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                  Destination URL <span className="text-amber-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={specialUrl}
+                  onChange={(e) => setSpecialUrl(e.target.value)}
+                  placeholder="https://partner-startup.com"
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                    Display Title
+                  </label>
+                  <input
+                    type="text"
+                    value={specialTitle}
+                    onChange={(e) => setSpecialTitle(e.target.value)}
+                    placeholder="e.g. Acme AI"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                    Category <span className="text-amber-500">*</span>
+                  </label>
+                  <select
+                    value={specialCategory}
+                    onChange={(e) => setSpecialCategory(e.target.value)}
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                    Country <span className="text-amber-500">*</span>
+                  </label>
+                  <select
+                    value={specialCountry}
+                    onChange={(e) => setSpecialCountry(e.target.value)}
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                  >
+                    {POPULAR_COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                  Displayed Ranking Bid ($ USD) <span className="text-amber-500">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-xs font-semibold text-[var(--text-muted)]">$</span>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={specialBidDollars}
+                    onChange={(e) => setSpecialBidDollars(parseInt(e.target.value, 10) || 0)}
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 pl-7 pr-3 text-xs text-[var(--text-primary)] font-mono font-bold focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] mt-1">
+                  This sets the public leaderboard ranking position. It will NOT inflate verified revenue.
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                  Description
+                </label>
+                <textarea
+                  rows={2}
+                  value={specialDesc}
+                  onChange={(e) => setSpecialDesc(e.target.value)}
+                  placeholder="Official promotional partner..."
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={specialSubmitting}
+                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs shadow-2xs transition cursor-pointer disabled:opacity-50"
+              >
+                {specialSubmitting ? 'Creating Special Listing...' : 'Activate Special Listing'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* 3. LISTINGS TAB */}
         {activeTab === 'listings' && (
           <div className="space-y-3">
             {/* Filters */}
@@ -354,7 +709,7 @@ export default function AdminPage() {
               </div>
 
               <div className="flex items-center space-x-1.5">
-                {['all', 'active', 'hidden'].map((status) => (
+                {['all', 'active', 'hidden', 'pending_payment'].map((status) => (
                   <button
                     key={status}
                     onClick={() => setStatusFilter(status)}
@@ -364,7 +719,7 @@ export default function AdminPage() {
                         : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:bg-[var(--bg-surface)]'
                     }`}
                   >
-                    {status}
+                    {status.replace('_', ' ')}
                   </button>
                 ))}
               </div>
@@ -378,7 +733,9 @@ export default function AdminPage() {
                     <tr>
                       <th className="py-2.5 px-3 font-semibold">Listing</th>
                       <th className="py-2.5 px-3 font-semibold">Category</th>
+                      <th className="py-2.5 px-3 font-semibold">Country</th>
                       <th className="py-2.5 px-3 font-semibold">Verified Bid</th>
+                      <th className="py-2.5 px-3 font-semibold">Type</th>
                       <th className="py-2.5 px-3 font-semibold">Clicks</th>
                       <th className="py-2.5 px-3 font-semibold">Status</th>
                       <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
@@ -387,8 +744,8 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-[var(--border-color)]">
                     {filteredListings.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                          No listings in database.
+                        <td colSpan={8} className="py-8 text-center text-xs text-[var(--text-muted)]">
+                          No listings matching filter.
                         </td>
                       </tr>
                     ) : (
@@ -401,72 +758,62 @@ export default function AdminPage() {
                               </div>
                               <div className="min-w-0 max-w-xs">
                                 <div className="font-semibold text-[var(--text-primary)] truncate">{l.title}</div>
-                                <a
-                                  href={l.destinationUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] truncate block text-[11px]"
-                                >
-                                  {l.canonicalUrl}
-                                </a>
+                                <div className="text-[10px] text-[var(--text-muted)] truncate">{l.canonicalUrl}</div>
                               </div>
                             </div>
                           </td>
 
-                          <td className="py-3 px-3">
-                            <select
-                              value={l.categoryId}
-                              onChange={(e) => handleChangeCategory(l.id, e.target.value)}
-                              className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded px-1.5 py-0.5 text-xs text-[var(--text-primary)] cursor-pointer focus:outline-none"
-                            >
-                              {categories.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                  {c.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-
-                          <td className="py-3 px-3 font-mono font-bold text-[var(--text-primary)]">
-                            ${(l.verifiedBid / 100).toLocaleString()}
+                          <td className="py-3 px-3 text-[var(--text-secondary)]">
+                            {l.category?.name || 'Uncategorized'}
                           </td>
 
                           <td className="py-3 px-3 text-[var(--text-secondary)]">
-                            {l.clickCount.toLocaleString()}
+                            <span className="inline-flex items-center space-x-1 font-medium">
+                              <span>{getCountryFlag(l.countryCode)}</span>
+                              <span>{getCountryName(l.countryCode)}</span>
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-3 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                            ${(l.verifiedBid / 100).toLocaleString()}
+                          </td>
+
+                          <td className="py-3 px-3">
+                            {l.isSpecial ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                                Admin Special
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-color)]">
+                                Standard Paid
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 font-mono text-[var(--text-secondary)]">
+                            {l.clickCount}
                           </td>
 
                           <td className="py-3 px-3">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              className={`px-2 py-0.5 rounded text-[10px] font-semibold capitalize ${
                                 l.status === 'active'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                  : l.status === 'pending_payment'
+                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                               }`}
                             >
-                              {l.status}
+                              {l.status.replace('_', ' ')}
                             </span>
                           </td>
 
                           <td className="py-3 px-3 text-right">
                             <button
                               onClick={() => handleToggleStatus(l.id, l.status)}
-                              className={`px-2 py-1 rounded text-xs font-semibold transition cursor-pointer inline-flex items-center space-x-1 ${
-                                l.status === 'active'
-                                  ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/20'
-                                  : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
-                              }`}
+                              className="px-2 py-1 bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded border border-[var(--border-color)] text-[11px] font-medium transition cursor-pointer"
                             >
-                              {l.status === 'active' ? (
-                                <>
-                                  <EyeOff className="w-3 h-3" />
-                                  <span>Hide</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="w-3 h-3" />
-                                  <span>Restore</span>
-                                </>
-                              )}
+                              {l.status === 'active' ? 'Hide' : 'Activate'}
                             </button>
                           </td>
                         </tr>
@@ -479,51 +826,56 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* Payments Tab */}
+        {/* 4. PAYMENTS TAB */}
         {activeTab === 'payments' && (
           <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl overflow-hidden shadow-2xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="text-[var(--text-secondary)] border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
                   <tr>
-                    <th className="py-2.5 px-3 font-semibold">Payment ID / Order</th>
+                    <th className="py-2.5 px-3 font-semibold">Payment ID</th>
                     <th className="py-2.5 px-3 font-semibold">Listing</th>
+                    <th className="py-2.5 px-3 font-semibold">Gateway</th>
                     <th className="py-2.5 px-3 font-semibold">Amount</th>
-                    <th className="py-2.5 px-3 font-semibold">Provider</th>
                     <th className="py-2.5 px-3 font-semibold">Status</th>
-                    <th className="py-2.5 px-3 font-semibold">Timestamp</th>
+                    <th className="py-2.5 px-3 font-semibold">Time (UTC)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-color)]">
                   {payments.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                        No payments recorded yet.
+                        No payment records in ledger.
                       </td>
                     </tr>
                   ) : (
                     payments.map((p) => (
                       <tr key={p.id} className="hover:bg-[var(--bg-surface)] transition">
-                        <td className="py-3 px-3 font-mono text-[var(--text-secondary)] text-[11px]">
+                        <td className="py-3 px-3 font-mono text-[11px] text-[var(--text-secondary)]">
                           {p.providerPaymentId}
                         </td>
-                        <td className="py-3 px-3">
-                          <div className="font-semibold text-[var(--text-primary)]">{p.listing?.title || 'Unknown'}</div>
-                          <div className="text-[var(--text-muted)] text-[11px]">{p.listing?.canonicalUrl}</div>
+                        <td className="py-3 px-3 font-semibold text-[var(--text-primary)]">
+                          {p.listing?.title || 'Unknown'}
+                        </td>
+                        <td className="py-3 px-3 uppercase text-[10px] text-[var(--text-muted)] font-bold">
+                          {p.provider}
                         </td>
                         <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
                           ${(p.amount / 100).toLocaleString()}
                         </td>
-                        <td className="py-3 px-3 capitalize text-[var(--text-secondary)]">
-                          {p.provider}
-                        </td>
                         <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                              p.status === 'succeeded'
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                            }`}
+                          >
                             {p.status}
                           </span>
                         </td>
-                        <td className="py-3 px-3 text-[var(--text-muted)] font-mono text-[11px]">
-                          {new Date(p.createdAt).toISOString().replace('T', ' ').slice(0, 16)} UTC
+                        <td className="py-3 px-3 font-mono text-[10px] text-[var(--text-muted)]">
+                          {new Date(p.createdAt).toISOString().replace('T', ' ').substring(0, 19)}
                         </td>
                       </tr>
                     ))

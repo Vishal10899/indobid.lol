@@ -4,6 +4,7 @@ import { validateAndFormatUrl, normalizeCanonicalUrl, detectDestinationType, san
 import { razorpayProvider } from '@/lib/payments/razorpay-provider';
 import { MINIMUM_BID_CENTS, MINIMUM_INCREMENT_CENTS } from '@/lib/ranking';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { isValidCountryCode, DEFAULT_COUNTRY_CODE } from '@/lib/countries';
 import { z } from 'zod';
 
 const checkoutSchema = z.object({
@@ -15,6 +16,7 @@ const checkoutSchema = z.object({
   title: z.string().max(100).optional(),
   description: z.string().max(500).optional(),
   categoryId: z.string().optional(),
+  countryCode: z.string().optional().nullable(),
   
   // Target bid amounts
   targetTotalBidDollars: z.number().positive().optional(),
@@ -51,6 +53,18 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
+    // Validate countryCode if provided
+    let normalizedCountryCode = DEFAULT_COUNTRY_CODE;
+    if (data.countryCode !== undefined && data.countryCode !== null && data.countryCode !== '') {
+      if (!isValidCountryCode(data.countryCode)) {
+        return NextResponse.json(
+          { error: 'Invalid country code. Please provide a valid 2-letter ISO country code.' },
+          { status: 400 }
+        );
+      }
+      normalizedCountryCode = data.countryCode.trim().toUpperCase();
+    }
+
     let listing = null;
     let currentVerifiedBidCents = 0;
     let chargeAmountCents = 0;
@@ -85,6 +99,14 @@ export async function POST(request: NextRequest) {
 
       // Exact backend difference calculation: requested target - current verified total
       chargeAmountCents = finalTargetTotalCents - currentVerifiedBidCents;
+
+      // Update country if explicitly provided
+      if (data.countryCode) {
+        await prisma.listing.update({
+          where: { id: listing.id },
+          data: { countryCode: normalizedCountryCode },
+        });
+      }
     }
     // CASE B: Destination URL submission (New or existing by canonical URL)
     else if (data.destinationUrl) {
@@ -131,21 +153,20 @@ export async function POST(request: NextRequest) {
         }
         chargeAmountCents = finalTargetTotalCents - currentVerifiedBidCents;
 
-        // Optionally update metadata
-        if (data.title || data.description) {
-          listing = await prisma.listing.update({
-            where: { id: listing.id },
-            data: {
-              title: data.title ? sanitizeText(data.title, 100) : listing.title,
-              description: data.description ? sanitizeText(data.description, 500) : listing.description,
-              logoUrl: data.logoUrl ? sanitizeText(data.logoUrl, 500) : listing.logoUrl,
-              destinationUrl: formattedUrl,
-            },
-            include: { category: true },
-          });
-        }
+        // Update metadata & country
+        listing = await prisma.listing.update({
+          where: { id: listing.id },
+          data: {
+            title: data.title ? sanitizeText(data.title, 100) : listing.title,
+            description: data.description ? sanitizeText(data.description, 500) : listing.description,
+            logoUrl: data.logoUrl ? sanitizeText(data.logoUrl, 500) : listing.logoUrl,
+            destinationUrl: formattedUrl,
+            countryCode: data.countryCode ? normalizedCountryCode : listing.countryCode || normalizedCountryCode,
+          },
+          include: { category: true },
+        });
       } else {
-        // Brand new listing
+        // Brand new listing created in pending_payment state with verifiedBid = 0
         finalTargetTotalCents = Math.max(MINIMUM_BID_CENTS, requestedTotal);
         chargeAmountCents = finalTargetTotalCents;
 
@@ -160,13 +181,14 @@ export async function POST(request: NextRequest) {
             title: sanitizeText(data.title || defaultTitle, 100),
             description: sanitizeText(data.description || defaultDesc, 500),
             categoryId,
+            countryCode: normalizedCountryCode,
             logoUrl: data.logoUrl ? sanitizeText(data.logoUrl, 500) : null,
             socialWebsite: data.socialWebsite ? sanitizeText(data.socialWebsite, 300) : null,
             socialInstagram: data.socialInstagram ? sanitizeText(data.socialInstagram, 300) : null,
             socialYoutube: data.socialYoutube ? sanitizeText(data.socialYoutube, 300) : null,
             socialX: data.socialX ? sanitizeText(data.socialX, 300) : null,
             verifiedBid: 0,
-            status: 'active',
+            status: 'pending_payment',
           },
           include: { category: true },
         });
@@ -227,6 +249,7 @@ export async function POST(request: NextRequest) {
       currency: checkoutSession.currency || 'USD',
       listingId: listing.id,
       listingTitle: listing.title,
+      countryCode: listing.countryCode,
       bidId: pendingBid.id,
       chargeAmountCents,
       targetTotalBidCents: finalTargetTotalCents,

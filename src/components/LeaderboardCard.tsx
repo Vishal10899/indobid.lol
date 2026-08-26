@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Trophy, ExternalLink, MousePointerClick, Calendar, Loader2, AlertCircle } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
+import { getCountryFlag, getCountryName } from '@/lib/countries';
 
 export interface LeaderboardItemData {
   id: string;
@@ -21,6 +22,7 @@ export interface LeaderboardItemData {
   categorySlug: string;
   verifiedBid: number; // in cents
   currency: string;
+  countryCode?: string | null;
   clickCount: number;
   status: string;
   socialWebsite: string | null;
@@ -157,8 +159,13 @@ export function LeaderboardCard({ item, onCustomOutbid }: LeaderboardCardProps) 
             </p>
 
             {/* Metadata row */}
-            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-[var(--text-muted)]">
-              <span className="font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] px-1.5 py-0.2 rounded">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--text-muted)]">
+              <span className="inline-flex items-center space-x-1 font-medium text-[var(--text-secondary)]">
+                <span>{getCountryFlag(item.countryCode)}</span>
+                <span>{getCountryName(item.countryCode)}</span>
+              </span>
+              <span>·</span>
+              <span className="font-medium text-[var(--text-secondary)] bg-[var(--bg-surface)] px-1.5 py-0.2 rounded border border-[var(--border-color)]">
                 {item.categoryName}
               </span>
               <span>·</span>

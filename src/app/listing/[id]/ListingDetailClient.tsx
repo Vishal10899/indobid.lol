@@ -7,6 +7,7 @@ import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { BidModal } from '@/components/BidModal';
 import { PlatformIcon, getPlatformLabel } from '@/components/PlatformIcon';
+import { getCountryFlag, getCountryName } from '@/lib/countries';
 
 interface ListingDetailProps {
   listing: {
@@ -22,6 +23,7 @@ interface ListingDetailProps {
     categorySlug: string;
     verifiedBid: number;
     currency: string;
+    countryCode?: string | null;
     clickCount: number;
     status: string;
     socialWebsite: string | null;
@@ -143,6 +145,10 @@ export function ListingDetailClient({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">{listing.title}</h1>
+                  <span className="text-xs bg-[var(--bg-surface)] text-[var(--text-secondary)] px-2 py-0.5 rounded font-medium border border-[var(--border-color)] flex items-center space-x-1">
+                    <span>{getCountryFlag(listing.countryCode)}</span>
+                    <span>{getCountryName(listing.countryCode)}</span>
+                  </span>
                   <span className="text-xs bg-[var(--bg-surface)] text-[var(--text-secondary)] px-2 py-0.5 rounded font-medium border border-[var(--border-color)]">
                     {listing.categoryName}
                   </span>

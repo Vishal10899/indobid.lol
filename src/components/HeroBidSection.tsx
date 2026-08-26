@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, ArrowRight, Minus, Plus, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
+import { POPULAR_COUNTRIES, DEFAULT_COUNTRY_CODE } from '@/lib/countries';
 
 interface Category {
   id: string;
@@ -34,6 +35,7 @@ export function HeroBidSection({
   const [targetDollars, setTargetDollars] = useState<number>(minToTakeFirstDollars || 2);
   const [url, setUrl] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [countryCode, setCountryCode] = useState<string>(DEFAULT_COUNTRY_CODE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -184,6 +186,7 @@ export function HeroBidSection({
           listingId: urlLookup?.listingId,
           destinationUrl: url,
           categoryId,
+          countryCode,
           targetTotalBidDollars: targetDollars,
         }),
       });
@@ -279,9 +282,9 @@ export function HeroBidSection({
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-3 pt-1">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
               {/* Destination URL */}
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-6">
                 <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
                   Destination URL
                 </label>
@@ -306,7 +309,7 @@ export function HeroBidSection({
               </div>
 
               {/* Category */}
-              <div>
+              <div className="sm:col-span-3">
                 <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
                   Category
                 </label>
@@ -318,6 +321,24 @@ export function HeroBidSection({
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Country */}
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                  Country
+                </label>
+                <select
+                  value={countryCode}
+                  onChange={(e) => setCountryCode(e.target.value)}
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-sm focus:outline-none transition cursor-pointer"
+                >
+                  {POPULAR_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.name}
                     </option>
                   ))}
                 </select>

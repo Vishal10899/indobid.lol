@@ -46,6 +46,7 @@ export interface LeaderboardItem {
   categorySlug: string;
   verifiedBid: number; // in cents
   currency: string;
+  countryCode: string | null;
   clickCount: number;
   status: string;
   socialWebsite: string | null;
@@ -160,6 +161,7 @@ export async function getLeaderboard({
       categorySlug: listing.category.slug,
       verifiedBid: listing.verifiedBid,
       currency: listing.currency,
+      countryCode: listing.countryCode,
       clickCount: listing.clickCount,
       status: listing.status,
       socialWebsite: listing.socialWebsite,

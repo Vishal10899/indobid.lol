@@ -3,13 +3,14 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Trophy, CheckCircle2, ArrowRight, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Trophy, CheckCircle2, ArrowRight, ExternalLink, RefreshCw, ShieldCheck, Clock, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { PlatformIcon } from '@/components/PlatformIcon';
 
 interface VerifiedData {
   verified: boolean;
+  status?: string;
   listing?: {
     id: string;
     title: string;
@@ -28,6 +29,8 @@ interface VerifiedData {
   amountPaidCents?: number;
 }
 
+const MAX_POLL_ATTEMPTS = 12; // 12 cycles * 2.5s = 30 seconds max polling
+
 function SuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get('session_id') || searchParams.get('order_id') || '';
@@ -37,8 +40,18 @@ function SuccessContent() {
 
   const [data, setData] = useState<VerifiedData | null>(null);
   const [pollCount, setPollCount] = useState(0);
+  const [isTimedOut, setIsTimedOut] = useState(false);
+  const [isFailed, setIsFailed] = useState(false);
+
+  const resetPolling = () => {
+    setIsTimedOut(false);
+    setIsFailed(false);
+    setPollCount(0);
+  };
 
   useEffect(() => {
+    if (data?.verified || isTimedOut || isFailed) return;
+
     let interval: NodeJS.Timeout;
 
     const checkStatus = async () => {
@@ -55,12 +68,25 @@ function SuccessContent() {
           if (json.verified) {
             setData(json);
             clearInterval(interval);
+            return;
+          }
+          if (json.status === 'failed' || json.status === 'canceled') {
+            setIsFailed(true);
+            clearInterval(interval);
+            return;
           }
         }
       } catch (e) {
         console.error('Status check error:', e);
       } finally {
-        setPollCount((prev) => prev + 1);
+        setPollCount((prev) => {
+          const next = prev + 1;
+          if (next >= MAX_POLL_ATTEMPTS) {
+            setIsTimedOut(true);
+            clearInterval(interval);
+          }
+          return next;
+        });
       }
     };
 
@@ -68,7 +94,7 @@ function SuccessContent() {
     interval = setInterval(checkStatus, 2500);
 
     return () => clearInterval(interval);
-  }, [sessionId, listingId, bidId, paymentId]);
+  }, [sessionId, listingId, bidId, paymentId, isTimedOut, isFailed, data?.verified]);
 
   const isVerified = data?.verified;
   const dollars = data?.verifiedBidCents ? data.verifiedBidCents / 100 : 0;
@@ -80,22 +106,96 @@ function SuccessContent() {
 
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
         <div className="max-w-md w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 sm:p-8 shadow-2xs text-center">
-          {!isVerified ? (
-            /* Processing State */
+          {/* 1. TIMED OUT STATE */}
+          {isTimedOut && !isVerified && (
+            <div className="py-2 space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-[var(--text-primary)]">Verification In Progress</h1>
+                <p className="text-xs text-[var(--text-secondary)] mt-1 max-w-xs mx-auto">
+                  Payment verification is taking longer than expected. If your payment was completed, your listing will become live automatically once confirmed.
+                </p>
+              </div>
+
+              <div className="p-3 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)] text-xs text-[var(--text-secondary)] text-left">
+                <div className="font-semibold text-[var(--text-primary)] mb-0.5">Status Check</div>
+                No verified charge confirmed yet. You can check again or return to the marketplace.
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={resetPolling}
+                  className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg text-xs shadow-2xs transition flex items-center justify-center space-x-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Check Again</span>
+                </button>
+
+                <Link
+                  href="/"
+                  className="w-full py-2.5 px-4 bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-medium rounded-lg text-xs border border-[var(--border-color)] transition flex items-center justify-center space-x-1.5"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Leaderboard</span>
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* 2. FAILED STATE */}
+          {isFailed && !isVerified && (
+            <div className="py-2 space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto border border-rose-500/20">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-[var(--text-primary)]">Payment Incomplete</h1>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">
+                  The payment transaction was not completed. Your listing has not been modified.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                <Link
+                  href="/"
+                  className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg text-xs shadow-2xs transition flex items-center justify-center space-x-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Try Again</span>
+                </Link>
+
+                <Link
+                  href="/"
+                  className="w-full py-2.5 px-4 bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-medium rounded-lg text-xs border border-[var(--border-color)] transition flex items-center justify-center space-x-1.5"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Leaderboard</span>
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* 3. ACTIVE PROCESSING STATE */}
+          {!isVerified && !isTimedOut && !isFailed && (
             <div className="py-6 space-y-3">
               <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/20 animate-spin">
                 <RefreshCw className="w-6 h-6" />
               </div>
-              <h1 className="text-xl font-bold text-[var(--text-primary)]">Payment Processing...</h1>
+              <h1 className="text-xl font-bold text-[var(--text-primary)]">Verifying Payment...</h1>
               <p className="text-xs text-[var(--text-secondary)] max-w-xs mx-auto">
-                Verifying transaction signature with webhook. Your leaderboard rank will activate shortly.
+                Verifying transaction signature with backend. Your leaderboard rank will activate immediately upon confirmation.
               </p>
               <div className="text-[11px] text-[var(--text-muted)]">
-                Polling status ({pollCount * 2}s)...
+                Checking status ({pollCount * 2}s / 30s max)...
               </div>
             </div>
-          ) : (
-            /* Verified Live State */
+          )}
+
+          {/* 4. VERIFIED LIVE STATE */}
+          {isVerified && (
             <div className="space-y-5">
               <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/20">
                 <CheckCircle2 className="w-6 h-6" />

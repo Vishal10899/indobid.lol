@@ -91,6 +91,7 @@ export default async function ListingPage({ params, searchParams }: ListingPageP
         categorySlug: listing.category.slug,
         verifiedBid: listing.verifiedBid,
         currency: listing.currency,
+        countryCode: listing.countryCode,
         clickCount: listing.clickCount,
         status: listing.status,
         socialWebsite: listing.socialWebsite,
