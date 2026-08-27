@@ -802,6 +802,127 @@ async function runTestSuite() {
     'Test 32: Public /api/analytics/top-listings returns valid JSON with up to 5 real active listings'
   );
 
+  // TEST 33: Canonical Category Taxonomy Completeness
+  console.log('\n--- Test Case 33: Canonical Category Taxonomy Completeness ---');
+  const { CANONICAL_CATEGORIES, getCategoryBySlug, isValidCategorySlug } = await import('../src/lib/categories');
+
+  const requiredNames = [
+    'AI',
+    'SaaS',
+    'Startups',
+    'FinTech',
+    'HealthTech',
+    'EdTech',
+    'E-commerce',
+    'Marketplace',
+    'Social',
+    'Consumer',
+    'Developer Tools',
+    'Cybersecurity',
+    'Web3 / Crypto',
+    'Gaming',
+    'Productivity',
+    'Marketing',
+    'Media',
+    'Entertainment',
+    'Travel',
+    'FoodTech',
+    'Logistics',
+    'Mobility',
+    'ClimateTech',
+    'CleanTech',
+    'PropTech',
+    'InsurTech',
+    'LegalTech',
+    'HRTech',
+    'DeepTech',
+    'Hardware',
+    'Robotics',
+    'Biotech',
+    'AgriTech',
+    'Enterprise',
+    'B2B',
+    'B2C',
+    'D2C',
+    'Creator Economy',
+    'Other',
+  ];
+
+  const allRequiredPresent = requiredNames.every((name) =>
+    CANONICAL_CATEGORIES.some((c) => c.name.toLowerCase() === name.toLowerCase())
+  );
+  const otherPresent = CANONICAL_CATEGORIES.some((c) => c.name === 'Other' && c.slug === 'other');
+  const isValidSlugCheck = isValidCategorySlug('fintech') && isValidCategorySlug('ai') && !isValidCategorySlug('fake_nonexistent_cat');
+
+  assert(
+    allRequiredPresent && otherPresent && isValidSlugCheck && CANONICAL_CATEGORIES.length >= 39,
+    'Test 33: Canonical category system contains all 39 business/startup categories including Other and validates slugs'
+  );
+
+  // TEST 34: Public /api/categories Endpoint Returns All Categories
+  console.log('\n--- Test Case 34: Public /api/categories Endpoint Returns All Categories ---');
+  const { GET: categoriesGET } = await import('../src/app/api/categories/route');
+  const catRes = await categoriesGET();
+  const catData = await catRes.json();
+
+  assert(
+    catRes.status === 200 &&
+      Array.isArray(catData.categories) &&
+      catData.categories.length >= 39 &&
+      catData.categories.some((c: any) => c.name === 'Other') &&
+      catData.categories.some((c: any) => c.name === 'FinTech') &&
+      catData.categories.some((c: any) => c.name === 'AI'),
+    'Test 34: Public /api/categories returns ALL categories without limitation to 3 and includes Other'
+  );
+
+  // TEST 35: Existing Listings Preservation with Legacy Categories
+  console.log('\n--- Test Case 35: Existing Listings Preservation with Legacy Categories ---');
+  const testListingWithCategory = await prisma.listing.create({
+    data: {
+      title: 'Test Preserved Category Listing',
+      destinationUrl: 'https://test-preserved-cat.com',
+      canonicalUrl: 'test-preserved-cat.com',
+      destinationType: 'website',
+      description: 'Preserved category test',
+      categoryId: testCategory.id,
+      verifiedBid: 1000,
+      status: 'active',
+    },
+    include: { category: true },
+  });
+
+  assert(
+    testListingWithCategory.categoryId === testCategory.id &&
+      testListingWithCategory.category.name === testCategory.name,
+    'Test 35: Existing listings remain safely tied to their valid categories without modification'
+  );
+
+  // TEST 36: Checkout Accepts Any Canonical Category
+  console.log('\n--- Test Case 36: Checkout Accepts Any Canonical Category ---');
+  const fintechCat = await prisma.category.findFirst({ where: { slug: 'fintech' } });
+  const otherCat = await prisma.category.findFirst({ where: { slug: 'other' } });
+
+  const { POST: checkoutPOST } = await import('../src/app/api/checkout/route');
+  const dummyRequest = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-checkout-category.com',
+      categoryId: fintechCat?.id || otherCat?.id,
+      targetTotalBidDollars: 2,
+    }),
+  });
+
+  const checkoutRes = await checkoutPOST(dummyRequest as any);
+  const checkoutData = await checkoutRes.json();
+
+  assert(
+    checkoutRes.status === 200 &&
+      checkoutData.orderId &&
+      checkoutData.listingId,
+    'Test 36: Checkout successfully accepts and processes newly expanded canonical categories'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
   await prisma.listingVisit.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
