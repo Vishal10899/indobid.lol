@@ -29,6 +29,10 @@ async function purgeDemoData() {
   const deletedSessions = await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_' } } });
   console.log(`Deleted ${deletedSessions.count} test visitor sessions.`);
 
+  // Delete all test listing visits
+  const deletedListingVisits = await prisma.listingVisit.deleteMany({ where: { sessionToken: { startsWith: 'test_' } } });
+  console.log(`Deleted ${deletedListingVisits.count} test listing visits.`);
+
   console.log('Database successfully cleaned! Ready for production.');
 }
 

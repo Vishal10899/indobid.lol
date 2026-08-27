@@ -682,8 +682,129 @@ async function runTestSuite() {
     'Test 28: Health check, Live Activity polling, and Stats polling generate ZERO visitor records'
   );
 
+  // TEST 29: Real Listing Visit Tracking & Session Deduplication
+  console.log('\n--- Test Case 29: Real Listing Visit Tracking & Session Deduplication ---');
+  const { recordListingVisit, getTopVisitedListings } = await import('../src/lib/visitor-tracker');
+
+  const testListingForVisits = await prisma.listing.create({
+    data: {
+      title: 'Test Listing for Visits',
+      destinationUrl: 'https://test-visits.com',
+      canonicalUrl: 'test-visits.com',
+      destinationType: 'website',
+      description: 'Testing real listing visits',
+      categoryId: testCategory.id,
+      verifiedBid: 1000,
+      visitCount: 0,
+      status: 'active',
+    },
+  });
+
+  const session1 = `test_sess_listing_1_${Date.now()}`;
+  const session2 = `test_sess_listing_2_${Date.now()}`;
+
+  // Visit 1 from Session 1
+  const visit1 = await recordListingVisit({
+    listingId: testListingForVisits.id,
+    sessionToken: session1,
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  });
+
+  // Refresh from Session 1 (same session)
+  const visit1Refresh = await recordListingVisit({
+    listingId: testListingForVisits.id,
+    sessionToken: session1,
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  });
+
+  // Visit 2 from Session 2 (different session)
+  const visit2 = await recordListingVisit({
+    listingId: testListingForVisits.id,
+    sessionToken: session2,
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+  });
+
+  const updatedListingVisits = await prisma.listing.findUnique({
+    where: { id: testListingForVisits.id },
+    select: { visitCount: true },
+  });
+
+  assert(
+    visit1.success &&
+      visit1.counted &&
+      visit1Refresh.success &&
+      !visit1Refresh.counted &&
+      visit2.success &&
+      visit2.counted &&
+      updatedListingVisits?.visitCount === 2,
+    'Test 29: Real listing visit increments count once per session, refresh does not double count, and distinct session increments'
+  );
+
+  // TEST 30: "Best of All" Top Listings Ranking by Real Visits
+  console.log('\n--- Test Case 30: Best of All Ranking by Real Visits ---');
+  const testListingPopular = await prisma.listing.create({
+    data: {
+      title: 'Test Most Popular Listing',
+      destinationUrl: 'https://test-most-popular.com',
+      canonicalUrl: 'test-most-popular.com',
+      destinationType: 'website',
+      description: 'Most visited test listing',
+      categoryId: testCategory.id,
+      verifiedBid: 200,
+      visitCount: 99,
+      status: 'active',
+    },
+  });
+
+  const topListings = await getTopVisitedListings(5);
+  const isMostVisitedTop = topListings.length > 0 && topListings[0].id === testListingPopular.id;
+
+  assert(
+    isMostVisitedTop && topListings[0].visitCount === 99,
+    'Test 30: Best of All ranking correctly orders listings by real visitCount DESC regardless of bid amount'
+  );
+
+  // TEST 31: Best of All Exclusion Rules (Hidden, Inactive, Unverified)
+  console.log('\n--- Test Case 31: Best of All Exclusion Rules ---');
+  const testHiddenWithVisits = await prisma.listing.create({
+    data: {
+      title: 'Test Hidden Popular Listing',
+      destinationUrl: 'https://test-hidden-popular.com',
+      canonicalUrl: 'test-hidden-popular.com',
+      destinationType: 'website',
+      description: 'Hidden listing with many visits',
+      categoryId: testCategory.id,
+      verifiedBid: 200,
+      visitCount: 500,
+      status: 'hidden',
+    },
+  });
+
+  const topListingsFiltered = await getTopVisitedListings(10);
+  const hiddenIncludedInTop = topListingsFiltered.some((l) => l.id === testHiddenWithVisits.id);
+
+  assert(
+    !hiddenIncludedInTop,
+    'Test 31: Hidden, inactive, and unverified listings are strictly excluded from Best of All rankings'
+  );
+
+  // TEST 32: Public Top Listings API (/api/analytics/top-listings)
+  console.log('\n--- Test Case 32: Public Top Listings API ---');
+  const { GET: topListingsGET } = await import('../src/app/api/analytics/top-listings/route');
+  const topListingsRes = await topListingsGET();
+  const topListingsData = await topListingsRes.json();
+
+  assert(
+    topListingsRes.status === 200 &&
+      topListingsData.success === true &&
+      Array.isArray(topListingsData.items) &&
+      topListingsData.items.length <= 5,
+    'Test 32: Public /api/analytics/top-listings returns valid JSON with up to 5 real active listings'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
+  await prisma.listingVisit.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
   await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
   await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } });
   await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });

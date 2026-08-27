@@ -211,3 +211,124 @@ export async function getAdminVisitorAnalytics(activeWindowMinutes = 5): Promise
     };
   }
 }
+
+/**
+ * Records a real visit to a specific listing detail page (/listing/[id]).
+ * - Deduplicates by [listingId, sessionToken] (1 unique visit per visitor session).
+ * - Excludes bots, health checks, cron, admin, and server requests.
+ * - Atomically increments Listing.visitCount upon first session visit.
+ */
+export async function recordListingVisit({
+  listingId,
+  sessionToken,
+  userAgent,
+}: {
+  listingId: string;
+  sessionToken: string;
+  userAgent?: string | null;
+}): Promise<{ success: boolean; counted: boolean }> {
+  if (!listingId || typeof listingId !== 'string' || !isValidSessionToken(sessionToken)) {
+    return { success: false, counted: false };
+  }
+
+  if (isKnownBot(userAgent ?? null)) {
+    return { success: false, counted: false };
+  }
+
+  try {
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      select: { id: true, status: true, verifiedBid: true },
+    });
+
+    if (!listing || listing.status !== 'active' || listing.verifiedBid <= 0) {
+      return { success: false, counted: false };
+    }
+
+    // Check if this session already visited this listing
+    const existingVisit = await prisma.listingVisit.findUnique({
+      where: {
+        listingId_sessionToken: {
+          listingId,
+          sessionToken,
+        },
+      },
+    });
+
+    if (existingVisit) {
+      return { success: true, counted: false };
+    }
+
+    // Atomically create visit record and increment listing visitCount
+    await prisma.$transaction([
+      prisma.listingVisit.create({
+        data: {
+          listingId,
+          sessionToken,
+        },
+      }),
+      prisma.listing.update({
+        where: { id: listingId },
+        data: {
+          visitCount: { increment: 1 },
+        },
+      }),
+    ]);
+
+    return { success: true, counted: true };
+  } catch (error) {
+    console.error('Error recording listing visit:', error);
+    return { success: false, counted: false };
+  }
+}
+
+/**
+ * Returns TOP 5 most visited active listings for the public "🏆 BEST OF ALL" section.
+ * - Strictly real production database records.
+ * - Ordered by visitCount DESC, then verifiedBid DESC, then bidReachedAt ASC.
+ */
+export async function getTopVisitedListings(limit = 5) {
+  try {
+    const listings = await prisma.listing.findMany({
+      where: {
+        status: 'active',
+        verifiedBid: { gt: 0 },
+      },
+      orderBy: [
+        { visitCount: 'desc' },
+        { verifiedBid: 'desc' },
+        { bidReachedAt: 'asc' },
+      ],
+      take: Math.min(limit, 20),
+      select: {
+        id: true,
+        title: true,
+        destinationUrl: true,
+        canonicalUrl: true,
+        destinationType: true,
+        description: true,
+        logoUrl: true,
+        verifiedBid: true,
+        currency: true,
+        countryCode: true,
+        visitCount: true,
+        clickCount: true,
+        createdAt: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            icon: true,
+          },
+        },
+      },
+    });
+
+    return listings;
+  } catch (error) {
+    console.error('Error fetching top visited listings:', error);
+    return [];
+  }
+}
+

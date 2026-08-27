@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { isAuthorizedAdmin } from '@/lib/auth';
-import { getAdminVisitorAnalytics } from '@/lib/visitor-tracker';
+import { getAdminVisitorAnalytics, getTopVisitedListings } from '@/lib/visitor-tracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,10 +69,11 @@ export async function GET(request: NextRequest) {
     ]);
 
     // 6. User and Traffic metrics & Real Visitor Analytics
-    const [totalUsers, totalClicks, visitorAnalytics] = await Promise.all([
+    const [totalUsers, totalClicks, visitorAnalytics, topVisitedListings] = await Promise.all([
       prisma.user.count(),
       prisma.click.count(),
-      getAdminVisitorAnalytics(2),
+      getAdminVisitorAnalytics(5),
+      getTopVisitedListings(10),
     ]);
 
     // 7. Category distribution
@@ -157,6 +158,7 @@ export async function GET(request: NextRequest) {
           trafficModelNote: 'Tracks outbound clicks to listings deduplicated by IP hash (1 per hour).',
         },
         visitors: visitorAnalytics,
+        topVisitedListings,
       },
       categories: categoriesWithCount.map((c) => ({
         id: c.id,

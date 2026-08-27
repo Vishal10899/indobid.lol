@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Trophy, ExternalLink, MousePointerClick, ArrowLeft, Share2, Check, Sparkles } from 'lucide-react';
+import { Trophy, ExternalLink, MousePointerClick, ArrowLeft, Share2, Check, Sparkles, Eye } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { BidModal } from '@/components/BidModal';
@@ -25,6 +25,7 @@ interface ListingDetailProps {
     currency: string;
     countryCode?: string | null;
     clickCount: number;
+    visitCount?: number;
     status: string;
     socialWebsite: string | null;
     socialInstagram: string | null;
@@ -61,6 +62,31 @@ export function ListingDetailClient({
 }: ListingDetailProps) {
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Trigger listing visit tracking on mount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      let sessionToken = localStorage.getItem('indobid_session_id');
+      if (!sessionToken) {
+        const now = Date.now();
+        sessionToken = crypto.randomUUID ? crypto.randomUUID() : `sess_${now}_${Math.random().toString(36).substring(2, 12)}`;
+        localStorage.setItem('indobid_session_id', sessionToken);
+        localStorage.setItem('indobid_session_last_active', now.toString());
+      }
+
+      if (sessionToken && listing.id) {
+        fetch('/api/analytics/listing-visit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ listingId: listing.id, sessionToken }),
+        }).catch(() => {});
+      }
+    } catch {
+      // Non-critical tracking safety
+    }
+  }, [listing.id]);
 
   const dollars = listing.verifiedBid / 100;
   const minOutbidDollars = Math.ceil(listing.minOutbidCents / 100);
@@ -193,9 +219,9 @@ export function ListingDetailClient({
           </div>
 
           {/* Stats Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-5 pt-4 border-t border-[var(--border-color)] text-xs">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-5 pt-4 border-t border-[var(--border-color)] text-xs">
             <div className="bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-color)]">
-              <div className="text-[var(--text-secondary)] text-[10px] uppercase font-semibold">Verified Cumulative Bid</div>
+              <div className="text-[var(--text-secondary)] text-[10px] uppercase font-semibold">Verified Total Bid</div>
               <div className="text-base sm:text-lg font-bold text-[var(--text-primary)] font-mono mt-0.5">
                 ${dollars.toLocaleString()}
               </div>
@@ -209,6 +235,14 @@ export function ListingDetailClient({
             </div>
 
             <div className="bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-color)]">
+              <div className="text-[var(--text-secondary)] text-[10px] uppercase font-semibold">Listing Views</div>
+              <div className="text-base sm:text-lg font-bold text-[var(--text-primary)] mt-0.5 flex items-center space-x-1">
+                <Eye className="w-4 h-4 text-emerald-500" />
+                <span>{(listing.visitCount ?? 0).toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-color)]">
               <div className="text-[var(--text-secondary)] text-[10px] uppercase font-semibold">Outbound Clicks</div>
               <div className="text-base sm:text-lg font-bold text-[var(--text-primary)] mt-0.5 flex items-center space-x-1">
                 <MousePointerClick className="w-4 h-4 text-[var(--text-muted)]" />
@@ -216,7 +250,7 @@ export function ListingDetailClient({
               </div>
             </div>
 
-            <div className="bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-color)]">
+            <div className="bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-color)] col-span-2 sm:col-span-1">
               <div className="text-[var(--text-secondary)] text-[10px] uppercase font-semibold">Platform</div>
               <div className="text-base sm:text-lg font-bold text-[var(--text-primary)] mt-0.5 capitalize">
                 {getPlatformLabel(listing.destinationType)}

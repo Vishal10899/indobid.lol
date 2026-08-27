@@ -26,6 +26,7 @@ import {
   Tag,
   Users,
   Activity,
+  Trophy,
 } from 'lucide-react';
 import { PlatformIcon } from '@/components/PlatformIcon';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -75,6 +76,17 @@ interface AdminStats {
     allTime: number;
     totalPageViews: number;
   };
+  topVisitedListings?: Array<{
+    id: string;
+    title: string;
+    canonicalUrl: string;
+    destinationType: string;
+    verifiedBid: number;
+    visitCount: number;
+    clickCount: number;
+    countryCode?: string | null;
+    category: { name: string; slug: string };
+  }>;
 }
 
 interface AdminListing {
@@ -89,6 +101,7 @@ interface AdminListing {
   category: { id: string; name: string; slug: string };
   verifiedBid: number;
   clickCount: number;
+  visitCount?: number;
   status: string;
   isSpecial: boolean;
   countryCode?: string | null;
@@ -628,6 +641,74 @@ export default function AdminPage() {
                 </div>
               </div>
             )}
+
+            {/* Fourth Row: Top Listings by Real Visits */}
+            {stats.topVisitedListings && stats.topVisitedListings.length > 0 && (
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-3">
+                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5">
+                    <Trophy className="w-4 h-4 text-amber-500" />
+                    <span>Top Listings by Real Page Visits (Best of All)</span>
+                  </div>
+                  <span className="text-[10px] text-[var(--text-muted)]">
+                    Individual /listing/[id] view analytics
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="border-b border-[var(--border-color)] text-[10px] text-[var(--text-muted)] uppercase">
+                        <th className="pb-2 font-semibold">Rank</th>
+                        <th className="pb-2 font-semibold">Listing</th>
+                        <th className="pb-2 font-semibold">Category</th>
+                        <th className="pb-2 font-semibold">Verified Bid</th>
+                        <th className="pb-2 font-semibold text-right">Real Visits</th>
+                        <th className="pb-2 font-semibold text-right">Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--border-color)]">
+                      {stats.topVisitedListings.map((item, index) => (
+                        <tr key={item.id} className="hover:bg-[var(--bg-surface)] transition">
+                          <td className="py-2.5 font-bold text-amber-500 font-mono">
+                            #{index + 1}
+                          </td>
+                          <td className="py-2.5">
+                            <div className="flex items-center space-x-1.5">
+                              <PlatformIcon type={item.destinationType} className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                              <Link
+                                href={`/listing/${item.id}`}
+                                className="font-semibold text-[var(--text-primary)] hover:text-amber-500 transition"
+                              >
+                                {item.title}
+                              </Link>
+                              {item.countryCode && (
+                                <span className="text-xs">{getCountryFlag(item.countryCode)}</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-[var(--text-muted)] font-mono truncate max-w-[200px]">
+                              {item.canonicalUrl}
+                            </div>
+                          </td>
+                          <td className="py-2.5 text-[var(--text-secondary)]">
+                            {item.category.name}
+                          </td>
+                          <td className="py-2.5 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                            ${(item.verifiedBid / 100).toLocaleString()}
+                          </td>
+                          <td className="py-2.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            👁 {item.visitCount.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 text-right font-mono text-[var(--text-secondary)]">
+                            {item.clickCount.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -811,6 +892,7 @@ export default function AdminPage() {
                       <th className="py-2.5 px-3 font-semibold">Country</th>
                       <th className="py-2.5 px-3 font-semibold">Verified Bid</th>
                       <th className="py-2.5 px-3 font-semibold">Type</th>
+                      <th className="py-2.5 px-3 font-semibold">Visits</th>
                       <th className="py-2.5 px-3 font-semibold">Clicks</th>
                       <th className="py-2.5 px-3 font-semibold">Status</th>
                       <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
@@ -819,7 +901,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-[var(--border-color)]">
                     {filteredListings.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-xs text-[var(--text-muted)]">
+                        <td colSpan={9} className="py-8 text-center text-xs text-[var(--text-muted)]">
                           No listings matching filter.
                         </td>
                       </tr>
@@ -863,6 +945,10 @@ export default function AdminPage() {
                                 Standard Paid
                               </span>
                             )}
+                          </td>
+
+                          <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            👁 {l.visitCount ?? 0}
                           </td>
 
                           <td className="py-3 px-3 font-mono text-[var(--text-secondary)]">

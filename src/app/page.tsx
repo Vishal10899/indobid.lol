@@ -7,6 +7,7 @@ import { HeroBidSection } from '@/components/HeroBidSection';
 import { CategoryNav } from '@/components/CategoryNav';
 import { LeaderboardList } from '@/components/LeaderboardList';
 import { HowItWorks } from '@/components/HowItWorks';
+import { BestOfAllSection } from '@/components/BestOfAllSection';
 import { Footer } from '@/components/Footer';
 import { BidModal } from '@/components/BidModal';
 import { LeaderboardItemData } from '@/components/LeaderboardCard';
@@ -158,6 +159,9 @@ export default function HomePage() {
           onOpenSubmit={() => handleOpenBidModal({ targetBidDollars: 2 })}
         />
       </main>
+
+      {/* 🏆 Best of All — Top 5 Most Visited Listings */}
+      <BestOfAllSection />
 
       {/* How It Works & Transparency */}
       <HowItWorks />

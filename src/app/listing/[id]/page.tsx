@@ -93,6 +93,7 @@ export default async function ListingPage({ params, searchParams }: ListingPageP
         currency: listing.currency,
         countryCode: listing.countryCode,
         clickCount: listing.clickCount,
+        visitCount: listing.visitCount,
         status: listing.status,
         socialWebsite: listing.socialWebsite,
         socialInstagram: listing.socialInstagram,
