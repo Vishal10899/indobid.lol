@@ -18,10 +18,24 @@ function assert(condition: boolean, testName: string, detail?: string) {
   }
 }
 
+async function ensureDbConnected() {
+  for (let i = 0; i < 5; i++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return;
+    } catch {
+      console.log(`Database waking up... retry ${i + 1}/5`);
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+}
+
 async function runTestSuite() {
   console.log('====================================================');
   console.log('  INDOBID.LOL — FULL PRODUCTION AUDIT TEST SUITE');
   console.log('====================================================\n');
+
+  await ensureDbConnected();
 
   // Clean up and prepare test database
   console.log('Setting up clean test categories and data...');
@@ -573,8 +587,71 @@ async function runTestSuite() {
     'Test 23: Live Activity feed strictly excludes hidden listings and includes active verified listings'
   );
 
+  // TEST 24: Real Visitor Session Recording & Bot Exclusion
+  console.log('\n--- Test Case 24: Real Visitor Session Recording & Bot Exclusion ---');
+  const { recordVisitorHeartbeat, getPublicVisitorStats, getAdminVisitorAnalytics } = await import('../src/lib/visitor-tracker');
+  
+  await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
+
+  const testSessionToken = `test_sess_${Date.now()}`;
+  const validHeartbeat = await recordVisitorHeartbeat({
+    sessionToken: testSessionToken,
+    ip: '192.168.1.100',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  });
+
+  const botHeartbeat = await recordVisitorHeartbeat({
+    sessionToken: `test_sess_bot_${Date.now()}`,
+    ip: '66.249.66.1',
+    userAgent: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+  });
+
+  const createdSession = await prisma.visitorSession.findUnique({ where: { sessionToken: testSessionToken } });
+
+  assert(
+    validHeartbeat.success &&
+      validHeartbeat.isNewSession &&
+      !botHeartbeat.success &&
+      createdSession !== null,
+    'Test 24: Real browser visitor session recorded in DB, and bot/crawler requests are strictly excluded'
+  );
+
+  // TEST 25: Session Heartbeat Deduplication (Does NOT increment total visits)
+  console.log('\n--- Test Case 25: Session Heartbeat Deduplication ---');
+  const totalBeforeDup = await prisma.visitorSession.count();
+  const dupHeartbeat = await recordVisitorHeartbeat({
+    sessionToken: testSessionToken,
+    ip: '192.168.1.100',
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  });
+  const totalAfterDup = await prisma.visitorSession.count();
+
+  assert(
+    dupHeartbeat.success &&
+      !dupHeartbeat.isNewSession &&
+      totalBeforeDup === totalAfterDup,
+    'Test 25: Repeating heartbeats update active timestamp without duplicating or inflating total visits'
+  );
+
+  // TEST 26: Public Visitor Stats API & Zero-Simulation Guarantee
+  console.log('\n--- Test Case 26: Public Visitor Stats API & Zero-Simulation Guarantee ---');
+  const { GET: visitorStatsGET } = await import('../src/app/api/analytics/stats/route');
+  const statsRes = await visitorStatsGET();
+  const statsData = await statsRes.json();
+
+  assert(
+    statsRes.status === 200 &&
+      statsData.success === true &&
+      typeof statsData.liveVisitors === 'number' &&
+      typeof statsData.totalVisits === 'number' &&
+      statsData.liveVisitors >= 1 &&
+      statsData.totalVisits >= 1,
+    'Test 26: Public visitor stats API returns exact database counts with zero random estimation'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
+  await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
   await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } });
   await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
   await prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } });

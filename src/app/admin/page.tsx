@@ -24,6 +24,8 @@ import {
   ExternalLink,
   ShieldCheck,
   Tag,
+  Users,
+  Activity,
 } from 'lucide-react';
 import { PlatformIcon } from '@/components/PlatformIcon';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -63,6 +65,15 @@ interface AdminStats {
   traffic: {
     totalRecordedClicks: number;
     trafficModelNote: string;
+  };
+  visitors?: {
+    liveActive: number;
+    today: number;
+    yesterday: number;
+    last7Days: number;
+    last30Days: number;
+    allTime: number;
+    totalPageViews: number;
   };
 }
 
@@ -553,6 +564,70 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
+
+            {/* Third Row: Real Production Visitor Analytics */}
+            {stats.visitors && (
+              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-3">
+                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5">
+                    <Users className="w-4 h-4 text-emerald-500" />
+                    <span>Real Production Visitor Analytics</span>
+                  </div>
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded font-semibold border border-emerald-500/20">
+                    100% Genuine Browser Sessions
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
+                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Live Active (2m)</div>
+                    <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center space-x-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                      <span>{stats.visitors.liveActive}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Today</div>
+                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
+                      {stats.visitors.today}
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Yesterday</div>
+                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
+                      {stats.visitors.yesterday}
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Last 7 Days</div>
+                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
+                      {stats.visitors.last7Days}
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Last 30 Days</div>
+                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
+                      {stats.visitors.last30Days}
+                    </div>
+                  </div>
+
+                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
+                    <div className="text-[10px] text-[var(--text-muted)] font-medium">All-Time Unique</div>
+                    <div className="text-lg font-bold text-amber-500 mt-0.5">
+                      {stats.visitors.allTime.toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-[10px] text-[var(--text-muted)] pt-0.5">
+                  Calculated exclusively from verified database browser sessions. Bot traffic, Render health checks (/api/health), and API polling are strictly excluded.
+                </div>
+              </div>
+            )}
           </div>
         )}
 

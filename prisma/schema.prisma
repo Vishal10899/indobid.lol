@@ -142,3 +142,18 @@ model User {
 
   @@map("users")
 }
+
+model VisitorSession {
+  id              String    @id @default(cuid())
+  sessionToken    String    @unique @map("session_token")
+  ipHash          String    @map("ip_hash")
+  userAgent       String?   @map("user_agent")
+  firstSeenAt     DateTime  @default(now()) @map("first_seen_at")
+  lastHeartbeatAt DateTime  @default(now()) @map("last_heartbeat_at")
+  pageViews       Int       @default(1) @map("page_views")
+
+  @@index([lastHeartbeatAt(sort: Desc)])
+  @@index([firstSeenAt(sort: Desc)])
+  @@map("visitor_sessions")
+}
+

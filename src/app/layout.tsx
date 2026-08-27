@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import './globals.css';
+import { VisitorTracker } from '@/components/VisitorTracker';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -54,6 +55,7 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased flex flex-col">
+        <VisitorTracker />
         {children}
       </body>
     </html>

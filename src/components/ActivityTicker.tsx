@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Trophy, TrendingUp } from 'lucide-react';
+import { Trophy, TrendingUp, Users } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 
 interface ActivityItem {
@@ -19,6 +19,10 @@ interface ActivityItem {
 
 export function ActivityTicker() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [visitorStats, setVisitorStats] = useState<{ liveVisitors: number; totalVisits: number }>({
+    liveVisitors: 0,
+    totalVisits: 0,
+  });
   const [loading, setLoading] = useState(true);
 
   const fetchActivity = async () => {
@@ -35,20 +39,49 @@ export function ActivityTicker() {
     }
   };
 
+  const fetchVisitorStats = async () => {
+    try {
+      const res = await fetch('/api/analytics/stats');
+      if (res.ok) {
+        const data = await res.json();
+        setVisitorStats({
+          liveVisitors: typeof data.liveVisitors === 'number' ? data.liveVisitors : 0,
+          totalVisits: typeof data.totalVisits === 'number' ? data.totalVisits : 0,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to load visitor stats:', e);
+    }
+  };
+
   useEffect(() => {
     fetchActivity();
-    const interval = setInterval(fetchActivity, 15000);
-    return () => clearInterval(interval);
+    fetchVisitorStats();
+    const activityInterval = setInterval(fetchActivity, 15000);
+    const visitorInterval = setInterval(fetchVisitorStats, 30000);
+    return () => {
+      clearInterval(activityInterval);
+      clearInterval(visitorInterval);
+    };
   }, []);
 
   const displayItems = activities.length > 0 ? [...activities, ...activities] : [];
 
   return (
     <div id="activity" className="w-full bg-[var(--bg-card)] border-y border-[var(--border-color)] overflow-hidden py-2 relative shadow-2xs">
-      <div className="max-w-6xl mx-auto px-4 flex items-center">
-        <div className="flex items-center space-x-1 text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide pr-3 border-r border-[var(--border-color)] shrink-0 z-10 bg-[var(--bg-card)]">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1" />
-          <span>Live Activity</span>
+      <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
+        <div className="flex items-center space-x-2.5 shrink-0 z-10 bg-[var(--bg-card)] pr-3 border-r border-[var(--border-color)]">
+          <div className="flex items-center space-x-1 text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1" />
+            <span>Live Activity</span>
+          </div>
+
+          <div className="flex items-center space-x-1 text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] px-2 py-0.5 rounded border border-[var(--border-color)]">
+            <Users className="w-3 h-3 text-emerald-500 shrink-0" />
+            <span>{visitorStats.liveVisitors} LIVE</span>
+            <span className="text-[var(--text-muted)]">·</span>
+            <span>{visitorStats.totalVisits.toLocaleString()} VISITS</span>
+          </div>
         </div>
 
         <div className="overflow-hidden whitespace-nowrap w-full ml-3 flex items-center">

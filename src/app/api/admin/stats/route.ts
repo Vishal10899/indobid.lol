@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { isAuthorizedAdmin } from '@/lib/auth';
+import { getAdminVisitorAnalytics } from '@/lib/visitor-tracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,10 +68,11 @@ export async function GET(request: NextRequest) {
       prisma.bid.count({ where: { status: 'pending' } }),
     ]);
 
-    // 6. User and Traffic metrics
-    const [totalUsers, totalClicks] = await Promise.all([
+    // 6. User and Traffic metrics & Real Visitor Analytics
+    const [totalUsers, totalClicks, visitorAnalytics] = await Promise.all([
       prisma.user.count(),
       prisma.click.count(),
+      getAdminVisitorAnalytics(2),
     ]);
 
     // 7. Category distribution
@@ -152,8 +154,9 @@ export async function GET(request: NextRequest) {
         },
         traffic: {
           totalRecordedClicks: totalClicks,
-          trafficModelNote: 'Tracks outbound clicks to listings deduplicated by IP hash (1 per hour). Total pageviews require external CDN or edge analytics.',
+          trafficModelNote: 'Tracks outbound clicks to listings deduplicated by IP hash (1 per hour).',
         },
+        visitors: visitorAnalytics,
       },
       categories: categoriesWithCount.map((c) => ({
         id: c.id,
