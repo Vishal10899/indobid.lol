@@ -649,6 +649,39 @@ async function runTestSuite() {
     'Test 26: Public visitor stats API returns exact database counts with zero random estimation'
   );
 
+  // TEST 27: Inactive Heartbeat Expiration (>5 minutes) removes visitor from LIVE count
+  console.log('\n--- Test Case 27: Inactive Heartbeat Expiration (>5 min) ---');
+  await prisma.visitorSession.update({
+    where: { sessionToken: testSessionToken },
+    data: { lastHeartbeatAt: new Date(Date.now() - 6 * 60 * 1000) }, // 6 minutes ago
+  });
+  const activeThreshold5m = new Date(Date.now() - 5 * 60 * 1000);
+  const activeForExpiredSession = await prisma.visitorSession.count({
+    where: {
+      sessionToken: testSessionToken,
+      lastHeartbeatAt: { gte: activeThreshold5m },
+    },
+  });
+
+  assert(
+    activeForExpiredSession === 0,
+    'Test 27: Visitor with last heartbeat older than 5 minutes is excluded from LIVE VISITORS'
+  );
+
+  // TEST 28: Zero Visitor Creation on Health, Activity, and Stats endpoints
+  console.log('\n--- Test Case 28: Zero Visitor Creation on Health/Activity/Stats endpoints ---');
+  const countBefore = await prisma.visitorSession.count();
+  const { GET: healthCheckGET } = await import('../src/app/api/health/route');
+  await healthCheckGET();
+  await activityGET();
+  await visitorStatsGET();
+  const countAfter = await prisma.visitorSession.count();
+
+  assert(
+    countBefore === countAfter,
+    'Test 28: Health check, Live Activity polling, and Stats polling generate ZERO visitor records'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
   await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });

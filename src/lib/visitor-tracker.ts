@@ -114,7 +114,7 @@ export async function recordVisitorHeartbeat({
  * - Total Visits: Total count of unique browser sessions recorded.
  * - Strictly 0 when no records exist.
  */
-export async function getPublicVisitorStats(activeWindowMinutes = 2): Promise<{
+export async function getPublicVisitorStats(activeWindowMinutes = 5): Promise<{
   liveVisitors: number;
   totalVisits: number;
 }> {
@@ -145,7 +145,7 @@ export async function getPublicVisitorStats(activeWindowMinutes = 2): Promise<{
  * Returns real admin visitor analytics broken down by genuine time intervals.
  * All numbers derived 100% from production database records.
  */
-export async function getAdminVisitorAnalytics(activeWindowMinutes = 2): Promise<{
+export async function getAdminVisitorAnalytics(activeWindowMinutes = 5): Promise<{
   liveActive: number;
   today: number;
   yesterday: number;
