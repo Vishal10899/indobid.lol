@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
           totalRevenueCents,
           totalVerifiedBidsDollars: totalVerifiedBidsCents / 100,
           totalVerifiedBidsCents,
-          currency: 'USD',
+          currency: 'INR',
         },
         payments: {
           total: totalPayments,

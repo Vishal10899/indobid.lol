@@ -22,7 +22,7 @@ export function launchRazorpayCheckout(options: LaunchRazorpayOptions): Promise<
       keyId,
       orderId,
       amount,
-      currency = 'USD',
+      currency = 'INR',
       name = 'indobid.lol',
       description,
       listingId,

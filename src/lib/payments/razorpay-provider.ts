@@ -11,10 +11,11 @@ export class RazorpayProvider implements PaymentProvider {
     this.keyId = process.env.RAZORPAY_KEY_ID?.trim() || '';
     this.keySecret = process.env.RAZORPAY_KEY_SECRET?.trim() || '';
     this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim() || '';
-    this.currency = (process.env.RAZORPAY_CURRENCY?.trim() || 'USD').toUpperCase();
+    this.currency = (process.env.RAZORPAY_CURRENCY?.trim() || 'INR').toUpperCase();
   }
 
   async createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutSessionResult> {
+    const orderCurrency = 'INR';
     if (!this.keyId || !this.keySecret) {
       // In development / demo mode when Razorpay keys are not provided
       const dummyOrderId = `order_${params.bidId.substring(0, 14)}`;
@@ -23,7 +24,7 @@ export class RazorpayProvider implements PaymentProvider {
         orderId: dummyOrderId,
         keyId: this.keyId || 'rzp_test_placeholder',
         amount: params.chargeAmountCents,
-        currency: this.currency,
+        currency: orderCurrency,
         provider: 'razorpay',
         checkoutUrl: `${params.successUrl}&session_id=${dummyOrderId}`,
       };
@@ -32,8 +33,8 @@ export class RazorpayProvider implements PaymentProvider {
     try {
       const authHeader = `Basic ${Buffer.from(`${this.keyId}:${this.keySecret}`).toString('base64')}`;
       const payload = {
-        amount: params.chargeAmountCents, // amount in smallest currency unit (cents / paise)
-        currency: this.currency,
+        amount: params.chargeAmountCents, // amount in smallest currency unit (paise: e.g. 200 for ₹2)
+        currency: orderCurrency,
         receipt: params.bidId.substring(0, 40),
         notes: {
           listingId: params.listingId,
@@ -65,7 +66,7 @@ export class RazorpayProvider implements PaymentProvider {
         orderId: order.id,
         keyId: this.keyId,
         amount: params.chargeAmountCents,
-        currency: this.currency,
+        currency: order.currency ? order.currency.toUpperCase() : orderCurrency,
         provider: 'razorpay',
         checkoutUrl: `${params.successUrl}&session_id=${order.id}`,
       };
@@ -102,6 +103,7 @@ export class RazorpayProvider implements PaymentProvider {
         const paymentEntity = event.payload?.payment?.entity;
         const orderEntity = event.payload?.order?.entity;
         const notes = orderEntity?.notes || paymentEntity?.notes || {};
+        const eventCurrency = (paymentEntity?.currency || orderEntity?.currency || 'INR').toUpperCase();
 
         return {
           type: 'payment.success',
@@ -110,7 +112,27 @@ export class RazorpayProvider implements PaymentProvider {
           listingId: notes.listingId,
           bidId: notes.bidId,
           amountCents: paymentEntity?.amount || orderEntity?.amount,
-          currency: paymentEntity?.currency || this.currency,
+          currency: eventCurrency,
+          customerEmail: paymentEntity?.email,
+          metadata: notes,
+          rawEvent: event,
+        };
+      }
+
+      if (eventType === 'payment.failed') {
+        const paymentEntity = event.payload?.payment?.entity;
+        const orderEntity = event.payload?.order?.entity;
+        const notes = orderEntity?.notes || paymentEntity?.notes || {};
+        const eventCurrency = (paymentEntity?.currency || orderEntity?.currency || 'INR').toUpperCase();
+
+        return {
+          type: 'payment.failed',
+          sessionId: orderEntity?.id,
+          paymentIntentId: paymentEntity?.id || event.payload?.payment?.entity?.id,
+          listingId: notes.listingId,
+          bidId: notes.bidId,
+          amountCents: paymentEntity?.amount || orderEntity?.amount || 0,
+          currency: eventCurrency,
           customerEmail: paymentEntity?.email,
           metadata: notes,
           rawEvent: event,

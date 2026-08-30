@@ -80,7 +80,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
         keyId: data.keyId,
         orderId: data.orderId || data.sessionId,
         amount: data.amount || data.chargeAmountCents,
-        currency: data.currency || 'USD',
+        currency: data.currency || 'INR',
         listingId: data.listingId || item.id,
         bidId: data.bidId,
         listingTitle: item.title,

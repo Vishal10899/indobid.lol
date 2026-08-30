@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
           const verifiedDollars = (currentVerifiedBidCents / 100).toLocaleString();
           return NextResponse.json(
             {
-              error: `Current verified bid is $${verifiedDollars}. A target below or equal to $${verifiedDollars} will not increase this listing's position.`,
+              error: `Current verified bid is ₹${verifiedDollars}. A target below or equal to ₹${verifiedDollars} will not increase this listing's position.`,
             },
             { status: 400 }
           );
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (chargeAmountCents < 100) {
-      return NextResponse.json({ error: 'Minimum charge amount is $1.00' }, { status: 400 });
+      return NextResponse.json({ error: 'Minimum charge amount is ₹1.00 (100 paise)' }, { status: 400 });
     }
 
     // 3. Create pending Bid record
@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
         amount: chargeAmountCents,
         previousBid: currentVerifiedBidCents,
         newTotalBid: finalTargetTotalCents,
-        currency: 'usd',
+        currency: 'INR',
         paymentProvider: 'razorpay',
         status: 'pending',
         bidderEmail: data.bidderEmail || null,
@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
       orderId: checkoutSession.orderId || checkoutSession.sessionId,
       keyId: checkoutSession.keyId,
       amount: chargeAmountCents,
-      currency: checkoutSession.currency || 'USD',
+      currency: checkoutSession.currency || 'INR',
       listingId: listing.id,
       listingTitle: listing.title,
       countryCode: listing.countryCode,

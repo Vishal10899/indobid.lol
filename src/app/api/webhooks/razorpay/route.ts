@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/db';
 import { RazorpayProvider } from '@/lib/payments/razorpay-provider';
 import { processSuccessfulPayment } from '@/lib/payments/fulfillment';
 
@@ -18,13 +19,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid webhook signature or unrecognized event' }, { status: 400 });
     }
 
+    if (event.type === 'payment.failed') {
+      // Mark bid as failed if bidId is known; listing remains pending_payment
+      if (event.bidId) {
+        await prisma.bid.updateMany({
+          where: { id: event.bidId, status: 'pending' },
+          data: { status: 'failed' },
+        });
+      }
+      return NextResponse.json({
+        success: false,
+        status: 'failed',
+        message: 'Payment failed event recorded. Listing remains inactive.',
+      });
+    }
+
     if (event.type === 'payment.success') {
+      // Verify that currency is strictly INR
+      const currency = (event.currency || '').trim().toUpperCase();
+      if (currency !== 'INR') {
+        return NextResponse.json(
+          {
+            error: `Invalid payment currency: expected 'INR', received '${event.currency}'. Payment rejected.`,
+          },
+          { status: 400 }
+        );
+      }
+
       const fulfillment = await processSuccessfulPayment({
         providerPaymentId: event.paymentIntentId || event.sessionId || `rzp_${Date.now()}`,
         listingId: event.listingId,
         bidId: event.bidId,
         amountCents: event.amountCents,
-        currency: event.currency,
+        currency: 'INR',
         customerEmail: event.customerEmail,
         metadata: event.metadata,
         provider: 'razorpay',

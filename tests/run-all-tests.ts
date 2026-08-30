@@ -2,8 +2,10 @@ import { prisma } from '../src/lib/db';
 import { validateAndFormatUrl, normalizeCanonicalUrl, detectDestinationType } from '../src/lib/url-utils';
 import { getLeaderboard, estimateRank, getListingRanks, MINIMUM_BID_CENTS, MINIMUM_INCREMENT_CENTS } from '../src/lib/ranking';
 import { processSuccessfulPayment } from '../src/lib/payments/fulfillment';
+import { RazorpayProvider } from '../src/lib/payments/razorpay-provider';
 import { trackOutboundClick } from '../src/lib/click-tracker';
 import { isAuthorizedAdmin } from '../src/lib/auth';
+import crypto from 'crypto';
 
 let passed = 0;
 let failed = 0;
@@ -921,6 +923,326 @@ async function runTestSuite() {
       checkoutData.orderId &&
       checkoutData.listingId,
     'Test 36: Checkout successfully accepts and processes newly expanded canonical categories'
+  );
+
+  // TEST 37: Razorpay Order with ₹2 creates order with amount=200 and currency=INR
+  console.log('\n--- Test Case 37: ₹2 creates Razorpay order with amount=200 and currency=INR ---');
+  const rzp2Req = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-rzp-2inr.com',
+      targetTotalBidDollars: 2,
+    }),
+  });
+  const rzp2Res = await checkoutPOST(rzp2Req as any);
+  const rzp2Data = await rzp2Res.json();
+
+  assert(
+    rzp2Res.status === 200 &&
+      rzp2Data.amount === 200 &&
+      rzp2Data.currency === 'INR' &&
+      rzp2Data.provider === 'razorpay',
+    'Test 37: ₹2 creates Razorpay order with amount=200 (paise) and currency=INR'
+  );
+
+  // TEST 38: Razorpay Order with ₹3 creates order with amount=300 and currency=INR
+  console.log('\n--- Test Case 38: ₹3 creates Razorpay order with amount=300 and currency=INR ---');
+  const rzp3Req = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-rzp-3inr.com',
+      targetTotalBidDollars: 3,
+    }),
+  });
+  const rzp3Res = await checkoutPOST(rzp3Req as any);
+  const rzp3Data = await rzp3Res.json();
+
+  assert(
+    rzp3Res.status === 200 &&
+      rzp3Data.amount === 300 &&
+      rzp3Data.currency === 'INR' &&
+      rzp3Data.provider === 'razorpay',
+    'Test 38: ₹3 creates Razorpay order with amount=300 (paise) and currency=INR'
+  );
+
+  // TEST 39: Razorpay Order with ₹10 creates order with amount=1000 and currency=INR
+  console.log('\n--- Test Case 39: ₹10 creates Razorpay order with amount=1000 and currency=INR ---');
+  const rzp10Req = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-rzp-10inr.com',
+      targetTotalBidDollars: 10,
+    }),
+  });
+  const rzp10Res = await checkoutPOST(rzp10Req as any);
+  const rzp10Data = await rzp10Res.json();
+
+  assert(
+    rzp10Res.status === 200 &&
+      rzp10Data.amount === 1000 &&
+      rzp10Data.currency === 'INR' &&
+      rzp10Data.provider === 'razorpay',
+    'Test 39: ₹10 creates Razorpay order with amount=1000 (paise) and currency=INR'
+  );
+
+  // TEST 40: Non-INR currency (USD) payment is strictly rejected by fulfillment
+  console.log('\n--- Test Case 40: USD payment/order is rejected ---');
+  const usdPendingListing = await prisma.listing.create({
+    data: {
+      title: 'Test USD Listing Must Reject',
+      destinationUrl: 'https://test-usd-reject.com',
+      canonicalUrl: 'test-usd-reject.com',
+      destinationType: 'website',
+      description: 'Listing with USD payment that must be rejected',
+      categoryId: testCategory.id,
+      verifiedBid: 0,
+      status: 'pending_payment',
+    },
+  });
+
+  let usdRejected = false;
+  try {
+    await processSuccessfulPayment({
+      providerPaymentId: `test_pay_usd_${Date.now()}`,
+      listingId: usdPendingListing.id,
+      amountCents: 500,
+      currency: 'USD', // Non-INR currency!
+      provider: 'razorpay',
+    });
+  } catch (err: any) {
+    usdRejected = err.message.includes('Invalid payment currency');
+  }
+
+  const usdListingAfter = await prisma.listing.findUnique({ where: { id: usdPendingListing.id } });
+  const usdLeaderboard = await getLeaderboard({ limit: 100 });
+  const usdInLeaderboard = usdLeaderboard.items.some((i) => i.id === usdPendingListing.id);
+
+  assert(
+    usdRejected &&
+      usdListingAfter?.status === 'pending_payment' &&
+      usdListingAfter?.verifiedBid === 0 &&
+      !usdInLeaderboard,
+    'Test 40: USD payment is strictly rejected and listing remains inactive with 0 verifiedBid'
+  );
+
+  // TEST 41: Incorrect/tampered amount is rejected by fulfillment
+  console.log('\n--- Test Case 41: Incorrect amount is rejected ---');
+  const amountMismatchListing = await prisma.listing.create({
+    data: {
+      title: 'Test Amount Mismatch Listing',
+      destinationUrl: 'https://test-mismatch.com',
+      canonicalUrl: 'test-mismatch.com',
+      destinationType: 'website',
+      description: 'Listing with tampered paid amount',
+      categoryId: testCategory.id,
+      verifiedBid: 0,
+      status: 'pending_payment',
+    },
+  });
+
+  const expectedBid = await prisma.bid.create({
+    data: {
+      listingId: amountMismatchListing.id,
+      amount: 500, // Expected: 500 paise (₹5)
+      previousBid: 0,
+      newTotalBid: 500,
+      currency: 'INR',
+      status: 'pending',
+    },
+  });
+
+  let amountMismatchRejected = false;
+  try {
+    await processSuccessfulPayment({
+      providerPaymentId: `test_pay_mismatch_${Date.now()}`,
+      listingId: amountMismatchListing.id,
+      bidId: expectedBid.id,
+      amountCents: 100, // Tampered: paid 100 paise instead of expected 500
+      currency: 'INR',
+      provider: 'razorpay',
+    });
+  } catch (err: any) {
+    amountMismatchRejected = err.message.includes('Payment amount mismatch');
+  }
+
+  const mismatchListingAfter = await prisma.listing.findUnique({ where: { id: amountMismatchListing.id } });
+
+  assert(
+    amountMismatchRejected &&
+      mismatchListingAfter?.status === 'pending_payment' &&
+      mismatchListingAfter?.verifiedBid === 0,
+    'Test 41: Tampered/mismatched paid amount is strictly rejected and listing remains unverified'
+  );
+
+  // TEST 42: Invalid webhook signature is rejected
+  console.log('\n--- Test Case 42: Invalid signature is rejected ---');
+  process.env.RAZORPAY_WEBHOOK_SECRET = 'test_webhook_secret_key_12345';
+  const providerInstance = new RazorpayProvider();
+  const testPayload = JSON.stringify({
+    event: 'payment.captured',
+    payload: {
+      payment: {
+        entity: {
+          id: 'pay_test_signature',
+          amount: 200,
+          currency: 'INR',
+          notes: { listingId: validListing.id },
+        },
+      },
+    },
+  });
+
+  const invalidSigResult = await providerInstance.verifyWebhookEvent(testPayload, 'completely_fake_signature_hash');
+
+  const correctSignature = crypto
+    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+    .update(testPayload)
+    .digest('hex');
+  const validSigResult = await providerInstance.verifyWebhookEvent(testPayload, correctSignature);
+
+  assert(
+    invalidSigResult === null &&
+      validSigResult !== null &&
+      validSigResult.type === 'payment.success' &&
+      validSigResult.currency === 'INR',
+    'Test 42: Invalid webhook signature is rejected (null) and valid HMAC signature is accepted'
+  );
+
+  // TEST 43: Failed payment does not activate listing
+  console.log('\n--- Test Case 43: Failed payment does not activate listing ---');
+  const failedWebhookListing = await prisma.listing.create({
+    data: {
+      title: 'Test Failed Webhook Listing',
+      destinationUrl: 'https://test-failed-webhook.com',
+      canonicalUrl: 'test-failed-webhook.com',
+      destinationType: 'website',
+      description: 'Listing with failed webhook event',
+      categoryId: testCategory.id,
+      verifiedBid: 0,
+      status: 'pending_payment',
+    },
+  });
+
+  const failedBidRecord = await prisma.bid.create({
+    data: {
+      listingId: failedWebhookListing.id,
+      amount: 200,
+      previousBid: 0,
+      newTotalBid: 200,
+      currency: 'INR',
+      status: 'pending',
+    },
+  });
+
+  const { POST: webhookPOST } = await import('../src/app/api/webhooks/razorpay/route');
+  const failedEventPayload = JSON.stringify({
+    event: 'payment.failed',
+    payload: {
+      payment: {
+        entity: {
+          id: 'pay_test_failed_event',
+          amount: 200,
+          currency: 'INR',
+          notes: { listingId: failedWebhookListing.id, bidId: failedBidRecord.id },
+        },
+      },
+    },
+  });
+
+  const failedSignature = crypto
+    .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
+    .update(failedEventPayload)
+    .digest('hex');
+
+  const failedWebhookReq = new Request('http://localhost:3000/api/webhooks/razorpay', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-razorpay-signature': failedSignature,
+    },
+    body: failedEventPayload,
+  });
+
+  const failedWebhookRes = await webhookPOST(failedWebhookReq as any);
+  const failedWebhookData = await failedWebhookRes.json();
+
+  const failedListingCheck = await prisma.listing.findUnique({ where: { id: failedWebhookListing.id } });
+  const failedBidCheck = await prisma.bid.findUnique({ where: { id: failedBidRecord.id } });
+
+  assert(
+    failedWebhookRes.status === 200 &&
+      failedWebhookData.status === 'failed' &&
+      failedListingCheck?.status === 'pending_payment' &&
+      failedListingCheck?.verifiedBid === 0 &&
+      failedBidCheck?.status === 'failed',
+    'Test 43: Failed payment webhook event updates bid to failed and leaves listing inactive'
+  );
+
+  // TEST 44: Successful INR payment activates listing exactly once
+  console.log('\n--- Test Case 44: Successful INR payment activates listing exactly once ---');
+  const inrLiveListing = await prisma.listing.create({
+    data: {
+      title: 'Test Live INR Activated Listing',
+      destinationUrl: 'https://test-inr-live-active.com',
+      canonicalUrl: 'test-inr-live-active.com',
+      destinationType: 'website',
+      description: 'Listing activated via verified INR payment',
+      categoryId: testCategory.id,
+      verifiedBid: 0,
+      status: 'pending_payment',
+    },
+  });
+
+  const inrFulfill = await processSuccessfulPayment({
+    providerPaymentId: `test_pay_inr_success_${Date.now()}`,
+    listingId: inrLiveListing.id,
+    amountCents: 200, // ₹2 INR = 200 paise
+    currency: 'INR',
+    provider: 'razorpay',
+  });
+
+  const inrListingAfter = await prisma.listing.findUnique({ where: { id: inrLiveListing.id } });
+
+  assert(
+    inrFulfill.success &&
+      !inrFulfill.alreadyProcessed &&
+      inrListingAfter?.status === 'active' &&
+      inrListingAfter?.verifiedBid === 200,
+    'Test 44: Successful INR payment (200 paise = ₹2) activates listing exactly once'
+  );
+
+  // TEST 45: Duplicate webhook does not double the bid
+  console.log('\n--- Test Case 45: Duplicate webhook does not double the bid ---');
+  const dupPaymentId = `test_pay_dup_verify_${Date.now()}`;
+  const firstFulfillment = await processSuccessfulPayment({
+    providerPaymentId: dupPaymentId,
+    listingId: inrLiveListing.id,
+    amountCents: 300, // +₹3 (300 paise)
+    currency: 'INR',
+    provider: 'razorpay',
+  });
+
+  const bidAfterFirstWebhook = (await prisma.listing.findUnique({ where: { id: inrLiveListing.id } }))!.verifiedBid;
+
+  const duplicateFulfillment = await processSuccessfulPayment({
+    providerPaymentId: dupPaymentId,
+    listingId: inrLiveListing.id,
+    amountCents: 300,
+    currency: 'INR',
+    provider: 'razorpay',
+  });
+
+  const bidAfterSecondWebhook = (await prisma.listing.findUnique({ where: { id: inrLiveListing.id } }))!.verifiedBid;
+
+  assert(
+    firstFulfillment.success &&
+      duplicateFulfillment.alreadyProcessed &&
+      bidAfterFirstWebhook === 500 &&
+      bidAfterSecondWebhook === 500,
+    'Test 45: Duplicate webhook with same payment ID is idempotent and does NOT double the bid'
   );
 
   // Post-test cleanup: Clean all test data from database

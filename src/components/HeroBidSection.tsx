@@ -188,7 +188,7 @@ export function HeroBidSection({
         keyId: data.keyId,
         orderId: data.orderId || data.sessionId,
         amount: data.amount || data.chargeAmountCents,
-        currency: data.currency || 'USD',
+        currency: data.currency || 'INR',
         listingId: data.listingId,
         bidId: data.bidId,
         listingTitle: data.listingTitle || url,

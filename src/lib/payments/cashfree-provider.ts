@@ -44,7 +44,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
     const payload = {
       order_id: orderId,
       order_amount: orderAmount,
-      order_currency: 'USD',
+      order_currency: 'INR',
       customer_details: {
         customer_id: `cust_${params.bidId.substring(0, 12)}`,
         customer_email: params.customerEmail || 'bidder@indobid.lol',
@@ -143,7 +143,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
       listingId,
       bidId,
       amountCents,
-      currency: (orderData.order_currency || 'USD').toLowerCase(),
+      currency: (orderData.order_currency || 'INR').toUpperCase(),
       customerEmail: customerData.customer_email || undefined,
       metadata: orderTags,
       rawEvent: parsed,
