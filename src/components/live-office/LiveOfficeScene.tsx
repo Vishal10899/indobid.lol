@@ -6,7 +6,7 @@ import { LeaderboardItemData } from '@/components/LeaderboardCard';
 import { SceneControls } from './SceneControls';
 import { BuildingInfoCard } from './BuildingInfoCard';
 import { getCountryFlag } from '@/lib/countries';
-import { Layers } from 'lucide-react';
+import { Layers, Trophy } from 'lucide-react';
 
 interface LiveOfficeSceneProps {
   items: LeaderboardItemData[];
@@ -40,10 +40,10 @@ const SIX_BUILDINGS: BuildingSlotConfig[] = [
     baseHeight: 5.8,
     width: 2.3,
     depth: 2.3,
-    structureColor: '#35464B', // Charcoal Structural Frame
-    secondaryColor: '#58676A', // Slate Trim
-    glassColor: '#173F46', // Deep Teal Glass
-    accentColor: '#DE8063', // Brand Coral Accent
+    structureColor: '#1A2328', // Midnight Obsidian Frame
+    secondaryColor: '#D97706', // Metallic Gold Trim & Cornice
+    glassColor: '#0E2E38', // Luminous Deep Emerald/Sapphire Core
+    accentColor: '#F59E0B', // Radiant Gold Highlight
     roofType: 'helipad',
   },
   // #2: Upper-Left / Left-Back Modern Glass Tower (65% Height of #1)
@@ -291,6 +291,19 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
 
     const fillLight = new THREE.HemisphereLight(0xFBF9F3, 0xD8D5C9, 1.2);
     scene.add(fillLight);
+
+    // Dedicated One-Light Spotlight Highlight focusing directly on Rank #1 Landmark Tower
+    const rank1Spotlight = new THREE.SpotLight(0xFFF6E0, 3.8, 32, Math.PI / 5.5, 0.4, 1.0);
+    rank1Spotlight.position.set(0, 16, 0);
+    rank1Spotlight.target.position.set(0, 3.5, 0);
+    rank1Spotlight.castShadow = true;
+    scene.add(rank1Spotlight);
+    scene.add(rank1Spotlight.target);
+
+    // Warm Crown / Helipad Ambient Gold Glow for Rank #1
+    const rank1Glow = new THREE.PointLight(0xF59E0B, 2.2, 10);
+    rank1Glow.position.set(0, 6.5, 0);
+    scene.add(rank1Glow);
 
     // -----------------------------------------------------------------------
     // 5. MINIATURE ARCHITECTURAL CITY PODIUM, NATURAL GRASS & URBAN ROADS
@@ -621,10 +634,11 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
       const numFloors = Math.floor(height / 0.85);
       for (let f = 1; f < numFloors; f++) {
         const floorY = (height / numFloors) * f;
-        const slabGeo = new THREE.BoxGeometry(width + 0.04, 0.06, depth + 0.04);
+        const slabGeo = new THREE.BoxGeometry(width + (isCenter ? 0.08 : 0.04), isCenter ? 0.08 : 0.06, depth + (isCenter ? 0.08 : 0.04));
         const slabMat = new THREE.MeshStandardMaterial({
           color: new THREE.Color(secColor),
-          roughness: 0.65,
+          roughness: isCenter ? 0.35 : 0.65,
+          metalness: isCenter ? 0.5 : 0.05,
         });
         const slabMesh = new THREE.Mesh(slabGeo, slabMat);
         slabMesh.position.y = floorY;
@@ -636,13 +650,27 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
       const parapetGeo = new THREE.BoxGeometry(width * 0.94, 0.22, depth * 0.94);
       const parapetMat = new THREE.MeshStandardMaterial({
         color: new THREE.Color(structColor),
-        roughness: 0.5,
-        metalness: 0.15,
+        roughness: isCenter ? 0.35 : 0.5,
+        metalness: isCenter ? 0.35 : 0.15,
       });
       const parapetMesh = new THREE.Mesh(parapetGeo, parapetMat);
       parapetMesh.position.y = height + 0.11;
       parapetMesh.castShadow = true;
       buildingGroup.add(parapetMesh);
+
+      // Golden Architectural Crown Trim Band for Rank 1
+      if (isCenter) {
+        const crownBandGeo = new THREE.BoxGeometry(width * 0.98, 0.08, depth * 0.98);
+        const crownBandMat = new THREE.MeshStandardMaterial({
+          color: 0xD97706, // Metallic Gold Crown
+          roughness: 0.25,
+          metalness: 0.65,
+        });
+        const crownBand = new THREE.Mesh(crownBandGeo, crownBandMat);
+        crownBand.position.y = height + 0.22;
+        crownBand.castShadow = true;
+        buildingGroup.add(crownBand);
+      }
 
       // Roof Surface Inner Deck
       const roofDeckGeo = new THREE.BoxGeometry(width * 0.88, 0.02, depth * 0.88);
@@ -1074,25 +1102,26 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
               <div
                 className={`flex items-center justify-center font-black rounded-xl border shadow-md transition-transform duration-150 ${
                   isCenter
-                    ? 'w-[60px] sm:w-[68px] h-[38px] sm:h-[44px] text-xl sm:text-2xl bg-[#182126] text-[#F4C343] border-[#F4C343] ring-2 ring-[#DE8063]/50'
+                    ? 'w-[60px] sm:w-[68px] h-[38px] sm:h-[44px] text-xl sm:text-2xl bg-[#182126] text-[#F59E0B] border-2 border-[#F59E0B] ring-4 ring-[#F59E0B]/40 shadow-xl'
                     : 'w-[40px] sm:w-[46px] h-[26px] sm:h-[30px] text-xs sm:text-sm bg-[#182126] text-[#F4C343] border-[#F4C343]/80'
                 } ${isHovered ? 'scale-110 shadow-lg' : ''}`}
               >
+                {isCenter && <Trophy className="w-4 h-4 text-[#F59E0B] mr-1" />}
                 #{config.rank}
               </div>
 
               {/* Connector Pin between Badge & Signboard */}
               <div
-                className={`w-[1.5px] ${
-                  isCenter ? 'h-2 bg-[#DE8063]' : 'h-1.5 bg-[#087F78]'
+                className={`w-[2px] ${
+                  isCenter ? 'h-2.5 bg-[#F59E0B]' : 'h-1.5 bg-[#087F78]'
                 }`}
               />
 
-              {/* 2. Building Information Board / Signboard: Brand Teal #087F78 */}
+              {/* 2. Building Information Board / Signboard: Luxury Obsidian/Gold for #1, Teal #087F78 for #2-#6 */}
               <div
                 className={`flex flex-col items-center justify-center rounded-2xl backdrop-blur-md border shadow-xl transition-transform duration-150 ${
                   isCenter
-                    ? 'min-w-[210px] sm:min-w-[245px] max-w-[270px] px-4 sm:px-5 py-2.5 sm:py-3 bg-[#087F78]/96 border-[#DE8063] ring-2 ring-[#DE8063]/30'
+                    ? 'min-w-[210px] sm:min-w-[245px] max-w-[270px] px-4 sm:px-5 py-2.5 sm:py-3 bg-gradient-to-b from-[#182126] via-[#102536] to-[#0A1822] border-2 border-[#F59E0B] ring-4 ring-[#F59E0B]/35 shadow-[0_0_30px_rgba(245,158,11,0.4)]'
                     : isClaimed
                     ? 'min-w-[145px] sm:min-w-[170px] max-w-[190px] px-2.5 sm:px-3 py-1.5 sm:py-2 bg-[#087F78]/94 border-[#B9DFDA]/80'
                     : 'min-w-[135px] sm:min-w-[155px] max-w-[175px] px-2.5 sm:px-3 py-1.5 sm:py-2 bg-[#087F78]/85 border-[#B9DFDA]/50'
@@ -1107,9 +1136,10 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
                       }`}
                     >
                       {flag && <span className={isCenter ? 'text-base' : 'text-xs'}>{flag}</span>}
+                      {isCenter && <Trophy className="w-3.5 h-3.5 text-[#F59E0B] shrink-0" />}
                       <span
                         className={`font-black text-white tracking-tight truncate ${
-                          isCenter ? 'text-base sm:text-lg' : 'text-xs sm:text-sm'
+                          isCenter ? 'text-base sm:text-lg text-[#FFD38A]' : 'text-xs sm:text-sm'
                         }`}
                       >
                         {realItem?.title}
@@ -1126,11 +1156,11 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
                         ${dollars.toLocaleString()}
                       </span>
                       <span
-                        className={`font-bold text-white/90 uppercase tracking-wider ${
-                          isCenter ? 'text-xs' : 'text-[10px]'
+                        className={`font-bold uppercase tracking-wider ${
+                          isCenter ? 'text-xs text-[#FFD38A]' : 'text-[10px] text-white/90'
                         }`}
                       >
-                        Verified
+                        {isCenter ? '★ #1 Verified' : 'Verified'}
                       </span>
                     </div>
                   </>
@@ -1138,11 +1168,11 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
                   <>
                     {/* UNCLAIMED */}
                     <span
-                      className={`font-extrabold text-white tracking-wide ${
-                        isCenter ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'
+                      className={`font-extrabold tracking-wide ${
+                        isCenter ? 'text-sm sm:text-base text-[#FFD38A]' : 'text-xs sm:text-sm text-white'
                       }`}
                     >
-                      AVAILABLE
+                      {isCenter ? '★ #1 CENTER SPOT' : 'AVAILABLE'}
                     </span>
                     <span
                       className={`font-bold text-[#FFD38A] ${
@@ -1159,13 +1189,13 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
               <div className="flex flex-col items-center">
                 <div
                   className={`w-[2px] ${
-                    isCenter ? 'h-3.5 bg-[#DE8063]' : 'h-2 bg-[#087F78]'
+                    isCenter ? 'h-4 bg-[#F59E0B]' : 'h-2 bg-[#087F78]'
                   }`}
                 />
                 <div
                   className={`w-2 h-2 rounded-full border ${
                     isCenter
-                      ? 'bg-[#F4C343] border-[#DE8063]'
+                      ? 'bg-[#F4C343] border-2 border-[#182126] ring-2 ring-[#F59E0B]/80'
                       : 'bg-[#F4C343] border-[#087F78]'
                   } shadow-xs`}
                 />

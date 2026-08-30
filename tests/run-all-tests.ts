@@ -1409,11 +1409,11 @@ async function runTestSuite() {
   try {
     await prisma.listingVisit.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } }).catch(() => {});
     await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } }).catch(() => {});
-    await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } }).catch(() => {});
-    await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } }).catch(() => {});
+    await prisma.activityEvent.deleteMany({ where: { title: { contains: 'test', mode: 'insensitive' } } }).catch(() => {});
+    await prisma.click.deleteMany({ where: { listing: { canonicalUrl: { contains: 'test', mode: 'insensitive' } } } }).catch(() => {});
     await prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } }).catch(() => {});
-    await prisma.bid.deleteMany({ where: { listing: { title: { contains: 'Test' } } } }).catch(() => {});
-    await prisma.listing.deleteMany({ where: { title: { contains: 'Test' } } }).catch(() => {});
+    await prisma.bid.deleteMany({ where: { listing: { canonicalUrl: { contains: 'test', mode: 'insensitive' } } } }).catch(() => {});
+    await prisma.listing.deleteMany({ where: { canonicalUrl: { contains: 'test', mode: 'insensitive' } } }).catch(() => {});
     await prisma.category.deleteMany({ where: { slug: { startsWith: 'test-' } } }).catch(() => {});
   } catch (cleanErr) {
     console.warn('Non-fatal cleanup warning:', cleanErr);

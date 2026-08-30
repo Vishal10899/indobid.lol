@@ -20,18 +20,22 @@ export function BuildingInfoCard({ item, onClose, onOutbid }: BuildingInfoCardPr
   const dollars = item.verifiedBid / 100;
 
   return (
-    <div className="absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:bottom-4 sm:w-96 z-30 bg-white/96 backdrop-blur-md border border-[#E5DDCC] rounded-2xl p-4 shadow-xl animate-in fade-in slide-in-from-bottom-3 duration-200">
+    <div
+      className={`absolute bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:bottom-4 sm:w-96 z-30 bg-white/96 backdrop-blur-md rounded-2xl p-4 shadow-xl animate-in fade-in slide-in-from-bottom-3 duration-200 ${
+        isFirst ? 'border-2 border-[#F59E0B] ring-2 ring-[#F59E0B]/30' : 'border border-[#E5DDCC]'
+      }`}
+    >
       {/* Header with Rank & Close button */}
       <div className="flex items-center justify-between pb-3 border-b border-[#E5DDCC]">
         <div className="flex items-center space-x-2">
           <div
             className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center space-x-1 ${
               isFirst
-                ? 'bg-[#DE8063] text-white shadow-xs'
+                ? 'bg-[#182126] text-[#F59E0B] border-2 border-[#F59E0B] shadow-xs'
                 : 'bg-[#DDF2EF] text-[#087F78] border border-[#B9DFDA]'
             }`}
           >
-            {isFirst && <Trophy className="w-3.5 h-3.5 mr-0.5 text-white" />}
+            {isFirst && <Trophy className="w-3.5 h-3.5 mr-0.5 text-[#F59E0B]" />}
             <span>Rank #{item.rank}</span>
           </div>
           <span className="text-xs text-[#71818A] font-medium">

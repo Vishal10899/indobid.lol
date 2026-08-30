@@ -95,10 +95,10 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
 
   return (
     <div
-      className={`rounded-2xl border transition-all duration-150 relative bg-white ${
+      className={`rounded-2xl transition-all duration-150 relative bg-white ${
         isFirst
-          ? 'border-[#DE8063]/70 shadow-xs ring-1 ring-[#DE8063]/30'
-          : 'border-[#E5DDCC] hover:border-[#087F78]/50 hover:shadow-xs'
+          ? 'border-2 border-[#F59E0B] shadow-md ring-2 ring-[#F59E0B]/30'
+          : 'border border-[#E5DDCC] hover:border-[#087F78]/50 hover:shadow-xs'
       }`}
     >
       <div className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
@@ -108,7 +108,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
           <div
             className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 border ${
               isFirst
-                ? 'bg-[#182126] text-[#F4C343] border-[#F4C343] shadow-xs'
+                ? 'bg-[#182126] text-[#F4C343] border-2 border-[#F59E0B] shadow-xs'
                 : 'bg-[#182126] text-[#F4C343] border-[#E5DDCC]'
             }`}
           >
