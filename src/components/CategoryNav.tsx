@@ -39,7 +39,6 @@ import {
   Dna,
   Sprout,
   Globe,
-  Tag,
 } from 'lucide-react';
 
 interface Category {
@@ -108,24 +107,24 @@ export function CategoryNav({
   totalListings,
 }: CategoryNavProps) {
   return (
-    <div className="w-full overflow-x-auto py-1 scrollbar-none">
-      <div className="flex items-center space-x-1.5 min-w-max pb-1">
+    <div className="w-full overflow-x-auto py-2 scrollbar-none">
+      <div className="flex items-center space-x-2 min-w-max pb-1">
         {/* All Categories Button */}
         <button
           onClick={() => onSelectCategory('all')}
-          className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+          className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
             selectedCategory === 'all'
-              ? 'bg-[var(--text-primary)] text-[var(--bg-card)] font-semibold shadow-2xs'
-              : 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)]'
+              ? 'bg-[#087F78] text-white shadow-xs border border-[#087F78]'
+              : 'bg-white text-[#405866] hover:text-[#102536] hover:bg-[#F5F2E9] border border-[#E5DDCC]'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          <span>All</span>
+          <span>All Sectors</span>
           <span
-            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               selectedCategory === 'all'
-                ? 'bg-amber-500 text-slate-950 font-bold'
-                : 'bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                ? 'bg-[#DDF2EF] text-[#087F78]'
+                : 'bg-[#EEE9DD] text-[#405866]'
             }`}
           >
             {totalListings}
@@ -139,19 +138,19 @@ export function CategoryNav({
             <button
               key={cat.id}
               onClick={() => onSelectCategory(cat.slug)}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+              className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                 isSelected
-                  ? 'bg-[var(--text-primary)] text-[var(--bg-card)] font-semibold shadow-2xs'
-                  : 'bg-[var(--bg-card)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)]'
+                  ? 'bg-[#087F78] text-white shadow-xs border border-[#087F78]'
+                  : 'bg-white text-[#405866] hover:text-[#102536] hover:bg-[#F5F2E9] border border-[#E5DDCC]'
               }`}
             >
               {ICON_MAP[cat.slug] || <Globe className="w-3.5 h-3.5" />}
               <span>{cat.name}</span>
               <span
-                className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                   isSelected
-                    ? 'bg-amber-500 text-slate-950 font-bold'
-                    : 'bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                    ? 'bg-[#DDF2EF] text-[#087F78]'
+                    : 'bg-[#EEE9DD] text-[#405866]'
                 }`}
               >
                 {cat.count}

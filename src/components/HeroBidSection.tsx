@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Trophy, ArrowRight, Minus, Plus, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { Trophy, ArrowRight, Minus, Plus, CheckCircle2, Loader2, AlertCircle, Building2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
 import { POPULAR_COUNTRIES, DEFAULT_COUNTRY_CODE } from '@/lib/countries';
@@ -100,29 +100,25 @@ export function HeroBidSection({
             if (data.listing.categoryId) {
               setCategoryId(data.listing.categoryId);
             }
-            // Suggested next target: current verified bid + $3
-            const currentBidDollars = Math.ceil(data.listing.verifiedBid / 100);
-            setTargetDollars(currentBidDollars + 3);
           } else {
-            setUrlLookup({
-              exists: false,
-              destinationType: data.destinationType,
-            });
+            setUrlLookup(null);
           }
         }
-      } catch (e) {
-        console.error('URL lookup failed:', e);
+      } catch (err) {
+        console.error('URL lookup error:', err);
       } finally {
         setLookupLoading(false);
       }
-    }, 350);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [url]);
 
-  // Dynamic rank estimation query
+  // Dynamic estimate calculation
   useEffect(() => {
-    const fetchEstimation = async () => {
+    if (!targetDollars || targetDollars <= 0) return;
+
+    const fetchEstimate = async () => {
       try {
         const res = await fetch('/api/estimate', {
           method: 'POST',
@@ -130,7 +126,6 @@ export function HeroBidSection({
           body: JSON.stringify({
             targetBidDollars: targetDollars,
             categoryId: categoryId || undefined,
-            url: url || undefined,
             listingId: urlLookup?.listingId,
           }),
         });
@@ -138,40 +133,32 @@ export function HeroBidSection({
           const data = await res.json();
           setEstimation(data);
         }
-      } catch (e) {
-        console.error('Estimate failed:', e);
+      } catch (err) {
+        console.error('Estimate error:', err);
       }
     };
 
-    fetchEstimation();
-  }, [targetDollars, categoryId, url, urlLookup]);
+    fetchEstimate();
+  }, [targetDollars, categoryId, urlLookup]);
 
   const handleAdjustBid = (delta: number) => {
-    setTargetDollars((prev) => Math.max(2, prev + delta));
+    setTargetDollars((prev) => Math.max(1, prev + delta));
   };
 
   const handleDirectBidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value.replace(/[^0-9]/g, ''), 10);
-    if (!isNaN(val)) {
-      setTargetDollars(Math.max(1, val));
-    } else {
-      setTargetDollars(0);
-    }
+    const rawVal = e.target.value.replace(/[^0-9]/g, '');
+    const num = parseInt(rawVal, 10);
+    setTargetDollars(isNaN(num) ? 0 : Math.max(1, num));
   };
 
-  // Direct checkout submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) {
-      setError('Please enter a destination URL');
+    if (!url) {
+      setError('Please enter a destination URL or handle');
       return;
     }
-
-    const currentVerifiedDollars = urlLookup?.currentVerifiedBid ? urlLookup.currentVerifiedBid / 100 : 0;
-    if (urlLookup?.exists && targetDollars <= currentVerifiedDollars) {
-      setError(
-        `Current verified bid is $${currentVerifiedDollars.toLocaleString()}. A target below or equal to $${currentVerifiedDollars.toLocaleString()} will not increase this listing's position.`
-      );
+    if (targetDollars <= 0) {
+      setError('Bid must be at least $1');
       return;
     }
 
@@ -183,17 +170,18 @@ export function HeroBidSection({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          listingId: urlLookup?.listingId,
-          destinationUrl: url,
-          categoryId,
-          countryCode,
+          url,
           targetTotalBidDollars: targetDollars,
+          categoryId: categoryId || undefined,
+          countryCode: countryCode || DEFAULT_COUNTRY_CODE,
+          listingId: urlLookup?.listingId,
         }),
       });
 
       const data = await res.json();
+
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to initialize checkout session');
+        throw new Error(data.error || 'Failed to create checkout session');
       }
 
       await launchRazorpayCheckout({
@@ -218,53 +206,53 @@ export function HeroBidSection({
   const estimatedRank = estimation?.estimatedGlobalRank || 1;
 
   return (
-    <section className="pt-6 pb-8 sm:pt-10 sm:pb-12 bg-[var(--bg-section)] border-b border-[var(--border-color)]">
+    <section className="py-8 sm:py-10 bg-[#F8F6EF]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-        {/* Headline */}
-        <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-[var(--text-primary)]">
-          Pay more. Rank higher.
-        </h1>
-        <p className="mt-1.5 text-xs sm:text-sm text-[var(--text-secondary)] max-w-md mx-auto">
-          Public visibility determined by verified cumulative bids.
-        </p>
-
         {/* Compact Bid / Submission Card */}
-        <div className="mt-5 sm:mt-6 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-4 sm:p-5 shadow-2xs text-left max-w-2xl mx-auto">
+        <div className="bg-white border border-[#E5DDCC] rounded-2xl sm:rounded-3xl p-5 sm:p-6 shadow-sm text-left max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center space-x-2 pb-3 border-b border-[#E5DDCC]">
+            <Building2 className="w-5 h-5 text-[#087F78]" />
+            <h2 className="font-extrabold text-base sm:text-lg text-[#102536]">
+              Claim Your Building in the City
+            </h2>
+          </div>
+
           {/* Top: Target Rank + Compact Stepper */}
-          <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-[var(--border-color)]">
+          <div className="flex items-center justify-between gap-2 py-4 border-b border-[#E5DDCC]">
             <div>
-              <div className="text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider">
-                Target Bid
+              <div className="text-[11px] font-bold text-[#71818A] uppercase tracking-wider">
+                Target Building Rank
               </div>
-              <div className="text-base sm:text-lg font-bold text-[var(--text-primary)] mt-0.5">
+              <div className="text-base sm:text-lg font-extrabold text-[#102536] mt-0.5">
                 {estimatedRank === 1 ? (
-                  <span className="text-amber-500 flex items-center">
-                    <Trophy className="w-4 h-4 mr-1 text-amber-500 shrink-0" /> Rank #1 Global
+                  <span className="text-[#DE8063] flex items-center font-black">
+                    <Trophy className="w-4 h-4 mr-1 text-[#DE8063] shrink-0" /> #1 Center Tower
                   </span>
                 ) : (
-                  <span>Rank #{estimatedRank}</span>
+                  <span className="text-[#087F78] font-bold">Rank #{estimatedRank} in City</span>
                 )}
               </div>
             </div>
 
             {/* Stepper Control */}
-            <div className="flex items-center space-x-1 bg-[var(--bg-surface)] p-1 rounded-xl border border-[var(--border-color)]">
+            <div className="flex items-center space-x-1 bg-[#F5F2E9] p-1.5 rounded-xl border border-[#E5DDCC]">
               <button
                 type="button"
                 onClick={() => handleAdjustBid(-1)}
-                className="w-8 h-8 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-primary)] flex items-center justify-center transition border border-[var(--border-color)] cursor-pointer"
+                className="w-8 h-8 rounded-lg bg-white hover:bg-[#F5F2E9] text-[#102536] flex items-center justify-center transition border border-[#E5DDCC] cursor-pointer"
                 aria-label="Decrease bid by $1"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
 
-              <div className="flex items-center px-1 font-mono">
-                <span className="text-[var(--text-secondary)] font-semibold text-sm sm:text-base mr-0.5">$</span>
+              <div className="flex items-center px-2 font-mono">
+                <span className="text-[#405866] font-bold text-sm sm:text-base mr-0.5">₹</span>
                 <input
                   type="text"
                   value={targetDollars > 0 ? targetDollars.toLocaleString() : ''}
                   onChange={handleDirectBidChange}
-                  className="w-14 sm:w-20 bg-transparent text-[var(--text-primary)] font-bold text-base sm:text-lg focus:outline-none text-center"
+                  className="w-14 sm:w-20 bg-transparent text-[#102536] font-extrabold text-base sm:text-lg focus:outline-none text-center"
                   placeholder="2"
                 />
               </div>
@@ -272,8 +260,8 @@ export function HeroBidSection({
               <button
                 type="button"
                 onClick={() => handleAdjustBid(1)}
-                className="w-8 h-8 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-primary)] flex items-center justify-center transition border border-[var(--border-color)] cursor-pointer"
-                aria-label="Increase bid by $1"
+                className="w-8 h-8 rounded-lg bg-white hover:bg-[#F5F2E9] text-[#102536] flex items-center justify-center transition border border-[#E5DDCC] cursor-pointer"
+                aria-label="Increase bid by ₹1"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -281,10 +269,10 @@ export function HeroBidSection({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-3 pt-3">
+          <form onSubmit={handleSubmit} className="space-y-3.5 pt-4">
             {/* Destination URL */}
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+              <label className="block text-xs font-bold text-[#102536] mb-1">
                 Destination URL
               </label>
               <div className="relative">
@@ -294,13 +282,13 @@ export function HeroBidSection({
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="https://yourstartup.com or @handle"
                   required
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
+                  className="w-full bg-[#F5F2E9] border border-[#E5DDCC] focus:border-[#087F78] focus:bg-white rounded-xl py-2.5 px-3 text-[#102536] placeholder-[#71818A] text-xs sm:text-sm focus:outline-none transition shadow-2xs"
                 />
                 {lookupLoading && (
-                  <div className="absolute right-3 top-2.5 text-xs text-[var(--text-muted)] animate-spin">⟳</div>
+                  <div className="absolute right-3 top-3 text-xs text-[#71818A] animate-spin">⟳</div>
                 )}
                 {urlLookup?.destinationType && (
-                  <div className="absolute right-3 top-2 text-[var(--text-secondary)]">
+                  <div className="absolute right-3 top-2.5 text-[#087F78]">
                     <PlatformIcon type={urlLookup.destinationType} className="w-4 h-4" />
                   </div>
                 )}
@@ -308,15 +296,15 @@ export function HeroBidSection({
             </div>
 
             {/* Category & Country in compact 2-column layout */}
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                <label className="block text-xs font-bold text-[#102536] mb-1">
                   Category
                 </label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
+                  className="w-full bg-[#F5F2E9] border border-[#E5DDCC] focus:border-[#087F78] focus:bg-white rounded-xl py-2.5 px-3 text-[#102536] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate font-medium"
                 >
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -327,13 +315,13 @@ export function HeroBidSection({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
+                <label className="block text-xs font-bold text-[#102536] mb-1">
                   Country
                 </label>
                 <select
                   value={countryCode}
                   onChange={(e) => setCountryCode(e.target.value)}
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 focus:bg-[var(--bg-card)] rounded-lg py-2 px-2.5 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
+                  className="w-full bg-[#F5F2E9] border border-[#E5DDCC] focus:border-[#087F78] focus:bg-white rounded-xl py-2.5 px-3 text-[#102536] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate font-medium"
                 >
                   {POPULAR_COUNTRIES.map((c) => (
                     <option key={c.code} value={c.code}>
@@ -344,75 +332,75 @@ export function HeroBidSection({
               </div>
             </div>
 
-            {/* Existing listing notification (Rebidding / Cumulative Bid detection) */}
+            {/* Existing listing notification */}
             {urlLookup?.exists && (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2.5 flex items-start space-x-2 text-xs text-emerald-800 dark:text-emerald-300">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+              <div className="bg-[#DDF2EF] border border-[#B9DFDA] rounded-xl p-3 flex items-start space-x-2.5 text-xs text-[#087F78]">
+                <CheckCircle2 className="w-4 h-4 text-[#087F78] shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold">{urlLookup.title}</span> has{' '}
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">${currentVerifiedDollars.toLocaleString()}</span> verified.
-                  You pay the difference ({' '}
-                  <span className="font-bold text-[var(--text-primary)]">${Math.max(0, targetDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
-                  ) to reach ${targetDollars.toLocaleString()}.
+                  <span className="font-bold">{urlLookup.title}</span> has{' '}
+                  <span className="font-extrabold text-[#087F78]">₹{currentVerifiedDollars.toLocaleString()}</span> verified.
+                  You only pay the difference ({' '}
+                  <span className="font-bold text-[#102536]">₹{Math.max(0, targetDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
+                  ) to upgrade your building to ₹{targetDollars.toLocaleString()}.
                 </div>
               </div>
             )}
 
-            {/* Compact Summary: 2-column Primary Stats + Secondary Detail Line */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 space-y-2">
+            {/* Compact Summary */}
+            <div className="bg-[#F5F2E9] border border-[#E5DDCC] rounded-xl p-3 space-y-2">
               <div className="grid grid-cols-2 gap-2 text-center">
-                <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
-                  <div className="text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-medium">Estimated rank</div>
-                  <div className="text-base sm:text-lg font-bold text-amber-500 mt-0.5">
+                <div className="bg-white p-2.5 rounded-lg border border-[#E5DDCC]">
+                  <div className="text-[10px] sm:text-[11px] text-[#71818A] font-bold uppercase">Estimated Rank</div>
+                  <div className="text-base sm:text-lg font-black text-[#087F78] mt-0.5">
                     #{estimatedRank}
                   </div>
                 </div>
 
-                <div className="bg-[var(--bg-card)] p-2 rounded-lg border border-[var(--border-color)]">
-                  <div className="text-[10px] sm:text-[11px] text-[var(--text-secondary)] font-medium">Pay today</div>
-                  <div className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 font-mono">
-                    ${chargeAmountDollars.toLocaleString()}
+                <div className="bg-white p-2.5 rounded-lg border border-[#E5DDCC]">
+                  <div className="text-[10px] sm:text-[11px] text-[#71818A] font-bold uppercase">Pay Today</div>
+                  <div className="text-base sm:text-lg font-black text-[#DE8063] mt-0.5 font-mono">
+                    ₹{chargeAmountDollars.toLocaleString()}
                   </div>
                 </div>
               </div>
 
               {/* Secondary detail line */}
-              <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] px-1 pt-0.5">
+              <div className="flex items-center justify-between text-[11px] text-[#405866] px-1 pt-1">
                 <div>
-                  <span>Total bid: </span>
-                  <strong className="text-[var(--text-primary)] font-mono">${targetDollars.toLocaleString()}</strong>
+                  <span>Total verified bid: </span>
+                  <strong className="text-[#102536] font-mono">₹{targetDollars.toLocaleString()}</strong>
                 </div>
                 <div className="truncate max-w-[150px] sm:max-w-[200px] text-right">
                   <span>Ahead of: </span>
-                  <strong className="text-[var(--text-primary)] truncate">
-                    {estimation?.competitorAhead ? estimation.competitorAhead.title : 'None (Top #1)'}
+                  <strong className="text-[#102536] truncate">
+                    {estimation?.competitorAhead ? estimation.competitorAhead.title : 'None (Rank #1)'}
                   </strong>
                 </div>
               </div>
             </div>
 
             {error && (
-              <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs rounded-lg flex items-center space-x-1.5">
-                <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
 
-            {/* Clean Main CTA: "Bid Now →" */}
+            {/* Clean Main CTA */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm sm:text-base rounded-xl shadow-2xs transition flex items-center justify-center space-x-1.5 cursor-pointer mt-2 disabled:opacity-60"
+              className="w-full py-3.5 px-5 bg-[#DE8063] hover:bg-[#CF6F55] text-white font-bold text-sm sm:text-base rounded-xl shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer mt-2 disabled:opacity-60 active:scale-[0.99]"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Processing...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Preparing Checkout...</span>
                 </>
               ) : (
                 <>
-                  <span>Bid Now</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Claim Building Spot</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
                 </>
               )}
             </button>

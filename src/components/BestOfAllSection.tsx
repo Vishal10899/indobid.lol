@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Trophy, Eye, ExternalLink, Sparkles, ArrowRight } from 'lucide-react';
+import { Trophy, Eye, Sparkles, ArrowRight } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { getCountryFlag, getCountryName } from '@/lib/countries';
 
@@ -68,68 +68,67 @@ export function BestOfAllSection() {
   }
 
   const rankBadges = [
-    'bg-amber-500 text-slate-950 shadow-xs ring-2 ring-amber-500/30',
-    'bg-slate-300 dark:bg-slate-700 text-slate-900 dark:text-slate-100 ring-1 ring-slate-400/30',
-    'bg-amber-700/20 text-amber-700 dark:text-amber-300 ring-1 ring-amber-700/30',
-    'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-color)]',
-    'bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-color)]',
+    'bg-[#182126] text-[#F4C343] border border-[#F4C343] shadow-xs',
+    'bg-[#182126] text-[#F4C343] border border-[#E5DDCC]',
+    'bg-[#182126] text-[#F4C343] border border-[#E5DDCC]',
+    'bg-[#F5F2E9] text-[#405866] border border-[#E5DDCC]',
+    'bg-[#F5F2E9] text-[#405866] border border-[#E5DDCC]',
   ];
 
   return (
-    <section id="best-of-all" className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 border-t border-[var(--border-color)]">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-5">
+    <section id="best-of-all" className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-10 border-t border-[#E5DDCC] bg-[#F8F6EF]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-6">
         <div>
-          <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold mb-1.5 border border-amber-500/20">
-            <Trophy className="w-3.5 h-3.5 text-amber-500" />
-            <span>Most Visited Listings</span>
+          <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-[#DDF2EF] text-[#087F78] text-xs font-bold mb-2 border border-[#B9DFDA]">
+            <Trophy className="w-3.5 h-3.5 text-[#087F78]" />
+            <span>Most Watched Startups</span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-[var(--text-primary)] flex items-center space-x-2">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-[#102536] tracking-tight flex items-center space-x-2">
             <span>🏆 Best of All</span>
           </h2>
-          <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-            Ranked exclusively by <strong>verified real visitor traffic</strong> to each public listing page.
+          <p className="text-xs sm:text-sm text-[#405866] mt-1">
+            The internet&apos;s most watched startups ranked exclusively by <strong>verified real visitor traffic</strong>.
           </p>
         </div>
 
-        <div className="text-[11px] text-[var(--text-muted)] flex items-center space-x-1 self-start sm:self-auto">
-          <Sparkles className="w-3 h-3 text-amber-500" />
-          <span>Independent from cumulative bid ranks</span>
+        <div className="text-xs text-[#71818A] flex items-center space-x-1 self-start sm:self-auto bg-white px-3 py-1.5 rounded-xl border border-[#E5DDCC] shadow-2xs">
+          <Sparkles className="w-3.5 h-3.5 text-[#087F78]" />
+          <span>Real visitor analytics only</span>
         </div>
       </div>
 
       {loading && items.length === 0 ? (
-        <div className="grid grid-cols-1 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {[1, 2, 3].map((n) => (
-            <div key={n} className="h-16 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] animate-pulse" />
+            <div key={n} className="h-16 rounded-2xl bg-white border border-[#E5DDCC] animate-pulse" />
           ))}
         </div>
       ) : (
-        <div className="space-y-2 sm:space-y-2.5">
+        <div className="space-y-2.5">
           {items.map((item, index) => {
             const rank = index + 1;
             const rankBadgeClass = rankBadges[index] || rankBadges[3];
-            const isTop3 = rank <= 3;
 
             return (
               <div
                 key={item.id}
-                className="group relative bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)] hover:border-amber-500/40 rounded-xl p-3 sm:p-4 transition duration-150 shadow-2xs flex items-center justify-between gap-3"
+                className="group relative bg-white hover:bg-[#F5F2E9]/60 border border-[#E5DDCC] hover:border-[#087F78]/40 rounded-2xl p-3.5 sm:p-4 transition duration-150 shadow-2xs flex items-center justify-between gap-3"
               >
                 {/* Left: Rank + Info */}
                 <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
                   {/* Rank Badge */}
                   <div
-                    className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-extrabold text-xs sm:text-sm shrink-0 ${rankBadgeClass}`}
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-black text-xs sm:text-sm shrink-0 ${rankBadgeClass}`}
                   >
                     #{rank}
                   </div>
 
                   {/* Logo or Platform Icon */}
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)] flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#F5F2E9] border border-[#E5DDCC] flex items-center justify-center shrink-0 overflow-hidden">
                     {item.logoUrl ? (
                       <img src={item.logoUrl} alt={item.title} className="w-full h-full object-cover" />
                     ) : (
-                      <PlatformIcon type={item.destinationType} className="w-4 h-4 text-[var(--text-muted)]" />
+                      <PlatformIcon type={item.destinationType} className="w-4 h-4 text-[#71818A]" />
                     )}
                   </div>
 
@@ -138,7 +137,7 @@ export function BestOfAllSection() {
                     <div className="flex items-center space-x-1.5 flex-wrap gap-y-0.5">
                       <Link
                         href={`/listing/${item.id}`}
-                        className="font-bold text-xs sm:text-sm text-[var(--text-primary)] hover:text-amber-500 transition truncate max-w-[200px] sm:max-w-[320px]"
+                        className="font-bold text-xs sm:text-sm text-[#102536] hover:text-[#087F78] transition truncate max-w-[200px] sm:max-w-[320px]"
                       >
                         {item.title}
                       </Link>
@@ -152,36 +151,34 @@ export function BestOfAllSection() {
                         </span>
                       )}
 
-                      <span className="text-[10px] bg-[var(--bg-surface)] text-[var(--text-muted)] px-1.5 py-0.2 rounded border border-[var(--border-color)] shrink-0 hidden sm:inline-block">
-                        {item.category.name}
+                      <span className="text-[11px] text-[#71818A] hidden sm:inline">
+                        · {item.category.name}
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5 hidden sm:block max-w-[500px]">
+                    <p className="text-[11px] sm:text-xs text-[#405866] line-clamp-1 mt-0.5">
                       {item.description}
                     </p>
                   </div>
                 </div>
 
-                {/* Right: Real Visits + CTA */}
-                <div className="flex items-center space-x-3 sm:space-x-4 shrink-0">
-                  {/* Real Visits Count */}
+                {/* Right: Real Visitor Count */}
+                <div className="flex items-center space-x-3 shrink-0">
                   <div className="text-right">
-                    <div className="inline-flex items-center space-x-1 text-emerald-600 dark:text-emerald-400 font-bold text-xs sm:text-sm bg-emerald-500/10 px-2 sm:px-2.5 py-1 rounded-lg border border-emerald-500/20">
-                      <Eye className="w-3.5 h-3.5 shrink-0" />
-                      <span className="font-mono sm:hidden">{formatVisitCount(item.visitCount)}</span>
-                      <span className="font-mono hidden sm:inline">{item.visitCount.toLocaleString()}</span>
-                      <span className="text-[10px] font-medium hidden sm:inline">visits</span>
+                    <div className="flex items-center space-x-1 justify-end font-extrabold text-xs sm:text-sm text-[#087F78] font-mono">
+                      <Eye className="w-3.5 h-3.5 text-[#087F78]" />
+                      <span>{formatVisitCount(item.visitCount)}</span>
+                    </div>
+                    <div className="text-[10px] text-[#71818A] uppercase font-bold tracking-wider">
+                      Real Visits
                     </div>
                   </div>
 
-                  {/* View Details Link */}
                   <Link
                     href={`/listing/${item.id}`}
-                    className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--text-primary)] text-[var(--text-secondary)] hover:text-[var(--bg-card)] border border-[var(--border-color)] text-xs font-semibold transition flex items-center space-x-1"
-                    title={`View ${item.title}`}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#F5F2E9] hover:bg-[#087F78] text-[#405866] hover:text-white flex items-center justify-center transition"
+                    aria-label={`View listing for ${item.title}`}
                   >
-                    <span className="hidden sm:inline">View</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>

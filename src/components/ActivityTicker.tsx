@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Trophy, TrendingUp, Users } from 'lucide-react';
+import { Users, Building2 } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 
 interface ActivityItem {
@@ -23,7 +23,6 @@ export function ActivityTicker() {
     liveVisitors: 0,
     totalVisits: 0,
   });
-  const [loading, setLoading] = useState(true);
 
   const fetchActivity = async () => {
     try {
@@ -34,8 +33,6 @@ export function ActivityTicker() {
       }
     } catch (e) {
       console.error('Failed to load activity feed:', e);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -58,7 +55,7 @@ export function ActivityTicker() {
     fetchActivity();
     fetchVisitorStats();
     const activityInterval = setInterval(fetchActivity, 15000);
-    const visitorInterval = setInterval(fetchVisitorStats, 30000);
+    const visitorInterval = setInterval(fetchVisitorStats, 25000);
     return () => {
       clearInterval(activityInterval);
       clearInterval(visitorInterval);
@@ -68,26 +65,28 @@ export function ActivityTicker() {
   const displayItems = activities.length > 0 ? [...activities, ...activities] : [];
 
   return (
-    <div id="activity" className="w-full bg-[var(--bg-card)] border-y border-[var(--border-color)] overflow-hidden py-2 relative shadow-2xs">
-      <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
-        <div className="flex items-center space-x-2.5 shrink-0 z-10 bg-[var(--bg-card)] pr-3 border-r border-[var(--border-color)]">
-          <div className="flex items-center space-x-1 text-xs font-bold text-[var(--text-primary)] uppercase tracking-wide">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 mr-1" />
-            <span>Live Activity</span>
+    <div id="activity" className="w-full bg-[#F2EFE4] border-b border-[#E5DDCC] overflow-hidden py-2 relative shadow-2xs">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between">
+        {/* Left: Real Live Indicator */}
+        <div className="flex items-center space-x-2.5 shrink-0 z-10 bg-[#F2EFE4] pr-3 border-r border-[#E5DDCC]">
+          <div className="flex items-center space-x-1.5 text-xs font-bold text-[#087F78] uppercase tracking-wide">
+            <span className="w-2 h-2 rounded-full bg-[#087F78] animate-pulse" />
+            <span>Live Feed</span>
           </div>
 
-          <div className="flex items-center space-x-1 text-[11px] font-semibold text-[var(--text-secondary)] bg-[var(--bg-surface)] px-2 py-0.5 rounded border border-[var(--border-color)]">
-            <Users className="w-3 h-3 text-emerald-500 shrink-0" />
-            <span>{visitorStats.liveVisitors} LIVE</span>
-            <span className="text-[var(--text-muted)]">·</span>
+          <div className="flex items-center space-x-1 text-[11px] font-semibold text-[#405866] bg-white px-2 py-0.5 rounded-lg border border-[#E5DDCC]">
+            <Users className="w-3 h-3 text-[#087F78] shrink-0" />
+            <span className="text-[#087F78] font-bold">{visitorStats.liveVisitors} LIVE</span>
+            <span className="text-[#71818A]">·</span>
             <span>{visitorStats.totalVisits.toLocaleString()} VISITS</span>
           </div>
         </div>
 
+        {/* Right: Scrolling activity ticker */}
         <div className="overflow-hidden whitespace-nowrap w-full ml-3 flex items-center">
           {activities.length === 0 ? (
-            <span className="text-xs text-[var(--text-muted)] italic">
-              No recent activity yet.
+            <span className="text-xs text-[#71818A] italic">
+              No recent activity yet. Bids appear here in real-time.
             </span>
           ) : (
             <div className="inline-flex space-x-6 animate-ticker items-center">
@@ -97,27 +96,27 @@ export function ActivityTicker() {
                   <Link
                     key={`${item.id}-${idx}`}
                     href={`/listing/${item.listingId}`}
-                    className="inline-flex items-center space-x-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition duration-150 group"
+                    className="inline-flex items-center space-x-2 text-xs text-[#405866] hover:text-[#102536] transition duration-150 group"
                   >
                     <span
-                      className={`inline-flex items-center justify-center px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                      className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold ${
                         isRankOne
-                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                          : 'bg-[var(--bg-surface)] text-[var(--text-primary)] border border-[var(--border-color)]'
+                          ? 'bg-[#DE8063] text-white shadow-xs'
+                          : 'bg-white text-[#087F78] border border-[#E5DDCC]'
                       }`}
                     >
-                      {isRankOne ? <Trophy className="w-2.5 h-2.5 mr-0.5 text-amber-500" /> : <TrendingUp className="w-2.5 h-2.5 mr-0.5 text-emerald-500" />}
+                      <Building2 className="w-2.5 h-2.5 mr-0.5" />
                       #{item.rank}
                     </span>
 
-                    <span className="flex items-center space-x-1 text-[var(--text-primary)] group-hover:text-amber-500">
-                      <PlatformIcon type={item.destinationType} className="w-3 h-3 text-[var(--text-muted)]" />
-                      <span className="font-medium">{item.title}</span>
+                    <span className="flex items-center space-x-1 text-[#102536] group-hover:text-[#087F78] font-semibold">
+                      <PlatformIcon type={item.destinationType} className="w-3 h-3 text-[#71818A]" />
+                      <span>{item.title}</span>
                     </span>
 
-                    <span className="text-[var(--text-muted)]">·</span>
-                    <span className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                      ${(item.amount / 100).toLocaleString()}
+                    <span className="text-[#71818A]">·</span>
+                    <span className="font-mono text-[#087F78] font-bold">
+                      +₹{(item.amount / 100).toLocaleString()}
                     </span>
                   </Link>
                 );

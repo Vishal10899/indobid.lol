@@ -925,14 +925,18 @@ async function runTestSuite() {
 
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
-  await prisma.listingVisit.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
-  await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } });
-  await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } });
-  await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
-  await prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } });
-  await prisma.bid.deleteMany({ where: { listing: { title: { contains: 'Test' } } } });
-  await prisma.listing.deleteMany({ where: { title: { contains: 'Test' } } });
-  await prisma.category.deleteMany({ where: { slug: { startsWith: 'test-' } } });
+  try {
+    await prisma.listingVisit.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } }).catch(() => {});
+    await prisma.visitorSession.deleteMany({ where: { sessionToken: { startsWith: 'test_sess_' } } }).catch(() => {});
+    await prisma.activityEvent.deleteMany({ where: { title: { contains: 'Test' } } }).catch(() => {});
+    await prisma.click.deleteMany({ where: { listing: { title: { contains: 'Test' } } } }).catch(() => {});
+    await prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } }).catch(() => {});
+    await prisma.bid.deleteMany({ where: { listing: { title: { contains: 'Test' } } } }).catch(() => {});
+    await prisma.listing.deleteMany({ where: { title: { contains: 'Test' } } }).catch(() => {});
+    await prisma.category.deleteMany({ where: { slug: { startsWith: 'test-' } } }).catch(() => {});
+  } catch (cleanErr) {
+    console.warn('Non-fatal cleanup warning:', cleanErr);
+  }
 
   console.log('\n====================================================');
   console.log(`  TEST RESULTS: ${passed} PASSED / ${failed} FAILED`);

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { ActivityTicker } from '@/components/ActivityTicker';
+import { LiveOfficeHero } from '@/components/live-office/LiveOfficeHero';
 import { HeroBidSection } from '@/components/HeroBidSection';
 import { CategoryNav } from '@/components/CategoryNav';
 import { LeaderboardList } from '@/components/LeaderboardList';
@@ -30,6 +31,7 @@ export default function HomePage() {
   const [highestBidCents, setHighestBidCents] = useState(0);
   const [minimumToTakeFirstCents, setMinimumToTakeFirstCents] = useState(200);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'3d' | 'list'>('3d');
 
   // Bid Modal state
   const [isBidModalOpen, setIsBidModalOpen] = useState(false);
@@ -125,19 +127,23 @@ export default function HomePage() {
         minToTakeFirstDollars={Math.ceil(minimumToTakeFirstCents / 100) || 2}
       />
 
-      {/* Live Activity Ticker */}
+      {/* Live Activity Feed Ticker */}
       <ActivityTicker />
 
-      {/* Hero Section with Interactive Bid Stepper */}
-      <HeroBidSection
-        categories={categories}
+      {/* Hero: 3D Startup City Skyline & Real-Time Stats (Compact Above-The-Fold) */}
+      <LiveOfficeHero
+        items={leaderboardItems}
+        totalListings={totalItems}
         highestBidCents={highestBidCents}
         minimumToTakeFirstCents={minimumToTakeFirstCents}
+        viewMode={viewMode}
+        onToggleViewMode={setViewMode}
         onOpenBidModal={handleOpenBidModal}
+        onOutbid={handleOutbidCard}
       />
 
-      {/* Main Leaderboard Section */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-4">
+      {/* Main Leaderboard Section - Snug & Compact */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-2 sm:py-3 space-y-3 sm:space-y-3.5">
         {/* Category Navigation Pills */}
         <CategoryNav
           categories={categories}
@@ -146,7 +152,7 @@ export default function HomePage() {
           totalListings={categories.reduce((acc, c) => acc + c.count, 0) || totalItems}
         />
 
-        {/* Leaderboard Cards */}
+        {/* Leaderboard Detailed Table / Cards */}
         <LeaderboardList
           items={leaderboardItems}
           page={page}
@@ -159,6 +165,14 @@ export default function HomePage() {
           onOpenSubmit={() => handleOpenBidModal({ targetBidDollars: 2 })}
         />
       </main>
+
+      {/* Interactive Quick Bid / Stepper Section */}
+      <HeroBidSection
+        categories={categories}
+        highestBidCents={highestBidCents}
+        minimumToTakeFirstCents={minimumToTakeFirstCents}
+        onOpenBidModal={handleOpenBidModal}
+      />
 
       {/* 🏆 Best of All — Top 5 Most Visited Listings */}
       <BestOfAllSection />

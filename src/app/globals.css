@@ -2,29 +2,55 @@
 
 @layer base {
   :root {
-    --bg-page: #f5f5f2;
-    --bg-section: #f8f8f6;
-    --bg-card: #ffffff;
-    --bg-surface: #f0f1ef;
-    --border-color: #dddfdc;
-    --text-primary: #171717;
-    --text-secondary: #62676b;
-    --text-muted: #858a8d;
-    --accent-amber: #f59e0b;
-    --accent-amber-hover: #d97706;
-  }
+    /* Master Color Palette: Warm Ivory, Dark Navy, Brand Teal, Coral */
+    --bg-page: #F8F6EF;
+    --bg-section: #F2EFE4;
+    --bg-card: #FFFFFF;
+    --bg-surface: #F5F2E9;
+    --bg-viewport: #FBF9F3;
+    
+    --border-color: #E5DDCC;
+    --border-subtle: #EEE8DC;
 
-  .dark {
-    --bg-page: #111214;
-    --bg-section: #151719;
-    --bg-card: #1a1c1f;
-    --bg-surface: #1e2023;
-    --border-color: #2b2e32;
-    --text-primary: #f2f2f0;
-    --text-secondary: #a8adb2;
-    --text-muted: #777d83;
-    --accent-amber: #f59e0b;
-    --accent-amber-hover: #fbbf24;
+    --text-primary: #102536;
+    --text-secondary: #405866;
+    --text-muted: #71818A;
+
+    /* Brand Teal */
+    --color-teal: #087F78;
+    --color-teal-hover: #056B66;
+    --color-teal-light: #DDF2EF;
+    --color-teal-border: #B9DFDA;
+
+    /* Brand Coral / Salmon CTA */
+    --color-coral: #DE8063;
+    --color-coral-hover: #CF6F55;
+    --color-coral-light: #F8E5DE;
+    --color-coral-border: #F0BCAD;
+
+    /* Charcoal & Gold for Rank Badges */
+    --color-badge-bg: #182126;
+    --color-badge-gold: #F4C343;
+
+    /* Architectural Lighting & Landscape */
+    --color-window-glow: #F3B45F;
+    --color-interior-glow: #FFD38A;
+    --color-grass: #547B55;
+    --color-road: #46545A;
+
+    /* Backwards compatibility semantic tokens */
+    --color-salmon: #DE8063;
+    --color-salmon-hover: #CF6F55;
+    --color-salmon-light: #F8E5DE;
+    --color-salmon-border: #F0BCAD;
+
+    --color-butter: #F4C343;
+    --color-cherry: #DE8063;
+    --color-olive: #087F78;
+    --color-oat: #F8F6EF;
+
+    --accent-primary: #DE8063;
+    --accent-primary-hover: #CF6F55;
   }
 
   body {
@@ -32,17 +58,17 @@
     color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    text-rendering: optimizeLegibility;
   }
 }
 
-/* Custom scrollbar */
+/* Custom soft scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-surface);
+  background: var(--bg-section);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
@@ -53,13 +79,44 @@
 }
 
 @keyframes ticker {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
 }
 
 .animate-ticker {
   animation: ticker 35s linear infinite;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 .animate-ticker:hover {
   animation-play-state: paused;
+}
+
+@keyframes float-subtle {
+  0%, 100% { transform: translate3d(0, 0px, 0); }
+  50% { transform: translate3d(0, -4px, 0); }
+}
+
+.animate-float-subtle {
+  animation: float-subtle 4s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
