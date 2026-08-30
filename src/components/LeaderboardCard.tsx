@@ -80,7 +80,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
         keyId: data.keyId,
         orderId: data.orderId || data.sessionId,
         amount: data.amount || data.chargeAmountCents,
-        currency: data.currency || 'INR',
+        currency: data.currency || 'USD',
         listingId: data.listingId || item.id,
         bidId: data.bidId,
         listingTitle: item.title,
@@ -196,7 +196,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
               Verified Bid
             </div>
             <div className="text-base sm:text-lg font-extrabold text-[#087F78] font-mono">
-              ₹{dollars.toLocaleString()}
+              ${dollars.toLocaleString()}
             </div>
           </div>
 

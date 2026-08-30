@@ -250,7 +250,7 @@ function SuccessContent() {
                     <div className="bg-[var(--bg-card)] p-2.5 rounded-xl border border-[var(--border-color)]">
                       <div className="text-[var(--text-secondary)] text-[10px] uppercase font-bold">Verified Bid</div>
                       <div className="text-lg font-extrabold text-[var(--color-teal)] font-mono mt-0.5">
-                        ₹{dollars.toLocaleString()}
+                        ${dollars.toLocaleString()}
                       </div>
                       <div className="text-[10px] text-[var(--text-muted)] mt-0.5">
                         100% verified

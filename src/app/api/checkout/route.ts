@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
           const verifiedDollars = (currentVerifiedBidCents / 100).toLocaleString();
           return NextResponse.json(
             {
-              error: `Current verified bid is ₹${verifiedDollars}. A target below or equal to ₹${verifiedDollars} will not increase this listing's position.`,
+              error: `Current verified bid is $${verifiedDollars}. A target below or equal to $${verifiedDollars} will not increase this listing's position.`,
             },
             { status: 400 }
           );
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
         // Brand new listing created in pending_payment state with verifiedBid = 0
         if (requestedTotal < MINIMUM_BID_CENTS) {
           return NextResponse.json(
-            { error: `Minimum bid amount is $2 (200 cents/paise)` },
+            { error: `Minimum bid amount is $2 (200 cents)` },
             { status: 400 }
           );
         }
@@ -204,11 +204,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (chargeAmountCents < 100) {
-      return NextResponse.json({ error: 'Minimum charge amount is $1.00 (100 cents/paise)' }, { status: 400 });
+      return NextResponse.json({ error: 'Minimum charge amount is $1.00 (100 cents)' }, { status: 400 });
     }
 
     if (!listing && chargeAmountCents < MINIMUM_BID_CENTS) {
-      return NextResponse.json({ error: 'Minimum bid amount is $2 (200 cents/paise)' }, { status: 400 });
+      return NextResponse.json({ error: 'Minimum bid amount is $2 (200 cents)' }, { status: 400 });
     }
 
     // 3. Create pending Bid record
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
         amount: chargeAmountCents,
         previousBid: currentVerifiedBidCents,
         newTotalBid: finalTargetTotalCents,
-        currency: 'INR',
+        currency: 'USD',
         paymentProvider: 'razorpay',
         status: 'pending',
         bidderEmail: data.bidderEmail || null,
@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
       orderId: checkoutSession.orderId || checkoutSession.sessionId,
       keyId: checkoutSession.keyId,
       amount: chargeAmountCents,
-      currency: checkoutSession.currency || 'INR',
+      currency: checkoutSession.currency || 'USD',
       listingId: listing.id,
       listingTitle: listing.title,
       countryCode: listing.countryCode,

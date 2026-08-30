@@ -1123,7 +1123,7 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
                           isCenter ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'
                         }`}
                       >
-                        ₹{dollars.toLocaleString()}
+                        ${dollars.toLocaleString()}
                       </span>
                       <span
                         className={`font-bold text-white/90 uppercase tracking-wider ${
@@ -1149,7 +1149,7 @@ export function LiveOfficeScene({ items, onOutbid, onOpenSubmit }: LiveOfficeSce
                         isCenter ? 'text-xs mt-0.5' : 'text-[10px]'
                       }`}
                     >
-                      Claim Spot · ₹2
+                      Claim Spot · $2
                     </span>
                   </>
                 )}

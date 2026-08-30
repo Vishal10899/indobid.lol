@@ -35,12 +35,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (event.type === 'payment.success') {
-      // Verify that currency is strictly INR
+      // Verify that currency is strictly USD
       const currency = (event.currency || '').trim().toUpperCase();
-      if (currency !== 'INR') {
+      if (currency !== 'USD') {
         return NextResponse.json(
           {
-            error: `Invalid payment currency: expected 'INR', received '${event.currency}'. Payment rejected.`,
+            error: `Invalid payment currency: expected 'USD', received '${event.currency}'. Payment rejected.`,
           },
           { status: 400 }
         );
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         listingId: event.listingId,
         bidId: event.bidId,
         amountCents: event.amountCents,
-        currency: 'INR',
+        currency: 'USD',
         customerEmail: event.customerEmail,
         metadata: event.metadata,
         provider: 'razorpay',

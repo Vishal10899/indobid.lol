@@ -1,10 +1,11 @@
 import { prisma } from './db';
 import { Prisma } from '@prisma/client';
 
-export const MINIMUM_BID_AMOUNT_INR = 2; // Testing phase central minimum (₹2 INR)
-export const MINIMUM_BID_CENTS = 200; // In integer minor units (200 cents/paise)
-export const DEFAULT_INCREMENT_CENTS = 300; // +₹3.00 default suggestion above current verified bid
-export const MINIMUM_INCREMENT_CENTS = 100; // ₹1.00 minimum outbid increment
+export const MINIMUM_BID_AMOUNT_USD = 2; // Canonical minimum bid ($2 USD)
+export const MINIMUM_BID_AMOUNT_INR = 2; // Compatibility alias
+export const MINIMUM_BID_CENTS = 200; // In integer minor units (200 cents)
+export const DEFAULT_INCREMENT_CENTS = 300; // +$3.00 default suggestion above current verified bid
+export const MINIMUM_INCREMENT_CENTS = 100; // $1.00 minimum outbid increment
 
 export function centsToDollars(cents: number): number {
   return Math.floor(cents) / 100;
@@ -17,9 +18,9 @@ export function dollarsToCents(dollars: number): number {
 export function formatCurrency(cents: number, includeCentsIfZero: boolean = false): string {
   const amount = cents / 100;
   if (amount % 1 === 0 && !includeCentsIfZero) {
-    return `₹${amount.toLocaleString()}`;
+    return `$${amount.toLocaleString()}`;
   }
-  return `₹${amount.toFixed(2)}`;
+  return `$${amount.toFixed(2)}`;
 }
 
 export interface LeaderboardItem {

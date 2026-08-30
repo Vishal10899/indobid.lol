@@ -107,7 +107,7 @@ export function BuildingInfoCard({ item, onClose, onOutbid }: BuildingInfoCardPr
             Verified Bid
           </div>
           <div className="text-sm font-extrabold text-[#087F78] font-mono">
-            ₹{dollars.toLocaleString()}
+            ${dollars.toLocaleString()}
           </div>
         </div>
 
@@ -138,7 +138,7 @@ export function BuildingInfoCard({ item, onClose, onOutbid }: BuildingInfoCardPr
             className="flex-1 py-2 px-3 bg-[#DE8063] hover:bg-[#CF6F55] text-white font-bold text-xs rounded-xl shadow-xs transition text-center flex items-center justify-center space-x-1 cursor-pointer"
           >
             <TrendingUp className="w-3 h-3" />
-            <span>Outbid (₹{(dollars + 1).toLocaleString()})</span>
+            <span>Outbid (${(dollars + 1).toLocaleString()})</span>
           </button>
         )}
       </div>

@@ -116,7 +116,7 @@ export function ActivityTicker() {
 
                     <span className="text-[#71818A]">·</span>
                     <span className="font-mono text-[#087F78] font-bold">
-                      +₹{(item.amount / 100).toLocaleString()}
+                      +${(item.amount / 100).toLocaleString()}
                     </span>
                   </Link>
                 );

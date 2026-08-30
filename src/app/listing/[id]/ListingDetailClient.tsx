@@ -100,7 +100,7 @@ export function ListingDetailClient({
 
   const handleShareX = () => {
     const text = encodeURIComponent(
-      `Check out ${listing.title} ranked #${listing.globalRank} in the @indobid_lol startup city with ₹${dollars.toLocaleString()} verified bid!\n\n`
+      `Check out ${listing.title} ranked #${listing.globalRank} in the @indobid_lol startup city with $${dollars.toLocaleString()} verified bid!\n\n`
     );
     const url = encodeURIComponent(window.location.href);
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
@@ -223,7 +223,7 @@ export function ListingDetailClient({
             <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]">
               <div className="text-[var(--text-secondary)] text-[10px] uppercase font-bold">Verified Total Bid</div>
               <div className="text-base sm:text-lg font-extrabold text-[var(--color-teal)] font-mono mt-0.5">
-                ₹{dollars.toLocaleString()}
+                ${dollars.toLocaleString()}
               </div>
             </div>
 
@@ -270,7 +270,7 @@ export function ListingDetailClient({
               Outbid or increase cumulative bid for {listing.title}
             </h3>
             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-              You only pay the difference between your target amount and the current ₹{dollars.toLocaleString()} verified total.
+              You only pay the difference between your target amount and the current ${dollars.toLocaleString()} verified total.
             </p>
           </div>
 
@@ -304,13 +304,13 @@ export function ListingDetailClient({
                       {new Date(b.createdAt).toISOString().replace('T', ' ').slice(0, 16)} UTC
                     </td>
                     <td className="py-3 px-3 font-mono font-extrabold text-[var(--color-teal)]">
-                      +₹{(b.amount / 100).toLocaleString()}
+                      +${(b.amount / 100).toLocaleString()}
                     </td>
                     <td className="py-3 px-3 font-mono text-[var(--text-muted)]">
-                      ₹{(b.previousBid / 100).toLocaleString()}
+                      ${(b.previousBid / 100).toLocaleString()}
                     </td>
                     <td className="py-3 px-3 font-mono font-extrabold text-[var(--text-primary)]">
-                      ₹{(b.newTotalBid / 100).toLocaleString()}
+                      ${(b.newTotalBid / 100).toLocaleString()}
                     </td>
                     <td className="py-3 px-3">
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-teal-light)] text-[var(--color-teal)] border border-[var(--color-teal-border)]">

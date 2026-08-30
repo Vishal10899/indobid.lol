@@ -7,7 +7,7 @@ export function HowItWorks() {
       icon: <Building2 className="w-5 h-5 text-[#DE8063]" />,
       bg: 'bg-[#F8E5DE] border-[#F0BCAD]',
       title: '1. Claim Your Building',
-      desc: 'Starts at ₹2 for new startups. For existing buildings, pay only the difference to reach your target total.',
+      desc: 'Starts at $2 for new startups. For existing buildings, pay only the difference to reach your target total.',
     },
     {
       icon: <ShieldCheck className="w-5 h-5 text-[#087F78]" />,

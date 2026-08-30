@@ -188,7 +188,7 @@ export function HeroBidSection({
         keyId: data.keyId,
         orderId: data.orderId || data.sessionId,
         amount: data.amount || data.chargeAmountCents,
-        currency: data.currency || 'INR',
+        currency: data.currency || 'USD',
         listingId: data.listingId,
         bidId: data.bidId,
         listingTitle: data.listingTitle || url,
@@ -247,7 +247,7 @@ export function HeroBidSection({
               </button>
 
               <div className="flex items-center px-2 font-mono">
-                <span className="text-[#405866] font-bold text-sm sm:text-base mr-0.5">₹</span>
+                <span className="text-[#405866] font-bold text-sm sm:text-base mr-0.5">$</span>
                 <input
                   type="text"
                   value={targetDollars > 0 ? targetDollars.toLocaleString() : ''}
@@ -264,7 +264,7 @@ export function HeroBidSection({
                 type="button"
                 onClick={() => handleAdjustBid(1)}
                 className="w-8 h-8 rounded-lg bg-white hover:bg-[#F5F2E9] text-[#102536] flex items-center justify-center transition border border-[#E5DDCC] cursor-pointer"
-                aria-label="Increase bid by ₹1"
+                aria-label="Increase bid by $1"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -283,7 +283,7 @@ export function HeroBidSection({
                   type="text"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://yourstartup.com or @handle"
+                  placeholder="indobid.lol, example.com or https://..."
                   required
                   className="w-full bg-[#F5F2E9] border border-[#E5DDCC] focus:border-[#087F78] focus:bg-white rounded-xl py-2.5 px-3 text-[#102536] placeholder-[#71818A] text-xs sm:text-sm focus:outline-none transition shadow-2xs"
                 />
@@ -341,10 +341,10 @@ export function HeroBidSection({
                 <CheckCircle2 className="w-4 h-4 text-[#087F78] shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold">{urlLookup.title}</span> has{' '}
-                  <span className="font-extrabold text-[#087F78]">₹{currentVerifiedDollars.toLocaleString()}</span> verified.
+                  <span className="font-extrabold text-[#087F78]">${currentVerifiedDollars.toLocaleString()}</span> verified.
                   You only pay the difference ({' '}
-                  <span className="font-bold text-[#102536]">₹{Math.max(0, targetDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
-                  ) to upgrade your building to ₹{targetDollars.toLocaleString()}.
+                  <span className="font-bold text-[#102536]">${Math.max(0, targetDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
+                  ) to upgrade your building to ${targetDollars.toLocaleString()}.
                 </div>
               </div>
             )}
@@ -362,7 +362,7 @@ export function HeroBidSection({
                 <div className="bg-white p-2.5 rounded-lg border border-[#E5DDCC]">
                   <div className="text-[10px] sm:text-[11px] text-[#71818A] font-bold uppercase">Pay Today</div>
                   <div className="text-base sm:text-lg font-black text-[#DE8063] mt-0.5 font-mono">
-                    ₹{chargeAmountDollars.toLocaleString()}
+                    ${chargeAmountDollars.toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -371,7 +371,7 @@ export function HeroBidSection({
               <div className="flex items-center justify-between text-[11px] text-[#405866] px-1 pt-1">
                 <div>
                   <span>Total verified bid: </span>
-                  <strong className="text-[#102536] font-mono">₹{targetDollars.toLocaleString()}</strong>
+                  <strong className="text-[#102536] font-mono">${targetDollars.toLocaleString()}</strong>
                 </div>
                 <div className="truncate max-w-[150px] sm:max-w-[200px] text-right">
                   <span>Ahead of: </span>

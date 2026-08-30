@@ -130,7 +130,7 @@ export function LiveOfficeHero({
               className="px-4 py-2 bg-[#DE8063] hover:bg-[#CF6F55] text-white font-bold rounded-xl text-xs sm:text-sm shadow-xs transition-all duration-150 flex items-center space-x-1.5 cursor-pointer active:scale-[0.98]"
             >
               <PlusCircle className="w-4 h-4 text-white" />
-              <span>Claim Spot (₹{minToTakeFirstDollars})</span>
+              <span>Claim Spot (${minToTakeFirstDollars})</span>
             </button>
           </div>
         </div>
@@ -171,7 +171,7 @@ export function LiveOfficeHero({
                   {topListing.title}
                 </span>
                 <span className="font-mono text-[#087F78] font-bold">
-                  (₹{ (topListing.verifiedBid / 100).toLocaleString()})
+                  (${ (topListing.verifiedBid / 100).toLocaleString()})
                 </span>
               </>
             ) : (

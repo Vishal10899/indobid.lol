@@ -925,13 +925,13 @@ async function runTestSuite() {
     'Test 36: Checkout successfully accepts and processes newly expanded canonical categories'
   );
 
-  // TEST 37: Razorpay Order with ₹2 creates order with amount=200 and currency=INR
-  console.log('\n--- Test Case 37: ₹2 creates Razorpay order with amount=200 and currency=INR ---');
+  // TEST 37: Razorpay Order with $2 creates order with amount=200 and currency=USD
+  console.log('\n--- Test Case 37: $2 creates Razorpay order with amount=200 and currency=USD ---');
   const rzp2Req = new Request('http://localhost:3000/api/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      destinationUrl: 'https://test-rzp-2inr.com',
+      destinationUrl: 'https://test-rzp-2usd.com',
       targetTotalBidDollars: 2,
     }),
   });
@@ -941,18 +941,18 @@ async function runTestSuite() {
   assert(
     rzp2Res.status === 200 &&
       rzp2Data.amount === 200 &&
-      rzp2Data.currency === 'INR' &&
+      rzp2Data.currency === 'USD' &&
       rzp2Data.provider === 'razorpay',
-    'Test 37: ₹2 creates Razorpay order with amount=200 (paise) and currency=INR'
+    'Test 37: $2 creates Razorpay order with amount=200 (cents) and currency=USD'
   );
 
-  // TEST 38: Razorpay Order with ₹3 creates order with amount=300 and currency=INR
-  console.log('\n--- Test Case 38: ₹3 creates Razorpay order with amount=300 and currency=INR ---');
+  // TEST 38: Razorpay Order with $3 creates order with amount=300 and currency=USD
+  console.log('\n--- Test Case 38: $3 creates Razorpay order with amount=300 and currency=USD ---');
   const rzp3Req = new Request('http://localhost:3000/api/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      destinationUrl: 'https://test-rzp-3inr.com',
+      destinationUrl: 'https://test-rzp-3usd.com',
       targetTotalBidDollars: 3,
     }),
   });
@@ -962,18 +962,18 @@ async function runTestSuite() {
   assert(
     rzp3Res.status === 200 &&
       rzp3Data.amount === 300 &&
-      rzp3Data.currency === 'INR' &&
+      rzp3Data.currency === 'USD' &&
       rzp3Data.provider === 'razorpay',
-    'Test 38: ₹3 creates Razorpay order with amount=300 (paise) and currency=INR'
+    'Test 38: $3 creates Razorpay order with amount=300 (cents) and currency=USD'
   );
 
-  // TEST 39: Razorpay Order with ₹10 creates order with amount=1000 and currency=INR
-  console.log('\n--- Test Case 39: ₹10 creates Razorpay order with amount=1000 and currency=INR ---');
+  // TEST 39: Razorpay Order with $10 creates order with amount=1000 and currency=USD
+  console.log('\n--- Test Case 39: $10 creates Razorpay order with amount=1000 and currency=USD ---');
   const rzp10Req = new Request('http://localhost:3000/api/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      destinationUrl: 'https://test-rzp-10inr.com',
+      destinationUrl: 'https://test-rzp-10usd.com',
       targetTotalBidDollars: 10,
     }),
   });
@@ -983,49 +983,49 @@ async function runTestSuite() {
   assert(
     rzp10Res.status === 200 &&
       rzp10Data.amount === 1000 &&
-      rzp10Data.currency === 'INR' &&
+      rzp10Data.currency === 'USD' &&
       rzp10Data.provider === 'razorpay',
-    'Test 39: ₹10 creates Razorpay order with amount=1000 (paise) and currency=INR'
+    'Test 39: $10 creates Razorpay order with amount=1000 (cents) and currency=USD'
   );
 
-  // TEST 40: Non-INR currency (USD) payment is strictly rejected by fulfillment
-  console.log('\n--- Test Case 40: USD payment/order is rejected ---');
-  const usdPendingListing = await prisma.listing.create({
+  // TEST 40: Non-USD currency (INR) payment is strictly rejected by fulfillment
+  console.log('\n--- Test Case 40: INR payment/order is rejected ---');
+  const inrPendingListing = await prisma.listing.create({
     data: {
-      title: 'Test USD Listing Must Reject',
-      destinationUrl: 'https://test-usd-reject.com',
-      canonicalUrl: 'test-usd-reject.com',
+      title: 'Test INR Listing Must Reject',
+      destinationUrl: 'https://test-inr-reject.com',
+      canonicalUrl: 'test-inr-reject.com',
       destinationType: 'website',
-      description: 'Listing with USD payment that must be rejected',
+      description: 'Listing with INR payment that must be rejected',
       categoryId: testCategory.id,
       verifiedBid: 0,
       status: 'pending_payment',
     },
   });
 
-  let usdRejected = false;
+  let inrRejected = false;
   try {
     await processSuccessfulPayment({
-      providerPaymentId: `test_pay_usd_${Date.now()}`,
-      listingId: usdPendingListing.id,
+      providerPaymentId: `test_pay_inr_${Date.now()}`,
+      listingId: inrPendingListing.id,
       amountCents: 500,
-      currency: 'USD', // Non-INR currency!
+      currency: 'INR', // Non-USD currency!
       provider: 'razorpay',
     });
   } catch (err: any) {
-    usdRejected = err.message.includes('Invalid payment currency');
+    inrRejected = err.message.includes('Invalid payment currency');
   }
 
-  const usdListingAfter = await prisma.listing.findUnique({ where: { id: usdPendingListing.id } });
-  const usdLeaderboard = await getLeaderboard({ limit: 100 });
-  const usdInLeaderboard = usdLeaderboard.items.some((i) => i.id === usdPendingListing.id);
+  const inrListingAfter = await prisma.listing.findUnique({ where: { id: inrPendingListing.id } });
+  const inrLeaderboard = await getLeaderboard({ limit: 100 });
+  const inrInLeaderboard = inrLeaderboard.items.some((i) => i.id === inrPendingListing.id);
 
   assert(
-    usdRejected &&
-      usdListingAfter?.status === 'pending_payment' &&
-      usdListingAfter?.verifiedBid === 0 &&
-      !usdInLeaderboard,
-    'Test 40: USD payment is strictly rejected and listing remains inactive with 0 verifiedBid'
+    inrRejected &&
+      inrListingAfter?.status === 'pending_payment' &&
+      inrListingAfter?.verifiedBid === 0 &&
+      !inrInLeaderboard,
+    'Test 40: INR payment is strictly rejected and listing remains inactive with 0 verifiedBid'
   );
 
   // TEST 41: Incorrect/tampered amount is rejected by fulfillment
@@ -1046,10 +1046,10 @@ async function runTestSuite() {
   const expectedBid = await prisma.bid.create({
     data: {
       listingId: amountMismatchListing.id,
-      amount: 500, // Expected: 500 paise (₹5)
+      amount: 500, // Expected: 500 cents ($5)
       previousBid: 0,
       newTotalBid: 500,
-      currency: 'INR',
+      currency: 'USD',
       status: 'pending',
     },
   });
@@ -1060,8 +1060,8 @@ async function runTestSuite() {
       providerPaymentId: `test_pay_mismatch_${Date.now()}`,
       listingId: amountMismatchListing.id,
       bidId: expectedBid.id,
-      amountCents: 100, // Tampered: paid 100 paise instead of expected 500
-      currency: 'INR',
+      amountCents: 100, // Tampered: paid 100 cents instead of expected 500
+      currency: 'USD',
       provider: 'razorpay',
     });
   } catch (err: any) {
@@ -1088,7 +1088,7 @@ async function runTestSuite() {
         entity: {
           id: 'pay_test_signature',
           amount: 200,
-          currency: 'INR',
+          currency: 'USD',
           notes: { listingId: validListing.id },
         },
       },
@@ -1107,7 +1107,7 @@ async function runTestSuite() {
     invalidSigResult === null &&
       validSigResult !== null &&
       validSigResult.type === 'payment.success' &&
-      validSigResult.currency === 'INR',
+      validSigResult.currency === 'USD',
     'Test 42: Invalid webhook signature is rejected (null) and valid HMAC signature is accepted'
   );
 
@@ -1132,7 +1132,7 @@ async function runTestSuite() {
       amount: 200,
       previousBid: 0,
       newTotalBid: 200,
-      currency: 'INR',
+      currency: 'USD',
       status: 'pending',
     },
   });
@@ -1145,7 +1145,7 @@ async function runTestSuite() {
         entity: {
           id: 'pay_test_failed_event',
           amount: 200,
-          currency: 'INR',
+          currency: 'USD',
           notes: { listingId: failedWebhookListing.id, bidId: failedBidRecord.id },
         },
       },
@@ -1181,37 +1181,37 @@ async function runTestSuite() {
     'Test 43: Failed payment webhook event updates bid to failed and leaves listing inactive'
   );
 
-  // TEST 44: Successful INR payment activates listing exactly once
-  console.log('\n--- Test Case 44: Successful INR payment activates listing exactly once ---');
-  const inrLiveListing = await prisma.listing.create({
+  // TEST 44: Successful USD payment activates listing exactly once
+  console.log('\n--- Test Case 44: Successful USD payment activates listing exactly once ---');
+  const usdLiveListing = await prisma.listing.create({
     data: {
-      title: 'Test Live INR Activated Listing',
-      destinationUrl: 'https://test-inr-live-active.com',
-      canonicalUrl: 'test-inr-live-active.com',
+      title: 'Test Live USD Activated Listing',
+      destinationUrl: 'https://test-usd-live-active.com',
+      canonicalUrl: 'test-usd-live-active.com',
       destinationType: 'website',
-      description: 'Listing activated via verified INR payment',
+      description: 'Listing activated via verified USD payment',
       categoryId: testCategory.id,
       verifiedBid: 0,
       status: 'pending_payment',
     },
   });
 
-  const inrFulfill = await processSuccessfulPayment({
-    providerPaymentId: `test_pay_inr_success_${Date.now()}`,
-    listingId: inrLiveListing.id,
-    amountCents: 200, // ₹2 INR = 200 paise
-    currency: 'INR',
+  const usdFulfill = await processSuccessfulPayment({
+    providerPaymentId: `test_pay_usd_success_${Date.now()}`,
+    listingId: usdLiveListing.id,
+    amountCents: 200, // $2 USD = 200 cents
+    currency: 'USD',
     provider: 'razorpay',
   });
 
-  const inrListingAfter = await prisma.listing.findUnique({ where: { id: inrLiveListing.id } });
+  const usdListingAfter = await prisma.listing.findUnique({ where: { id: usdLiveListing.id } });
 
   assert(
-    inrFulfill.success &&
-      !inrFulfill.alreadyProcessed &&
-      inrListingAfter?.status === 'active' &&
-      inrListingAfter?.verifiedBid === 200,
-    'Test 44: Successful INR payment (200 paise = ₹2) activates listing exactly once'
+    usdFulfill.success &&
+      !usdFulfill.alreadyProcessed &&
+      usdListingAfter?.status === 'active' &&
+      usdListingAfter?.verifiedBid === 200,
+    'Test 44: Successful USD payment (200 cents = $2) activates listing exactly once'
   );
 
   // TEST 45: Duplicate webhook does not double the bid
@@ -1219,23 +1219,23 @@ async function runTestSuite() {
   const dupPaymentId = `test_pay_dup_verify_${Date.now()}`;
   const firstFulfillment = await processSuccessfulPayment({
     providerPaymentId: dupPaymentId,
-    listingId: inrLiveListing.id,
-    amountCents: 300, // +₹3 (300 paise)
-    currency: 'INR',
+    listingId: usdLiveListing.id,
+    amountCents: 300, // +$3 (300 cents)
+    currency: 'USD',
     provider: 'razorpay',
   });
 
-  const bidAfterFirstWebhook = (await prisma.listing.findUnique({ where: { id: inrLiveListing.id } }))!.verifiedBid;
+  const bidAfterFirstWebhook = (await prisma.listing.findUnique({ where: { id: usdLiveListing.id } }))!.verifiedBid;
 
   const duplicateFulfillment = await processSuccessfulPayment({
     providerPaymentId: dupPaymentId,
-    listingId: inrLiveListing.id,
+    listingId: usdLiveListing.id,
     amountCents: 300,
-    currency: 'INR',
+    currency: 'USD',
     provider: 'razorpay',
   });
 
-  const bidAfterSecondWebhook = (await prisma.listing.findUnique({ where: { id: inrLiveListing.id } }))!.verifiedBid;
+  const bidAfterSecondWebhook = (await prisma.listing.findUnique({ where: { id: usdLiveListing.id } }))!.verifiedBid;
 
   assert(
     firstFulfillment.success &&
@@ -1315,6 +1315,93 @@ async function runTestSuite() {
   assert(
     validCustomRes.status === 200 && validCustomData.amount === 1700,
     'Test 49: Custom amount ($17) is valid and creates 1700 paise order'
+  );
+
+  // TEST 50: Accepts bare domains without protocol (indobid.lol, example.com)
+  console.log('\n--- Test Case 50: Accepts bare domains without protocol ---');
+  const bareIndobid = validateAndFormatUrl('indobid.lol');
+  const bareExample = validateAndFormatUrl('example.com');
+  assert(
+    bareIndobid.isValid &&
+      bareIndobid.formattedUrl === 'https://indobid.lol/' &&
+      bareExample.isValid &&
+      bareExample.formattedUrl === 'https://example.com/',
+    'Test 50: Bare domains without protocol (indobid.lol, example.com) are valid and normalized to https://'
+  );
+
+  // TEST 51: Accepts www domains without protocol (www.indobid.lol, www.example.com)
+  console.log('\n--- Test Case 51: Accepts www domains without protocol ---');
+  const wwwIndobid = validateAndFormatUrl('www.indobid.lol');
+  const wwwExample = validateAndFormatUrl('www.example.com');
+  assert(
+    wwwIndobid.isValid &&
+      wwwIndobid.formattedUrl === 'https://www.indobid.lol/' &&
+      wwwExample.isValid &&
+      wwwExample.formattedUrl === 'https://www.example.com/',
+    'Test 51: www domains without protocol (www.indobid.lol, www.example.com) are valid'
+  );
+
+  // TEST 52: Accepts http:// URLs (http://indobid.lol, http://example.com)
+  console.log('\n--- Test Case 52: Accepts http:// URLs ---');
+  const httpIndobid = validateAndFormatUrl('http://indobid.lol');
+  const httpExample = validateAndFormatUrl('http://example.com');
+  assert(
+    httpIndobid.isValid &&
+      httpIndobid.formattedUrl === 'http://indobid.lol/' &&
+      httpExample.isValid &&
+      httpExample.formattedUrl === 'http://example.com/',
+    'Test 52: http:// URLs (http://indobid.lol, http://example.com) are valid'
+  );
+
+  // TEST 53: Accepts https:// URLs (https://indobid.lol, https://example.com)
+  console.log('\n--- Test Case 53: Accepts https:// URLs ---');
+  const httpsIndobid = validateAndFormatUrl('https://indobid.lol');
+  const httpsExample = validateAndFormatUrl('https://example.com');
+  assert(
+    httpsIndobid.isValid &&
+      httpsIndobid.formattedUrl === 'https://indobid.lol/' &&
+      httpsExample.isValid &&
+      httpsExample.formattedUrl === 'https://example.com/',
+    'Test 53: https:// URLs (https://indobid.lol, https://example.com) are valid'
+  );
+
+  // TEST 54: Normalization creates identical canonical keys for all formats
+  console.log('\n--- Test Case 54: Canonical URL normalization consistency ---');
+  const canon1 = normalizeCanonicalUrl('indobid.lol');
+  const canon2 = normalizeCanonicalUrl('www.indobid.lol');
+  const canon3 = normalizeCanonicalUrl('http://indobid.lol');
+  const canon4 = normalizeCanonicalUrl('https://indobid.lol');
+  assert(
+    canon1 === 'indobid.lol' &&
+      canon2 === 'indobid.lol' &&
+      canon3 === 'indobid.lol' &&
+      canon4 === 'indobid.lol',
+    'Test 54: Canonical key is identical (indobid.lol) across all domain formats'
+  );
+
+  // TEST 55: Rejects unsafe javascript: protocol
+  console.log('\n--- Test Case 55: Rejects javascript: protocol ---');
+  const jsAttack = validateAndFormatUrl('javascript:alert(1)');
+  assert(!jsAttack.isValid, 'Test 55: javascript:alert(1) is strictly rejected');
+
+  // TEST 56: Rejects unsafe data: protocol
+  console.log('\n--- Test Case 56: Rejects data: protocol ---');
+  const dataAttack = validateAndFormatUrl('data:text/html,<script>alert(1)</script>');
+  assert(!dataAttack.isValid, 'Test 56: data:text/html,... is strictly rejected');
+
+  // TEST 57: Rejects unsafe vbscript: protocol
+  console.log('\n--- Test Case 57: Rejects vbscript: protocol ---');
+  const vbAttack = validateAndFormatUrl('vbscript:msgbox(1)');
+  assert(!vbAttack.isValid, 'Test 57: vbscript:... is strictly rejected');
+
+  // TEST 58: Rejects obviously malformed and whitespace inputs
+  console.log('\n--- Test Case 58: Rejects malformed and whitespace inputs ---');
+  const spaceAttack = validateAndFormatUrl('indobid lol');
+  const noTld = validateAndFormatUrl('nodomain');
+  const emptyStr = validateAndFormatUrl('   ');
+  assert(
+    !spaceAttack.isValid && !noTld.isValid && !emptyStr.isValid,
+    'Test 58: Whitespace, missing TLD, and empty inputs are strictly rejected'
   );
 
   // Post-test cleanup: Clean all test data from database

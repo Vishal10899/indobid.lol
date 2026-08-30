@@ -220,7 +220,7 @@ export function BidModal({
         keyId: data.keyId,
         orderId: data.orderId || data.sessionId,
         amount: data.amount || data.chargeAmountCents,
-        currency: data.currency || 'INR',
+        currency: data.currency || 'USD',
         listingId: data.listingId,
         bidId: data.bidId,
         listingTitle: data.listingTitle || title,
@@ -290,7 +290,7 @@ export function BidModal({
               </button>
 
               <div className="flex items-center font-mono">
-                <span className="text-[var(--text-secondary)] font-bold mr-0.5">₹</span>
+                <span className="text-[var(--text-secondary)] font-bold mr-0.5">$</span>
                 <input
                   type="text"
                   value={targetBidDollars > 0 ? targetBidDollars.toLocaleString() : ''}
@@ -307,7 +307,7 @@ export function BidModal({
                 type="button"
                 onClick={() => handleAdjustBid(1)}
                 className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
-                aria-label="Increase bid by ₹1"
+                aria-label="Increase bid by $1"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -320,10 +320,10 @@ export function BidModal({
               <CheckCircle2 className="w-4 h-4 text-[var(--color-teal)] shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold">Existing listing found:</span> Currently at{' '}
-                <span className="font-extrabold text-[var(--color-teal)]">₹{currentVerifiedDollars.toLocaleString()}</span>.
+                <span className="font-extrabold text-[var(--color-teal)]">${currentVerifiedDollars.toLocaleString()}</span>.
                 You pay the difference ({' '}
-                <span className="font-bold text-[var(--text-primary)]">₹{Math.max(0, targetBidDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
-                ) to reach ₹{targetBidDollars.toLocaleString()}.
+                <span className="font-bold text-[var(--text-primary)]">${Math.max(0, targetBidDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
+                ) to reach ${targetBidDollars.toLocaleString()}.
               </div>
             </div>
           )}
@@ -339,7 +339,7 @@ export function BidModal({
                 required
                 value={destinationUrl}
                 onChange={(e) => setDestinationUrl(e.target.value)}
-                placeholder="https://yourstartup.com or @handle"
+                placeholder="indobid.lol, example.com or https://..."
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--color-teal)] focus:bg-[var(--bg-card)] rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
               />
               {urlLookup?.destinationType && (
@@ -421,11 +421,11 @@ export function BidModal({
           <div className="grid grid-cols-3 gap-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 text-center">
             <div>
               <div className="text-[10px] text-[var(--text-secondary)] font-medium">Target Total</div>
-              <div className="font-extrabold text-[var(--text-primary)] font-mono">₹{targetBidDollars.toLocaleString()}</div>
+              <div className="font-extrabold text-[var(--text-primary)] font-mono">${targetBidDollars.toLocaleString()}</div>
             </div>
             <div>
               <div className="text-[10px] text-[var(--text-secondary)] font-medium">Pay Today</div>
-              <div className="font-extrabold text-[var(--color-salmon)] font-mono">₹{chargeAmountDollars.toLocaleString()}</div>
+              <div className="font-extrabold text-[var(--color-salmon)] font-mono">${chargeAmountDollars.toLocaleString()}</div>
             </div>
             <div>
               <div className="text-[10px] text-[var(--text-secondary)] font-medium">Estimated Rank</div>

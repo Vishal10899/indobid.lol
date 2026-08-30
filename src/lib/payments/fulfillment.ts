@@ -30,7 +30,7 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
     listingId,
     bidId,
     amountCents,
-    currency = 'INR',
+    currency = 'USD',
     customerEmail,
     metadata = {},
     provider = 'razorpay',
@@ -43,13 +43,13 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
     throw new Error('listingId is required for payment fulfillment');
   }
   if (typeof amountCents !== 'number' || amountCents <= 0 || isNaN(amountCents)) {
-    throw new Error('amountCents must be a positive integer in paise');
+    throw new Error('amountCents must be a positive integer in cents');
   }
 
-  // Strict INR Currency Verification: Reject any non-INR currency
+  // Strict USD Currency Verification: Reject any non-USD currency
   const normalizedCurrency = (currency || '').trim().toUpperCase();
-  if (normalizedCurrency !== 'INR') {
-    throw new Error(`Invalid payment currency: expected 'INR', received '${currency}'. Payment rejected.`);
+  if (normalizedCurrency !== 'USD') {
+    throw new Error(`Invalid payment currency: expected 'USD', received '${currency}'. Payment rejected.`);
   }
 
   // Backend Expected Amount Verification: Do not trust unverified client amounts
@@ -58,7 +58,7 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
     if (expectedBid && expectedBid.amount > 0) {
       if (amountCents !== expectedBid.amount) {
         throw new Error(
-          `Payment amount mismatch: expected ${expectedBid.amount} paise (₹${expectedBid.amount / 100}), received ${amountCents} paise (₹${amountCents / 100}). Payment rejected.`
+          `Payment amount mismatch: expected ${expectedBid.amount} cents ($${expectedBid.amount / 100}), received ${amountCents} cents ($${amountCents / 100}). Payment rejected.`
         );
       }
     }
@@ -240,8 +240,8 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
     // 5. Create Activity Event
     let eventType = 'climbed_rank';
     let message = '';
-    const formattedAmount = `₹${(newVerifiedBid / 100).toLocaleString()}`;
-    const formattedCharge = `₹${(amountCents / 100).toLocaleString()}`;
+    const formattedAmount = `$${(newVerifiedBid / 100).toLocaleString()}`;
+    const formattedCharge = `$${(amountCents / 100).toLocaleString()}`;
 
     if (newRank === 1) {
       eventType = 'took_first';

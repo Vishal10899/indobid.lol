@@ -489,7 +489,7 @@ export default function AdminPage() {
               <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
                 <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Verified Revenue</div>
                 <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
-                  ₹{stats.financials.totalRevenueDollars.toLocaleString()}
+                  ${stats.financials.totalRevenueDollars.toLocaleString()}
                 </div>
                 <div className="text-[10px] text-[var(--text-muted)] mt-1">
                   From {stats.payments.successful} verified payments
@@ -499,7 +499,7 @@ export default function AdminPage() {
               <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
                 <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Verified Bids Sum</div>
                 <div className="text-xl sm:text-2xl font-extrabold text-amber-500 font-mono mt-1">
-                  ₹{stats.financials.totalVerifiedBidsDollars.toLocaleString()}
+                  ${stats.financials.totalVerifiedBidsDollars.toLocaleString()}
                 </div>
                 <div className="text-[10px] text-[var(--text-muted)] mt-1">
                   Across {stats.listings.active} active listings
@@ -694,7 +694,7 @@ export default function AdminPage() {
                             {item.category.name}
                           </td>
                           <td className="py-2.5 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                            ₹{(item.verifiedBid / 100).toLocaleString()}
+                            ${(item.verifiedBid / 100).toLocaleString()}
                           </td>
                           <td className="py-2.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                             👁 {item.visitCount.toLocaleString()}
@@ -806,10 +806,10 @@ export default function AdminPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                  Displayed Ranking Bid (₹ INR) <span className="text-amber-500">*</span>
+                  Displayed Ranking Bid ($ USD) <span className="text-amber-500">*</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2 text-xs font-semibold text-[var(--text-muted)]">₹</span>
+                  <span className="absolute left-3 top-2 text-xs font-semibold text-[var(--text-muted)]">$</span>
                   <input
                     type="number"
                     min="1"
@@ -932,7 +932,7 @@ export default function AdminPage() {
                           </td>
 
                           <td className="py-3 px-3 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                            ₹{(l.verifiedBid / 100).toLocaleString()}
+                            ${(l.verifiedBid / 100).toLocaleString()}
                           </td>
 
                           <td className="py-3 px-3">
@@ -1022,7 +1022,7 @@ export default function AdminPage() {
                           {p.provider}
                         </td>
                         <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          ₹{(p.amount / 100).toLocaleString()}
+                          ${(p.amount / 100).toLocaleString()}
                         </td>
                         <td className="py-3 px-3">
                           <span
