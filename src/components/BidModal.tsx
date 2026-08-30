@@ -166,7 +166,7 @@ export function BidModal({
   const handleDirectBidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value.replace(/[^0-9]/g, ''), 10);
     if (!isNaN(val)) {
-      setTargetBidDollars(Math.max(1, val));
+      setTargetBidDollars(val);
     } else {
       setTargetBidDollars(0);
     }
@@ -176,6 +176,10 @@ export function BidModal({
     e.preventDefault();
     if (!destinationUrl.trim()) {
       setError('Destination URL is required');
+      return;
+    }
+    if (targetBidDollars < 2) {
+      setError('Bid must be at least $2');
       return;
     }
 
@@ -291,6 +295,9 @@ export function BidModal({
                   type="text"
                   value={targetBidDollars > 0 ? targetBidDollars.toLocaleString() : ''}
                   onChange={handleDirectBidChange}
+                  onBlur={() => {
+                    if (targetBidDollars < 2) setTargetBidDollars(2);
+                  }}
                   className="w-20 bg-transparent text-[var(--text-primary)] font-extrabold text-base text-center focus:outline-none"
                   placeholder="2"
                 />

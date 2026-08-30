@@ -1245,6 +1245,78 @@ async function runTestSuite() {
     'Test 45: Duplicate webhook with same payment ID is idempotent and does NOT double the bid'
   );
 
+  // TEST 46: Below $2 is strictly rejected by backend checkout API
+  console.log('\n--- Test Case 46: Below $2 is rejected by backend ---');
+  const subMinReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-sub-min-reject.com',
+      targetTotalBidDollars: 1, // $1 (below $2 minimum)
+    }),
+  });
+  const subMinRes = await checkoutPOST(subMinReq as any);
+  const subMinData = await subMinRes.json();
+
+  assert(
+    subMinRes.status === 400 && subMinData.error.includes('Minimum bid amount is $2'),
+    'Test 46: Sub-$2 bid ($1) is strictly rejected by backend checkout API with 400'
+  );
+
+  // TEST 47: $3 bid is valid
+  console.log('\n--- Test Case 47: $3 bid is valid ---');
+  const valid3Req = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-valid-3usd.com',
+      targetTotalBidDollars: 3,
+    }),
+  });
+  const valid3Res = await checkoutPOST(valid3Req as any);
+  const valid3Data = await valid3Res.json();
+
+  assert(
+    valid3Res.status === 200 && valid3Data.amount === 300,
+    'Test 47: $3 bid is valid and creates 300 paise order'
+  );
+
+  // TEST 48: $5 bid is valid
+  console.log('\n--- Test Case 48: $5 bid is valid ---');
+  const valid5Req = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-valid-5usd.com',
+      targetTotalBidDollars: 5,
+    }),
+  });
+  const valid5Res = await checkoutPOST(valid5Req as any);
+  const valid5Data = await valid5Res.json();
+
+  assert(
+    valid5Res.status === 200 && valid5Data.amount === 500,
+    'Test 48: $5 bid is valid and creates 500 paise order'
+  );
+
+  // TEST 49: Custom amounts above $2 are valid
+  console.log('\n--- Test Case 49: Custom amount ($17) is valid ---');
+  const validCustomReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://test-valid-custom17usd.com',
+      targetTotalBidDollars: 17,
+    }),
+  });
+  const validCustomRes = await checkoutPOST(validCustomReq as any);
+  const validCustomData = await validCustomRes.json();
+
+  assert(
+    validCustomRes.status === 200 && validCustomData.amount === 1700,
+    'Test 49: Custom amount ($17) is valid and creates 1700 paise order'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
   try {

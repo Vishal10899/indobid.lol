@@ -167,7 +167,13 @@ export async function POST(request: NextRequest) {
         });
       } else {
         // Brand new listing created in pending_payment state with verifiedBid = 0
-        finalTargetTotalCents = Math.max(MINIMUM_BID_CENTS, requestedTotal);
+        if (requestedTotal < MINIMUM_BID_CENTS) {
+          return NextResponse.json(
+            { error: `Minimum bid amount is $2 (200 cents/paise)` },
+            { status: 400 }
+          );
+        }
+        finalTargetTotalCents = requestedTotal;
         chargeAmountCents = finalTargetTotalCents;
 
         const defaultTitle = new URL(formattedUrl).hostname.replace(/^www\./, '');
@@ -198,7 +204,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (chargeAmountCents < 100) {
-      return NextResponse.json({ error: 'Minimum charge amount is ₹1.00 (100 paise)' }, { status: 400 });
+      return NextResponse.json({ error: 'Minimum charge amount is $1.00 (100 cents/paise)' }, { status: 400 });
+    }
+
+    if (!listing && chargeAmountCents < MINIMUM_BID_CENTS) {
+      return NextResponse.json({ error: 'Minimum bid amount is $2 (200 cents/paise)' }, { status: 400 });
     }
 
     // 3. Create pending Bid record

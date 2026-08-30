@@ -142,13 +142,13 @@ export function HeroBidSection({
   }, [targetDollars, categoryId, urlLookup]);
 
   const handleAdjustBid = (delta: number) => {
-    setTargetDollars((prev) => Math.max(1, prev + delta));
+    setTargetDollars((prev) => Math.max(2, prev + delta));
   };
 
   const handleDirectBidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawVal = e.target.value.replace(/[^0-9]/g, '');
     const num = parseInt(rawVal, 10);
-    setTargetDollars(isNaN(num) ? 0 : Math.max(1, num));
+    setTargetDollars(isNaN(num) ? 0 : num);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,8 +157,8 @@ export function HeroBidSection({
       setError('Please enter a destination URL or handle');
       return;
     }
-    if (targetDollars <= 0) {
-      setError('Bid must be at least $1');
+    if (targetDollars < 2) {
+      setError('Bid must be at least $2');
       return;
     }
 
@@ -252,6 +252,9 @@ export function HeroBidSection({
                   type="text"
                   value={targetDollars > 0 ? targetDollars.toLocaleString() : ''}
                   onChange={handleDirectBidChange}
+                  onBlur={() => {
+                    if (targetDollars < 2) setTargetDollars(2);
+                  }}
                   className="w-14 sm:w-20 bg-transparent text-[#102536] font-extrabold text-base sm:text-lg focus:outline-none text-center"
                   placeholder="2"
                 />
