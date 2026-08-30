@@ -33,7 +33,7 @@ export function HeroBidSection({
   const minToTakeFirstDollars = Math.ceil(minimumToTakeFirstCents / 100);
   // Default target for new listing is $2
   const [targetDollars, setTargetDollars] = useState<number>(minToTakeFirstDollars || 2);
-  const [url, setUrl] = useState('');
+  const [destinationUrl, setDestinationUrl] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [countryCode, setCountryCode] = useState<string>(DEFAULT_COUNTRY_CODE);
   const [loading, setLoading] = useState(false);
@@ -73,7 +73,7 @@ export function HeroBidSection({
 
   // Debounced URL lookup (auto-detects existing listing for rebidding)
   useEffect(() => {
-    if (!url || url.trim().length < 4) {
+    if (!destinationUrl || destinationUrl.trim().length < 4) {
       setUrlLookup(null);
       return;
     }
@@ -84,7 +84,7 @@ export function HeroBidSection({
         const res = await fetch('/api/listings/lookup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({ destinationUrl, url: destinationUrl }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -112,7 +112,7 @@ export function HeroBidSection({
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [url]);
+  }, [destinationUrl]);
 
   // Dynamic estimate calculation
   useEffect(() => {
@@ -127,6 +127,8 @@ export function HeroBidSection({
             targetBidDollars: targetDollars,
             categoryId: categoryId || undefined,
             listingId: urlLookup?.listingId,
+            destinationUrl: destinationUrl || undefined,
+            url: destinationUrl || undefined,
           }),
         });
         if (res.ok) {
@@ -139,7 +141,7 @@ export function HeroBidSection({
     };
 
     fetchEstimate();
-  }, [targetDollars, categoryId, urlLookup]);
+  }, [targetDollars, categoryId, urlLookup, destinationUrl]);
 
   const handleAdjustBid = (delta: number) => {
     setTargetDollars((prev) => Math.max(2, prev + delta));
@@ -153,7 +155,7 @@ export function HeroBidSection({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url) {
+    if (!destinationUrl || !destinationUrl.trim()) {
       setError('Please enter a destination URL or handle');
       return;
     }
@@ -170,7 +172,7 @@ export function HeroBidSection({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url,
+          destinationUrl: destinationUrl.trim(),
           targetTotalBidDollars: targetDollars,
           categoryId: categoryId || undefined,
           countryCode: countryCode || DEFAULT_COUNTRY_CODE,
@@ -191,7 +193,7 @@ export function HeroBidSection({
         currency: data.currency || 'USD',
         listingId: data.listingId,
         bidId: data.bidId,
-        listingTitle: data.listingTitle || url,
+        listingTitle: data.listingTitle || destinationUrl,
         checkoutUrl: data.checkoutUrl,
       });
     } catch (err) {
@@ -281,8 +283,8 @@ export function HeroBidSection({
               <div className="relative">
                 <input
                   type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
+                  value={destinationUrl}
+                  onChange={(e) => setDestinationUrl(e.target.value)}
                   placeholder="indobid.lol, example.com or https://..."
                   required
                   className="w-full bg-[#F5F2E9] border border-[#E5DDCC] focus:border-[#087F78] focus:bg-white rounded-xl py-2.5 px-3 text-[#102536] placeholder-[#71818A] text-xs sm:text-sm focus:outline-none transition shadow-2xs"

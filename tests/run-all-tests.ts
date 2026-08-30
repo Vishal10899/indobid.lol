@@ -1404,6 +1404,140 @@ async function runTestSuite() {
     'Test 58: Whitespace, missing TLD, and empty inputs are strictly rejected'
   );
 
+  // TEST 59: Claim Form Flow — new listing + hello.com is accepted
+  console.log('\n--- Test Case 59: new listing + hello.com is accepted by checkout API ---');
+  const helloReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'hello.com',
+      targetTotalBidDollars: 2,
+    }),
+  });
+  const helloRes = await checkoutPOST(helloReq as any);
+  const helloData = await helloRes.json();
+  assert(
+    helloRes.status === 200 && helloData.success && helloData.amount === 200,
+    'Test 59: new listing + hello.com is accepted by checkout API and returns 200'
+  );
+
+  // TEST 60: Claim Form Flow — new listing + indobid.lol is accepted
+  console.log('\n--- Test Case 60: new listing + indobid.lol is accepted by checkout API ---');
+  const existingIndobid = await prisma.listing.findUnique({ where: { canonicalUrl: 'indobid.lol' } });
+  const indobidTarget = existingIndobid ? Math.ceil(existingIndobid.verifiedBid / 100) + 1 : 2;
+  const indobidReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'indobid.lol',
+      targetTotalBidDollars: indobidTarget,
+    }),
+  });
+  const indobidRes = await checkoutPOST(indobidReq as any);
+  const indobidData = await indobidRes.json();
+
+  const newIndobidReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'test-new-indobid.lol',
+      targetTotalBidDollars: 2,
+    }),
+  });
+  const newIndobidRes = await checkoutPOST(newIndobidReq as any);
+  const newIndobidData = await newIndobidRes.json();
+
+  assert(
+    indobidRes.status === 200 &&
+      indobidData.success &&
+      newIndobidRes.status === 200 &&
+      newIndobidData.success &&
+      newIndobidData.amount === 200,
+    'Test 60: new listing + indobid.lol domain format is accepted by checkout API and returns 200'
+  );
+
+  // TEST 61: Claim Form Flow — new listing + https://example.com is accepted
+  console.log('\n--- Test Case 61: new listing + https://example.com is accepted by checkout API ---');
+  const exampleHttpsReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: 'https://example.com',
+      targetTotalBidDollars: 2,
+    }),
+  });
+  const exampleHttpsRes = await checkoutPOST(exampleHttpsReq as any);
+  const exampleHttpsData = await exampleHttpsRes.json();
+  assert(
+    exampleHttpsRes.status === 200 && exampleHttpsData.success && exampleHttpsData.amount === 200,
+    'Test 61: new listing + https://example.com is accepted by checkout API and returns 200'
+  );
+
+  // TEST 62: Claim Form Flow — new listing + empty destinationUrl is rejected
+  console.log('\n--- Test Case 62: new listing + empty destinationUrl is rejected ---');
+  const emptyDestReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      destinationUrl: '',
+      targetTotalBidDollars: 2,
+    }),
+  });
+  const emptyDestRes = await checkoutPOST(emptyDestReq as any);
+  const emptyDestData = await emptyDestRes.json();
+  assert(
+    emptyDestRes.status === 400 && emptyDestData.error === 'Either listingId or destinationUrl is required',
+    'Test 62: new listing + empty destinationUrl is rejected with 400 and error message'
+  );
+
+  // TEST 63: Claim Form Flow — existing listingId without destinationUrl is accepted
+  console.log('\n--- Test Case 63: existing listingId without destinationUrl is accepted ---');
+  const existingUpgradeListing = await prisma.listing.create({
+    data: {
+      title: 'Test Existing Upgrade Listing',
+      destinationUrl: 'https://test-existing-upgrade-dest.com',
+      canonicalUrl: 'test-existing-upgrade-dest.com',
+      destinationType: 'website',
+      description: 'Testing upgrade by listingId without destinationUrl',
+      categoryId: testCategory.id,
+      verifiedBid: 200,
+      status: 'active',
+    },
+  });
+
+  const existingUpgradeReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      listingId: existingUpgradeListing.id,
+      targetTotalBidDollars: 5,
+    }),
+  });
+  const existingUpgradeRes = await checkoutPOST(existingUpgradeReq as any);
+  const existingUpgradeData = await existingUpgradeRes.json();
+  assert(
+    existingUpgradeRes.status === 200 &&
+      existingUpgradeData.success &&
+      existingUpgradeData.chargeAmountCents === 300,
+    'Test 63: existing listingId without destinationUrl is accepted and charges difference ($5 - $2 = $3)'
+  );
+
+  // TEST 64: Claim Form Flow — neither listingId nor destinationUrl is rejected
+  console.log('\n--- Test Case 64: neither listingId nor destinationUrl is rejected ---');
+  const neitherReq = new Request('http://localhost:3000/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      targetTotalBidDollars: 2,
+    }),
+  });
+  const neitherRes = await checkoutPOST(neitherReq as any);
+  const neitherData = await neitherRes.json();
+  assert(
+    neitherRes.status === 400 && neitherData.error === 'Either listingId or destinationUrl is required',
+    'Test 64: neither listingId nor destinationUrl is strictly rejected with 400'
+  );
+
   // Post-test cleanup: Clean all test data from database
   console.log('\nCleaning test fixtures from database...');
   try {

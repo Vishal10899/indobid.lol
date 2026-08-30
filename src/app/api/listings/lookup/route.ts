@@ -4,7 +4,8 @@ import { validateAndFormatUrl, normalizeCanonicalUrl, detectDestinationType } fr
 import { z } from 'zod';
 
 const lookupSchema = z.object({
-  url: z.string().min(1, 'URL is required'),
+  url: z.string().optional().nullable(),
+  destinationUrl: z.string().optional().nullable(),
 });
 
 export async function POST(request: NextRequest) {
@@ -16,7 +17,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid input' }, { status: 400 });
     }
 
-    const { isValid, formattedUrl, error } = validateAndFormatUrl(parsed.data.url);
+    const inputUrl = (parsed.data.destinationUrl || parsed.data.url)?.trim();
+    if (!inputUrl) {
+      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    }
+
+    const { isValid, formattedUrl, error } = validateAndFormatUrl(inputUrl);
     if (!isValid) {
       return NextResponse.json({ error: error || 'Invalid URL format' }, { status: 400 });
     }

@@ -9,18 +9,19 @@ import { z } from 'zod';
 
 const checkoutSchema = z.object({
   // Either existing listing ID
-  listingId: z.string().optional(),
+  listingId: z.string().optional().nullable(),
   
   // Or new destination details
-  destinationUrl: z.string().optional(),
-  title: z.string().max(100).optional(),
-  description: z.string().max(500).optional(),
-  categoryId: z.string().optional(),
+  destinationUrl: z.string().optional().nullable(),
+  url: z.string().optional().nullable(),
+  title: z.string().max(100).optional().nullable(),
+  description: z.string().max(500).optional().nullable(),
+  categoryId: z.string().optional().nullable(),
   countryCode: z.string().optional().nullable(),
   
   // Target bid amounts
-  targetTotalBidDollars: z.number().positive().optional(),
-  targetTotalBidCents: z.number().int().positive().optional(),
+  targetTotalBidDollars: z.number().positive().optional().nullable(),
+  targetTotalBidCents: z.number().int().positive().optional().nullable(),
   
   logoUrl: z.string().optional().nullable(),
   socialWebsite: z.string().optional().nullable(),
@@ -70,10 +71,13 @@ export async function POST(request: NextRequest) {
     let chargeAmountCents = 0;
     let finalTargetTotalCents = 0;
 
+    const trimmedListingId = data.listingId?.trim();
+    const effectiveDestinationUrl = (data.destinationUrl || data.url)?.trim();
+
     // CASE A: Existing Listing by ID (1-Click Outbid from Leaderboard)
-    if (data.listingId) {
+    if (trimmedListingId) {
       listing = await prisma.listing.findUnique({
-        where: { id: data.listingId },
+        where: { id: trimmedListingId },
         include: { category: true },
       });
 
@@ -109,8 +113,8 @@ export async function POST(request: NextRequest) {
       }
     }
     // CASE B: Destination URL submission (New or existing by canonical URL)
-    else if (data.destinationUrl) {
-      const { isValid, formattedUrl, error: urlError } = validateAndFormatUrl(data.destinationUrl);
+    else if (effectiveDestinationUrl) {
+      const { isValid, formattedUrl, error: urlError } = validateAndFormatUrl(effectiveDestinationUrl);
       if (!isValid) {
         return NextResponse.json({ error: urlError || 'Invalid destination URL' }, { status: 400 });
       }

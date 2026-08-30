@@ -5,11 +5,12 @@ import { validateAndFormatUrl, normalizeCanonicalUrl } from '@/lib/url-utils';
 import { z } from 'zod';
 
 const estimateSchema = z.object({
-  targetBidCents: z.number().int().positive().optional(),
-  targetBidDollars: z.number().positive().optional(),
-  categoryId: z.string().optional(),
-  listingId: z.string().optional(),
-  url: z.string().optional(),
+  targetBidCents: z.number().int().positive().optional().nullable(),
+  targetBidDollars: z.number().positive().optional().nullable(),
+  categoryId: z.string().optional().nullable(),
+  listingId: z.string().optional().nullable(),
+  url: z.string().optional().nullable(),
+  destinationUrl: z.string().optional().nullable(),
 });
 
 export async function POST(request: NextRequest) {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid input' }, { status: 400 });
     }
 
-    let targetBidCents = parsed.data.targetBidCents;
+    let targetBidCents = parsed.data.targetBidCents || undefined;
     if (!targetBidCents && parsed.data.targetBidDollars) {
       targetBidCents = Math.round(parsed.data.targetBidDollars * 100);
     }
@@ -30,14 +31,15 @@ export async function POST(request: NextRequest) {
     }
 
     let existingListing = null;
-    let listingId = parsed.data.listingId;
+    let listingId = parsed.data.listingId || undefined;
+    const rawUrl = (parsed.data.destinationUrl || parsed.data.url)?.trim();
 
     if (listingId) {
       existingListing = await prisma.listing.findUnique({
         where: { id: listingId },
       });
-    } else if (parsed.data.url) {
-      const { isValid, formattedUrl } = validateAndFormatUrl(parsed.data.url);
+    } else if (rawUrl) {
+      const { isValid, formattedUrl } = validateAndFormatUrl(rawUrl);
       if (isValid) {
         const canonical = normalizeCanonicalUrl(formattedUrl);
         existingListing = await prisma.listing.findUnique({
