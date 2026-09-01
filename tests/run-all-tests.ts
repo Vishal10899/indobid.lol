@@ -2001,12 +2001,264 @@ async function runTestSuite() {
     'Test 109: Authoritative single Founder identity (Vishal Chaudhary, @vishalchaudhary, VishalChaudhary74096@gmail.com) verified'
   );
 
+  // -------------------------------------------------------------------------------------------------
+  // PART 9: USERNAME REGISTRATION, ATOMIC UNIQUENESS & CASE-INSENSITIVITY (Tests 110 - 120)
+  // -------------------------------------------------------------------------------------------------
+  console.log('\n--- PART 9: USERNAME REGISTRATION, ATOMIC UNIQUENESS & CASE-INSENSITIVITY (Tests 110 - 120) ---');
+
+  const { GET: checkUsernameRoute } = await import('../src/app/api/auth/check-username/route');
+  const { POST: loginRoute } = await import('../src/app/api/auth/login/route');
+  const { GET: profileRoute } = await import('../src/app/api/profile/[username]/route');
+
+  const uniqueSuffix = Date.now().toString().slice(-6);
+  const testRegUsername = `chaudhary_${uniqueSuffix}`;
+  const testRegEmail = `chaudhary_${uniqueSuffix}@example.com`;
+  const testRegPassword = 'securePassword123';
+
+  // Test 110: Registering new username succeeds and persists in DB
+  const signupReq1 = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: testRegUsername,
+      displayName: 'Chaudhary Debater',
+      email: testRegEmail,
+      password: testRegPassword,
+    }),
+  });
+
+  const signupRes1 = await signupRoute(signupReq1);
+  const signupData1 = await signupRes1.json();
+  const dbUser1 = await prisma.user.findUnique({ where: { username: testRegUsername } });
+
+  assert(
+    signupRes1.status === 200 &&
+    signupData1.success === true &&
+    dbUser1 !== null &&
+    dbUser1.username === testRegUsername,
+    'Test 110: Registering new username succeeds and immediately persists in the database'
+  );
+
+  // Test 111: Same username again with different email is strictly rejected with 409
+  const signupReq2 = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: testRegUsername,
+      email: `other_${testRegEmail}`,
+      password: testRegPassword,
+    }),
+  });
+
+  const signupRes2 = await signupRoute(signupReq2);
+  const signupData2 = await signupRes2.json();
+
+  assert(
+    signupRes2.status === 409 &&
+    signupData2.success === false &&
+    signupData2.error.includes('Username is already taken'),
+    'Test 111: Attempting to register the same username again with a different email is strictly rejected with 409'
+  );
+
+  // Test 112: Same username with different capitalization is normalized and rejected
+  const signupReq3 = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: testRegUsername.toUpperCase(),
+      email: `caps_${testRegEmail}`,
+      password: testRegPassword,
+    }),
+  });
+
+  const signupRes3 = await signupRoute(signupReq3);
+  const signupData3 = await signupRes3.json();
+
+  assert(
+    signupRes3.status === 409 &&
+    signupData3.success === false &&
+    signupData3.error.includes('Username is already taken'),
+    'Test 112: Attempting to register the same username with different capitalization is normalized and rejected with 409'
+  );
+
+  // Test 113: GET /api/auth/check-username reports availability accurately
+  const checkTakenReq = new NextRequest(`http://localhost:3000/api/auth/check-username?username=${testRegUsername}`);
+  const checkTakenRes = await checkUsernameRoute(checkTakenReq);
+  const checkTakenData = await checkTakenRes.json();
+
+  const checkAvailReq = new NextRequest(`http://localhost:3000/api/auth/check-username?username=unused_${uniqueSuffix}`);
+  const checkAvailRes = await checkUsernameRoute(checkAvailReq);
+  const checkAvailData = await checkAvailRes.json();
+
+  assert(
+    checkTakenRes.status === 200 &&
+    checkTakenData.available === false &&
+    checkAvailRes.status === 200 &&
+    checkAvailData.available === true,
+    'Test 113: GET /api/auth/check-username accurately reports taken for registered username and available for unused'
+  );
+
+  // Test 114: Founder username (vishalchaudhary) cannot be claimed by another user
+  const founderClaimReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'VishalChaudhary',
+      email: `fakefounder_${Date.now()}@example.com`,
+      password: 'hackerPassword123',
+    }),
+  });
+
+  const founderClaimRes = await signupRoute(founderClaimReq);
+  const founderClaimData = await founderClaimRes.json();
+
+  assert(
+    founderClaimRes.status === 409 &&
+    founderClaimData.success === false &&
+    founderClaimData.error.includes('Username is already taken'),
+    'Test 114: Founder username vishalchaudhary cannot be claimed by another account'
+  );
+
+  // Test 115: Invalid usernames (too short, invalid characters) are strictly rejected
+  const invalidUserReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'ab',
+      email: `invalid_${Date.now()}@example.com`,
+      password: 'password123',
+    }),
+  });
+
+  const invalidUserRes = await signupRoute(invalidUserReq);
+  const invalidUserData = await invalidUserRes.json();
+
+  assert(
+    invalidUserRes.status === 400 &&
+    invalidUserData.success === false,
+    'Test 115: Invalid username (< 3 characters) is strictly rejected by validation'
+  );
+
+  // Test 116: Simultaneous duplicate signup requests are handled atomically by database uniqueness
+  let raceErrorHandled = true;
+  try {
+    const racePromises = [
+      signupRoute(new NextRequest('http://localhost:3000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: `race_${uniqueSuffix}`,
+          email: `race1_${uniqueSuffix}@example.com`,
+          password: 'password123',
+        }),
+      })),
+      signupRoute(new NextRequest('http://localhost:3000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: `race_${uniqueSuffix}`,
+          email: `race2_${uniqueSuffix}@example.com`,
+          password: 'password123',
+        }),
+      })),
+    ];
+    const raceResults = await Promise.all(racePromises);
+    const statuses = raceResults.map((r) => r.status);
+    raceErrorHandled = statuses.includes(200) && statuses.includes(409);
+  } catch {
+    raceErrorHandled = false;
+  }
+
+  assert(
+    raceErrorHandled === true,
+    'Test 116: Simultaneous duplicate signup requests for same username are handled atomically with 1 success and 1 conflict'
+  );
+
+  // Test 117: User can log in using their normalized username or uppercase version
+  await prisma.user.update({
+    where: { id: dbUser1!.id },
+    data: { emailVerifiedAt: new Date(), isVerified: true },
+  });
+
+  const loginCapsReq = new NextRequest('http://localhost:3000/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      login: testRegUsername.toUpperCase(),
+      password: testRegPassword,
+    }),
+  });
+
+  const loginCapsRes = await loginRoute(loginCapsReq);
+  const loginCapsData = await loginCapsRes.json();
+
+  assert(
+    loginCapsRes.status === 200 &&
+    loginCapsData.success === true &&
+    loginCapsData.user.username === testRegUsername,
+    'Test 117: User can log in using their normalized username with case-insensitive handling'
+  );
+
+  // Test 118: Public profile route resolves username case-insensitively
+  const profileReq = new NextRequest(`http://localhost:3000/api/profile/${testRegUsername.toUpperCase()}`);
+  const profileRes = await profileRoute(profileReq, { params: Promise.resolve({ username: testRegUsername.toUpperCase() }) });
+  const profileData = await profileRes.json();
+
+  assert(
+    profileRes.status === 200 &&
+    profileData.profile &&
+    profileData.profile.username === testRegUsername,
+    'Test 118: Public profile route /api/profile/[username] resolves username case-insensitively'
+  );
+
+  // Test 119: Attempting to register with already registered & verified email is safely rejected with 409
+  const emailDupReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: `newuser_${uniqueSuffix}`,
+      email: testRegEmail,
+      password: 'newPassword123',
+    }),
+  });
+
+  const emailDupRes = await signupRoute(emailDupReq);
+  const emailDupData = await emailDupRes.json();
+
+  assert(
+    emailDupRes.status === 409 &&
+    emailDupData.success === false &&
+    emailDupData.error.includes('An account with this email address already exists'),
+    'Test 119: Attempting to register with already registered & verified email is safely rejected with 409'
+  );
+
+  // Test 120: Database unique constraint on username prevents any duplicate insertion at SQL level
+  let sqlUniqueBlocked = false;
+  try {
+    await prisma.user.create({
+      data: {
+        username: testRegUsername,
+        email: `sql_test_${Date.now()}@example.com`,
+        displayName: 'SQL Test',
+      },
+    });
+  } catch (err: any) {
+    if (err?.code === 'P2002') {
+      sqlUniqueBlocked = true;
+    }
+  }
+
+  assert(
+    sqlUniqueBlocked === true,
+    'Test 120: Database unique constraint on users.username strictly prevents duplicate insertion at SQL level'
+  );
+
   // Clean up all test data cleanly
   await (prisma as any).passwordResetToken.deleteMany({ where: { email: resetUserEmail } });
   await prisma.user.deleteMany({ where: { id: resetUser.id } });
   await prisma.debate.deleteMany({ where: { id: debateToHide.id } });
-  await prisma.emailOtp.deleteMany({ where: { email: { in: [testOtpEmail, directEmail, expiredEmail, resendTestEmail, attemptLimitEmail, unverifiedEmail, apiTestEmail] } } });
-  await prisma.user.deleteMany({ where: { email: apiTestEmail } });
+  await prisma.emailOtp.deleteMany({ where: { email: { in: [testOtpEmail, directEmail, expiredEmail, resendTestEmail, attemptLimitEmail, unverifiedEmail, apiTestEmail, testRegEmail, `race1_${uniqueSuffix}@example.com`, `race2_${uniqueSuffix}@example.com`] } } });
+  await prisma.user.deleteMany({ where: { email: { in: [apiTestEmail, testRegEmail, `race1_${uniqueSuffix}@example.com`, `race2_${uniqueSuffix}@example.com`] } } });
   if (verifiedUser) {
     await prisma.user.deleteMany({ where: { id: verifiedUser.id } });
   }

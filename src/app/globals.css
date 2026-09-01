@@ -47,36 +47,36 @@
   }
 
   html.light {
-    /* IndoBid Warm Editorial Light Mode */
-    --bg-page: #F5F0E8;
-    --bg-page-deep: #EBE3D7;
-    --bg-surface: #FAF6EF;
-    --bg-surface-subtle: #F0E9DC;
-    --bg-card: #FAF6EF;
-    --bg-card-hover: #F2ECE0;
+    /* IndoBid High-Contrast Luxury Editorial Light Mode */
+    --bg-page: #F6F3ED;
+    --bg-page-deep: #ECE5DA;
+    --bg-surface: #FFFFFF;
+    --bg-surface-subtle: #F7F3EC;
+    --bg-card: #FFFFFF;
+    --bg-card-hover: #F8F5EE;
     --bg-elevated: #FFFFFF;
-    --bg-slate: #D9D2C5;
+    --bg-slate: #DDD6C9;
 
-    --border-color: rgba(24, 34, 36, 0.11);
-    --border-subtle: rgba(24, 34, 36, 0.06);
-    --border-highlight: #C86F54;
-    --border-amber: rgba(176, 139, 42, 0.35);
+    --border-color: rgba(13, 22, 25, 0.14);
+    --border-subtle: rgba(13, 22, 25, 0.08);
+    --border-highlight: #BA5133;
+    --border-amber: rgba(148, 110, 19, 0.40);
 
-    --text-primary: #182224;
-    --text-secondary: #55686B;
-    --text-muted: #88999C;
+    --text-primary: #0C1518;
+    --text-secondary: #2C3E44;
+    --text-muted: #4B6067;
 
-    /* Accents */
-    --color-coral: #C86F54;
-    --color-coral-bright: #D87D62;
-    --color-amber: #B08B2A;
-    --color-lime: #64861A;
-    --color-slate: #D9D2C5;
-    --color-success: #49821C;
-    --color-danger: #C03E3E;
+    /* High-Contrast Accents */
+    --color-coral: #BA5133;
+    --color-coral-bright: #A84428;
+    --color-amber: #946E13;
+    --color-lime: #3D6B0D;
+    --color-slate: #DDD6C9;
+    --color-success: #2E7519;
+    --color-danger: #B82B2B;
 
-    --accent-cta: #C86F54;
-    --accent-cta-hover: #D87D62;
+    --accent-cta: #BA5133;
+    --accent-cta-hover: #A84428;
   }
 
   html, body {
@@ -108,23 +108,18 @@
   background: var(--border-color);
   border-radius: 4px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-coral);
+
+/* Global focus styling */
+:focus-visible {
+  outline: 2px solid var(--color-coral);
+  outline-offset: 2px;
 }
 
-@keyframes ticker {
-  0% { transform: translate3d(0, 0, 0); }
-  100% { transform: translate3d(-50%, 0, 0); }
-}
-
-.animate-ticker {
-  animation: ticker 35s linear infinite;
-  will-change: transform;
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
-}
-.animate-ticker:hover {
-  animation-play-state: paused;
+/* Smooth micro-transitions */
+button, a, input, textarea, select {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @media (prefers-reduced-motion: reduce) {

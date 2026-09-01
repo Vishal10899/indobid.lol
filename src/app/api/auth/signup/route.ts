@@ -5,6 +5,7 @@ import { requestEmailOtp } from '@/lib/email-otp';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const USERNAME_REGEX = /^[a-z0-9_]{3,25}$/;
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { username, email, password, displayName, avatarUrl } = body || {};
 
-    // 1. Mandatory Username & Password Validation
+    // 1. Mandatory Username Validation & Deterministic Normalization
     if (!username || typeof username !== 'string' || !username.trim()) {
       return NextResponse.json(
         { success: false, error: 'Username is required' },
@@ -30,6 +31,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const cleanUsername = username.trim().toLowerCase();
+    if (!USERNAME_REGEX.test(cleanUsername)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Username must be between 3 and 25 characters (lowercase letters, numbers, and underscores only)',
+        },
+        { status: 400 }
+      );
+    }
+
+    // 2. Password Validation
     if (!password || typeof password !== 'string' || password.length < 6) {
       return NextResponse.json(
         { success: false, error: 'Password must be at least 6 characters' },
@@ -37,7 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Mandatory Email Validation
+    // 3. Mandatory Email Validation & Normalization
     if (!email || typeof email !== 'string' || !email.trim()) {
       return NextResponse.json(
         { success: false, error: 'Email address is required' },
@@ -53,42 +66,41 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cleanUsername = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-    if (cleanUsername.length < 3 || cleanUsername.length > 25) {
+    // 4. Pre-check Database for Existing Username (Deterministic & Case-Insensitive)
+    const userByUsername = await prisma.user.findUnique({
+      where: { username: cleanUsername },
+    });
+
+    if (userByUsername && userByUsername.email !== cleanEmail) {
       return NextResponse.json(
-        { success: false, error: 'Username must be between 3 and 25 characters (alphanumeric and underscore)' },
-        { status: 400 }
+        { success: false, error: 'Username is already taken' },
+        { status: 409 }
       );
     }
 
-    // 3. Check for existing username or verified email
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username: cleanUsername },
-          { email: cleanEmail },
-        ],
-      },
+    // 5. Pre-check Database for Existing Email
+    const userByEmail = await prisma.user.findUnique({
+      where: { email: cleanEmail },
     });
 
-    if (existingUser) {
-      if (existingUser.username === cleanUsername && existingUser.email !== cleanEmail) {
-        return NextResponse.json(
-          { success: false, error: 'Username is already taken' },
-          { status: 409 }
-        );
-      }
-      if (existingUser.email === cleanEmail && existingUser.emailVerifiedAt !== null) {
-        return NextResponse.json(
-          { success: false, error: 'An account with this email address already exists' },
-          { status: 409 }
-        );
-      }
+    if (userByEmail && userByEmail.emailVerifiedAt !== null) {
+      return NextResponse.json(
+        { success: false, error: 'An account with this email address already exists' },
+        { status: 409 }
+      );
+    }
+
+    // If existing unverified email account is changing username, ensure new username isn't taken
+    if (userByEmail && userByUsername && userByUsername.id !== userByEmail.id) {
+      return NextResponse.json(
+        { success: false, error: 'Username is already taken' },
+        { status: 409 }
+      );
     }
 
     const passwordHash = hashPassword(password);
 
-    // 4. Optional Avatar URL validation if passed on signup
+    // 6. Optional Avatar URL validation
     let validAvatarUrl: string | null = null;
     if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.trim()) {
       const trimmed = avatarUrl.trim();
@@ -97,31 +109,51 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 5. Create or update pending unverified user record
-    if (existingUser && existingUser.email === cleanEmail) {
-      await prisma.user.update({
-        where: { id: existingUser.id },
-        data: {
-          username: cleanUsername,
-          displayName: displayName?.trim() || cleanUsername,
-          passwordHash,
-          avatarUrl: validAvatarUrl || existingUser.avatarUrl,
-        },
-      });
-    } else {
-      await prisma.user.create({
-        data: {
-          username: cleanUsername,
-          displayName: displayName?.trim() || cleanUsername,
-          email: cleanEmail,
-          passwordHash,
-          avatarUrl: validAvatarUrl,
-          emailVerifiedAt: null, // Requires OTP verification
-        },
-      });
+    // 7. Atomic Create or Update Pending Unverified User Record
+    try {
+      if (userByEmail) {
+        await prisma.user.update({
+          where: { id: userByEmail.id },
+          data: {
+            username: cleanUsername,
+            displayName: displayName?.trim() || cleanUsername,
+            passwordHash,
+            avatarUrl: validAvatarUrl || userByEmail.avatarUrl,
+          },
+        });
+      } else {
+        await prisma.user.create({
+          data: {
+            username: cleanUsername,
+            displayName: displayName?.trim() || cleanUsername,
+            email: cleanEmail,
+            passwordHash,
+            avatarUrl: validAvatarUrl,
+            emailVerifiedAt: null, // Requires OTP verification
+          },
+        });
+      }
+    } catch (dbErr: any) {
+      // Handle race condition unique constraint violations atomically
+      if (dbErr?.code === 'P2002') {
+        const target = dbErr?.meta?.target;
+        if (Array.isArray(target) ? target.includes('username') : target?.includes?.('username')) {
+          return NextResponse.json(
+            { success: false, error: 'Username is already taken' },
+            { status: 409 }
+          );
+        }
+        if (Array.isArray(target) ? target.includes('email') : target?.includes?.('email')) {
+          return NextResponse.json(
+            { success: false, error: 'An account with this email address already exists' },
+            { status: 409 }
+          );
+        }
+      }
+      throw dbErr;
     }
 
-    // 6. Generate and send 6-digit OTP verification code
+    // 8. Generate and Send 6-Digit Email OTP Verification Code
     const otpRes = await requestEmailOtp(cleanEmail);
     if (!otpRes.success) {
       return NextResponse.json(
@@ -134,6 +166,7 @@ export async function POST(req: NextRequest) {
       success: true,
       requiresVerification: true,
       email: cleanEmail,
+      username: cleanUsername,
       message: 'We sent a 6-digit code to your email.',
     });
   } catch (error) {

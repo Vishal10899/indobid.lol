@@ -15,8 +15,6 @@ import {
   Plus,
   RefreshCw,
   MessageSquare,
-  Sparkles,
-  ArrowRight,
 } from 'lucide-react';
 
 interface CategoryItem {
@@ -89,7 +87,7 @@ export default function HomePage() {
 
         {/* Center Column: Scrollable Main Content & Feed */}
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
-          {/* Top Sticky Header with Feed Tabs */}
+          {/* Top Sticky Header with Feed Tabs & Category Chips */}
           <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] w-full min-w-0">
             {/* Feed Tabs: For You, Highest Value, Trending, New, Following */}
             <div className="flex border-b border-[var(--border-subtle)] w-full overflow-x-auto scrollbar-none">
@@ -200,38 +198,11 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Refined Minimal Editorial Hero Teaser */}
-          <div className="p-4 sm:p-5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 space-y-2.5">
-            <div className="space-y-1">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-[var(--text-primary)]">
-                What’s your opinion worth?
-              </h1>
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-xl">
-                Put financial conviction behind your ideas. Discover debates and arguments with skin in the game.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 pt-0.5">
-              <button
-                onClick={() => setIsCreateModalOpen(true)}
-                className="px-3.5 py-2 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center space-x-1.5 active:scale-[0.98]"
-              >
-                <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Start Conversation · ₹10</span>
-              </button>
-              <Link
-                href="/explore"
-                className="px-3 py-2 bg-[var(--bg-page-deep)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] hover:border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium text-xs rounded-xl transition cursor-pointer"
-              >
-                Explore Topics
-              </Link>
-            </div>
-          </div>
-
-          {/* Quick Post Composer Teaser */}
+          {/* Quick Post Composer */}
           <div className="p-3 sm:p-4 border-b border-[var(--border-subtle)] w-full min-w-0 box-border">
             <div
               onClick={() => setIsCreateModalOpen(true)}
-              className="flex items-center space-x-2.5 sm:space-x-3 p-2.5 sm:p-3 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] hover:border-[var(--border-color)] cursor-pointer transition w-full min-w-0 group"
+              className="flex items-center space-x-2.5 sm:space-x-3 p-2.5 sm:p-3 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] hover:border-[var(--border-color)] cursor-pointer transition w-full min-w-0 group shadow-xs"
             >
               <Avatar
                 src={user?.avatarUrl}
@@ -242,7 +213,7 @@ export default function HomePage() {
               <div className="flex-1 min-w-0 text-xs text-[var(--text-muted)] group-hover:text-[var(--text-secondary)] font-medium truncate">
                 State your opinion with conviction...
               </div>
-              <button className="px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-xs transition shrink-0 flex items-center space-x-1 cursor-pointer">
+              <button className="px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-xs transition shrink-0 flex items-center space-x-1 cursor-pointer active:scale-[0.98]">
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
                 <span>Post · ₹10</span>
               </button>

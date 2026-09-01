@@ -478,12 +478,12 @@ function UserProfileContent() {
                         <div className="p-1.5 rounded-lg bg-[var(--bg-page-deep)] text-[var(--color-amber)]">
                           <Coins className="w-4 h-4" />
                         </div>
-                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">
                           Creator Earnings
                         </span>
                       </div>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[var(--color-lime)]/15 text-[var(--color-lime)] font-bold">
-                        10% Creator Share
+                        50% Creator Share
                       </span>
                     </div>
 
@@ -492,7 +492,7 @@ function UserProfileContent() {
                         <span className="text-2xl sm:text-3xl font-black font-mono text-[var(--color-amber)] tracking-tight block">
                           {profile.creatorEconomics.formattedCreatorEarnings}
                         </span>
-                        <span className="text-[11px] text-[var(--text-muted)]">
+                        <span className="text-[11px] text-[var(--text-secondary)]">
                           Lifetime earned from {profile.stats.debatesStarted} opinions
                         </span>
                       </div>
@@ -508,17 +508,17 @@ function UserProfileContent() {
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
                       <div className="bg-[var(--bg-page-deep)] p-3 rounded-xl border border-[var(--border-subtle)]">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-secondary)] block">
                           Available Balance
                         </span>
-                        <span className="text-sm sm:text-base font-bold text-emerald-400 font-mono mt-0.5 block">
+                        <span className="text-sm sm:text-base font-bold text-[var(--color-lime)] font-mono mt-0.5 block">
                           {profile.creatorEconomics.formattedAvailableEarnings || profile.creatorEconomics.formattedCreatorEarnings}
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)]">Matured earnings</span>
                       </div>
 
                       <div className="bg-[var(--bg-page-deep)] p-3 rounded-xl border border-[var(--border-subtle)]">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-secondary)] block">
                           Pending Balance
                         </span>
                         <span className="text-sm sm:text-base font-bold text-[var(--text-secondary)] font-mono mt-0.5 block">
@@ -528,7 +528,7 @@ function UserProfileContent() {
                       </div>
 
                       <div className="bg-[var(--bg-page-deep)] p-3 rounded-xl border border-[var(--border-subtle)] col-span-2 sm:col-span-1">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-secondary)] block">
                           Community Backed
                         </span>
                         <span className="text-sm sm:text-base font-bold text-[var(--text-primary)] font-mono mt-0.5 block">
@@ -766,7 +766,7 @@ function UserProfileContent() {
                       {profile.debates.length > 0 ? (
                         profile.debates.map((d) => {
                           const externalBacking = Math.max(0, d.totalVerifiedContribution - (d.originalContribution || 1000));
-                          const estReward = Math.floor(externalBacking * 0.10);
+                          const estReward = d.creatorEarnedPaise > 0 ? d.creatorEarnedPaise : Math.floor(externalBacking * 0.50);
                           return (
                             <Link
                               key={d.id}
@@ -786,7 +786,7 @@ function UserProfileContent() {
                                 <span>{d.contributionCount} responses</span>
                                 <span>Starting Stake: {formatINR(d.originalContribution || 1000)}</span>
                                 <span className="font-bold text-[var(--color-coral)]">
-                                  Creator Share (10%): {formatINR(estReward)}
+                                  Creator Share (50%): {formatINR(estReward)}
                                 </span>
                               </div>
                             </Link>
