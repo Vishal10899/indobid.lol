@@ -25,9 +25,10 @@ interface CreateDebateModalProps {
   isOpen: boolean;
   onClose: () => void;
   categories?: Category[];
+  onCreated?: () => void;
 }
 
-export function CreateDebateModal({ isOpen, onClose }: CreateDebateModalProps) {
+export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateModalProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -195,6 +196,7 @@ export function CreateDebateModal({ isOpen, onClose }: CreateDebateModalProps) {
 
               const verifyData = await verifyRes.json();
               if (verifyRes.ok && verifyData.success) {
+                onCreated?.();
                 onClose();
                 router.push(`/debate/${debateId}`);
               } else {
@@ -234,6 +236,7 @@ export function CreateDebateModal({ isOpen, onClose }: CreateDebateModalProps) {
 
         const verifyData = await verifyRes.json();
         if (verifyRes.ok && verifyData.success) {
+          onCreated?.();
           onClose();
           router.push(`/debate/${debateId}`);
         } else {
@@ -468,6 +471,22 @@ export function CreateDebateModal({ isOpen, onClose }: CreateDebateModalProps) {
                   >
                     +
                   </button>
+                </div>
+
+                {/* Quality Gate Breakdown (PRD Section 45) */}
+                <div className="p-2.5 rounded-xl bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] space-y-1 text-[11px]">
+                  <div className="flex items-center justify-between text-[var(--text-secondary)]">
+                    <span>Your Contribution:</span>
+                    <span className="font-mono font-bold text-[var(--color-amber)]">₹{amountRupees}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[var(--text-secondary)]">
+                    <span>Revenue Allocation:</span>
+                    <span className="text-[var(--text-primary)] font-semibold">50% Creator Pool · 50% IndoBid</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[var(--text-secondary)]">
+                    <span>Visibility:</span>
+                    <span className="text-[var(--text-primary)] font-semibold">{isAnonymous ? 'Anonymous (Masked)' : `@${username || 'You'}`}</span>
+                  </div>
                 </div>
               </div>
 

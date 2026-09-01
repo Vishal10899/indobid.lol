@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 import { RightSidebar } from '@/components/RightSidebar';
 import { Navbar } from '@/components/Navbar';
@@ -22,9 +23,14 @@ import {
   Check,
   ArrowLeft,
   Coins,
+  Edit3,
+  MoreHorizontal,
+  EyeOff,
 } from 'lucide-react';
 import { formatINR } from '@/lib/money';
 import { useAuth } from '@/context/AuthContext';
+import { FormattedText } from '@/components/FormattedText';
+import { EditDebateModal } from '@/components/EditDebateModal';
 
 interface Contribution {
   id: string;
@@ -48,10 +54,12 @@ interface DebateDetail {
     name: string;
     slug: string;
   };
+  authorId?: string | null;
   authorUsername: string;
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
   authorIsVerified?: boolean;
+  authorRole?: string | null;
   isAnonymous?: boolean;
   originalContribution: number;
   totalVerifiedContribution: number;
@@ -59,7 +67,9 @@ interface DebateDetail {
   lastContributionAmount: number;
   minimumNextContribution: number;
   likeCount?: number;
+  hashtags?: string | null;
   createdAt: string;
+  updatedAt?: string;
   contributions: Contribution[];
   rewardBreakdown?: {
     creatorInitialPaise: number;
@@ -69,14 +79,49 @@ interface DebateDetail {
   };
 }
 
-interface Props {
+interface DebateDetailProps {
   initialDebate: DebateDetail;
 }
 
-export function DebateDetailClient({ initialDebate }: Props) {
+export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
+  const router = useRouter();
   const { user, openAuthModal } = useAuth();
   const [debate, setDebate] = useState<DebateDetail>(initialDebate);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [hiding, setHiding] = useState(false);
+
+  const canEdit = Boolean(
+    !debate.isAnonymous &&
+    user && (
+      (debate.authorId && user.id === debate.authorId) ||
+      (user.username && debate.authorUsername && user.username.toLowerCase() === debate.authorUsername.toLowerCase()) ||
+      user.role === 'founder' ||
+      user.role === 'admin' ||
+      user.username === 'vishalchaudhary'
+    )
+  );
+
+  const handleHidePost = async () => {
+    if (!confirm('Are you sure you want to hide this opinion from public feeds?')) return;
+
+    setHiding(true);
+    try {
+      const res = await fetch(`/api/debates/${debate.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        router.push('/');
+      } else {
+        const err = await res.json();
+        alert(err.error || 'Failed to hide opinion');
+      }
+    } catch {
+      alert('Network error hiding opinion');
+    } finally {
+      setHiding(false);
+      setIsMenuOpen(false);
+    }
+  };
 
   // Social interactions
   const [likes, setLikes] = useState(initialDebate.likeCount || 0);
@@ -159,7 +204,7 @@ export function DebateDetailClient({ initialDebate }: Props) {
   const handleLikeToggle = async () => {
     const newLiked = !liked;
     setLiked(newLiked);
-    setLikes((prev) => (newLiked ? prev + 1 : Math.max(0, prev - 1)));
+    setLikes((prev: number) => (newLiked ? prev + 1 : Math.max(0, prev - 1)));
 
     try {
       const res = await fetch(`/api/debates/${debate.id}/like`, { method: 'POST' });
@@ -170,7 +215,7 @@ export function DebateDetailClient({ initialDebate }: Props) {
       }
     } catch {
       setLiked(!newLiked);
-      setLikes((prev) => (newLiked ? Math.max(0, prev - 1) : prev + 1));
+      setLikes((prev: number) => (newLiked ? Math.max(0, prev - 1) : prev + 1));
     }
   };
 
@@ -354,20 +399,20 @@ export function DebateDetailClient({ initialDebate }: Props) {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] w-full overflow-x-hidden">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] w-full flex flex-col">
       {/* Mobile Top Navbar */}
-      <div className="lg:hidden w-full">
+      <div className="lg:hidden w-full shrink-0">
         <Navbar onOpenCreate={() => setIsCreateModalOpen(true)} />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto flex justify-center min-w-0">
+      <div className="w-full max-w-7xl mx-auto flex justify-center min-w-0 flex-1 lg:h-full lg:overflow-hidden">
         {/* Left Sidebar */}
         <Sidebar onOpenCreate={() => setIsCreateModalOpen(true)} />
 
         {/* Center Main Thread */}
-        <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12">
+        <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/90 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between min-w-0">
             <Link
               href="/"
               className="inline-flex items-center space-x-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
@@ -409,6 +454,11 @@ export function DebateDetailClient({ initialDebate }: Props) {
                       {!debate.isAnonymous && debate.authorIsVerified && (
                         <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)] shrink-0" />
                       )}
+                      {!debate.isAnonymous && (debate.authorRole === 'founder' || debate.authorRole === 'admin' || debate.authorUsername === 'vishalchaudhary' || debate.authorUsername === 'vishalkumar') && (
+                        <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
+                          Founder
+                        </span>
+                      )}
                     </div>
                     {!debate.isAnonymous && (
                       <span className="text-[11px] text-[var(--text-muted)]">@{debate.authorUsername}</span>
@@ -416,9 +466,50 @@ export function DebateDetailClient({ initialDebate }: Props) {
                   </div>
                 </div>
 
-                <span className="text-xs font-medium text-[var(--text-secondary)] px-2.5 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-                  {debate.category.name}
-                </span>
+                <div className="flex items-center space-x-2 relative">
+                  <span className="text-xs font-medium text-[var(--text-secondary)] px-2.5 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
+                    {debate.category.name}
+                  </span>
+
+                  {canEdit && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-surface)] transition cursor-pointer"
+                        title="Author Options"
+                        aria-label="Author Options"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+
+                      {isMenuOpen && (
+                        <div
+                          className="absolute right-0 top-full mt-1 w-36 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl py-1 z-30 text-xs animate-in fade-in zoom-in-95 duration-100"
+                        >
+                          <button
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="w-full px-3 py-2 text-left text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] flex items-center space-x-2 cursor-pointer transition"
+                          >
+                            <Edit3 className="w-3.5 h-3.5 text-[var(--color-coral)]" />
+                            <span>Edit Post</span>
+                          </button>
+
+                          <button
+                            onClick={handleHidePost}
+                            disabled={hiding}
+                            className="w-full px-3 py-2 text-left text-red-400 hover:bg-[var(--bg-card-hover)] flex items-center space-x-2 cursor-pointer transition disabled:opacity-50"
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                            <span>{hiding ? 'Hiding...' : 'Hide Post'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Title & Full Argument */}
@@ -426,12 +517,61 @@ export function DebateDetailClient({ initialDebate }: Props) {
                 <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight leading-snug break-words">
                   {debate.title}
                 </h1>
-                <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap font-normal break-words">
-                  {debate.content}
-                </p>
+                <div className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed whitespace-pre-wrap font-normal break-words">
+                  <FormattedText text={debate.content} />
+                </div>
+
+                {debate.hashtags && (
+                  <div className="flex flex-wrap gap-1.5 pt-1 min-w-0">
+                    {debate.hashtags.split(' ').map((tag, idx) => (
+                      <span key={idx} className="text-xs font-mono text-[var(--color-coral)] break-all">
+                        {tag.startsWith('#') ? tag : `#${tag}`}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Verified Backing & Creator Reward Note */}
+              {/* Financial Statistics Grid (PRD Section 13) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-0.5">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                    Total Value
+                  </span>
+                  <span className="text-sm sm:text-base font-mono font-black text-[var(--color-amber)] block">
+                    {formatINR(debate.totalVerifiedContribution)}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-0.5">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                    Paid Participants
+                  </span>
+                  <span className="text-sm sm:text-base font-mono font-black text-[var(--text-primary)] block">
+                    {debate.contributionCount}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-0.5">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                    Arguments
+                  </span>
+                  <span className="text-sm sm:text-base font-mono font-black text-[var(--text-primary)] block">
+                    {debate.contributions.length}
+                  </span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-0.5">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                    Current Min
+                  </span>
+                  <span className="text-sm sm:text-base font-mono font-black text-[var(--color-coral)] block">
+                    {formatINR(debate.minimumNextContribution)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Verified Backing & 50/50 Revenue Split Note (PRD Section 16 & 48) */}
               <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-3 flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-2.5 min-w-0">
                   <div className="p-1.5 rounded-lg bg-[var(--bg-page-deep)] text-[var(--color-amber)] shrink-0">
@@ -439,10 +579,10 @@ export function DebateDetailClient({ initialDebate }: Props) {
                   </div>
                   <div className="min-w-0">
                     <span className="font-bold text-[var(--text-primary)] block truncate">
-                      {formatINR(debate.totalVerifiedContribution)} backed conviction
+                      {formatINR(debate.totalVerifiedContribution)} Total Financial Conviction
                     </span>
                     <span className="text-[11px] text-[var(--text-muted)] block truncate">
-                      Creators earn 10% of verified community responses
+                      50% Creator pool / 50% Platform protocol allocation
                     </span>
                   </div>
                 </div>
@@ -561,9 +701,9 @@ export function DebateDetailClient({ initialDebate }: Props) {
                         </span>
                       </div>
 
-                      <p className="text-xs sm:text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-normal break-words">
-                        {c.content}
-                      </p>
+                      <div className="text-xs sm:text-sm text-[var(--text-primary)] leading-relaxed whitespace-pre-wrap font-normal break-words">
+                        <FormattedText text={c.content} />
+                      </div>
                     </div>
                   );
                 })}
@@ -769,6 +909,31 @@ export function DebateDetailClient({ initialDebate }: Props) {
 
       <BottomNav onOpenCreate={() => setIsCreateModalOpen(true)} />
       <CreateDebateModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
+
+      {/* Author Edit Modal */}
+      {canEdit && (
+        <EditDebateModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          debateId={debate.id}
+          initialTitle={debate.title}
+          initialContent={debate.content}
+          initialHashtags={debate.hashtags}
+          authorUsername={debate.authorUsername}
+          onUpdated={(updated) => {
+            setDebate((prev) => ({
+              ...prev,
+              title: updated.title,
+              content: updated.content,
+              hashtags: updated.hashtags,
+              updatedAt: updated.updatedAt,
+              contributions: prev.contributions.map((c, idx) =>
+                idx === 0 ? { ...c, content: updated.content } : c
+              ),
+            }));
+          }}
+        />
+      )}
     </div>
   );
 }

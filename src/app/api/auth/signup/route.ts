@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { hashPassword, createSessionToken, AUTH_COOKIE_NAME } from '@/lib/user-auth';
+import { hashPassword } from '@/lib/user-auth';
+import { requestEmailOtp } from '@/lib/email-otp';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit(`signup_${ip}`, 10, 60);
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too many signup attempts. Please wait a moment.' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
-    const { username, email, password, displayName, avatarUrl } = body;
+    const { username, email, password, displayName, avatarUrl } = body || {};
 
     // 1. Mandatory Username & Password Validation
     if (!username || typeof username !== 'string' || !username.trim()) {
@@ -48,7 +61,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Prevent duplicate account using database constraints & lookup
+    // 3. Check for existing username or verified email
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [
@@ -59,13 +72,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (existingUser) {
-      if (existingUser.username === cleanUsername) {
+      if (existingUser.username === cleanUsername && existingUser.email !== cleanEmail) {
         return NextResponse.json(
           { success: false, error: 'Username is already taken' },
           { status: 409 }
         );
       }
-      if (existingUser.email === cleanEmail) {
+      if (existingUser.email === cleanEmail && existingUser.emailVerifiedAt !== null) {
         return NextResponse.json(
           { success: false, error: 'An account with this email address already exists' },
           { status: 409 }
@@ -84,44 +97,49 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const user = await prisma.user.create({
-      data: {
-        username: cleanUsername,
-        displayName: displayName?.trim() || cleanUsername,
-        email: cleanEmail,
-        passwordHash,
-        avatarUrl: validAvatarUrl,
-      },
-    });
+    // 5. Create or update pending unverified user record
+    if (existingUser && existingUser.email === cleanEmail) {
+      await prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          username: cleanUsername,
+          displayName: displayName?.trim() || cleanUsername,
+          passwordHash,
+          avatarUrl: validAvatarUrl || existingUser.avatarUrl,
+        },
+      });
+    } else {
+      await prisma.user.create({
+        data: {
+          username: cleanUsername,
+          displayName: displayName?.trim() || cleanUsername,
+          email: cleanEmail,
+          passwordHash,
+          avatarUrl: validAvatarUrl,
+          emailVerifiedAt: null, // Requires OTP verification
+        },
+      });
+    }
 
-    const sessionPayload = {
-      userId: user.id,
-      username: user.username!,
-      email: user.email,
-      displayName: user.displayName || user.username!,
-      role: user.role,
-    };
+    // 6. Generate and send 6-digit OTP verification code
+    const otpRes = await requestEmailOtp(cleanEmail);
+    if (!otpRes.success) {
+      return NextResponse.json(
+        { success: false, error: otpRes.error || 'Failed to send verification code' },
+        { status: 400 }
+      );
+    }
 
-    const token = createSessionToken(sessionPayload);
-
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      user: sessionPayload,
+      requiresVerification: true,
+      email: cleanEmail,
+      message: 'We sent a 6-digit code to your email.',
     });
-
-    response.cookies.set(AUTH_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
-    });
-
-    return response;
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
-      { success: false, error: 'Internal server error during registration' },
+      { success: false, error: 'Failed to create account' },
       { status: 500 }
     );
   }

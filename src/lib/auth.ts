@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'vishalkumar75912@gmail.com').toLowerCase().trim();
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'vishalchaudhary74096@gmail.com').toLowerCase().trim();
 export const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY?.trim() || '';
 
 export const ADMIN_SESSION_COOKIE = 'indobid_admin_session';
@@ -123,9 +123,11 @@ export function verifyAdminSessionToken(token: string): { valid: boolean; email?
 /**
  * Server-side authorization check for Admin API routes
  */
-export function isAuthorizedAdmin(request: Request | NextRequest): boolean {
+export function isAuthorizedAdmin(request?: Request | NextRequest | null): boolean {
+  if (!request) return false;
+
   // 1. Check HttpOnly cookie
-  if ('cookies' in request && typeof request.cookies.get === 'function') {
+  if ('cookies' in request && request.cookies && typeof request.cookies.get === 'function') {
     const cookieToken = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
     if (cookieToken && verifyAdminSessionToken(cookieToken).valid) {
       return true;
@@ -133,25 +135,27 @@ export function isAuthorizedAdmin(request: Request | NextRequest): boolean {
   }
 
   // 2. Check Cookie header
-  const cookieHeader = request.headers.get('cookie');
-  if (cookieHeader) {
-    const match = cookieHeader.match(new RegExp(`${ADMIN_SESSION_COOKIE}=([^;]+)`));
-    if (match && verifyAdminSessionToken(match[1]).valid) {
+  if (request.headers && typeof request.headers.get === 'function') {
+    const cookieHeader = request.headers.get('cookie');
+    if (cookieHeader) {
+      const match = cookieHeader.match(new RegExp(`${ADMIN_SESSION_COOKIE}=([^;]+)`));
+      if (match && verifyAdminSessionToken(match[1]).valid) {
+        return true;
+      }
+    }
+
+    // 3. Check Authorization Bearer header
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7).trim();
+      if (verifyAdminSessionToken(token).valid) return true;
+    }
+
+    // 4. Check x-admin-key header
+    const customHeader = request.headers.get('x-admin-key');
+    if (customHeader && verifyAdminSessionToken(customHeader.trim()).valid) {
       return true;
     }
-  }
-
-  // 3. Check Authorization Bearer header
-  const authHeader = request.headers.get('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7).trim();
-    if (verifyAdminSessionToken(token).valid) return true;
-  }
-
-  // 4. Check x-admin-key header
-  const customHeader = request.headers.get('x-admin-key');
-  if (customHeader && verifyAdminSessionToken(customHeader.trim()).valid) {
-    return true;
   }
 
   return false;

@@ -17,6 +17,7 @@ export interface DebateListItem {
   authorDisplayName: string;
   authorAvatarUrl?: string | null;
   authorIsVerified?: boolean;
+  authorRole?: string | null;
   originalContribution: number; // in paise
   totalVerifiedContribution: number; // in paise
   contributionCount: number;
@@ -34,7 +35,7 @@ export interface DebateListItem {
 
 export interface GetDebatesOptions {
   category?: string;
-  sort?: 'for_you' | 'trending' | 'rising' | 'newest' | 'top' | 'active' | 'following';
+  sort?: 'for_you' | 'highest_value' | 'trending' | 'new' | 'newest' | 'top' | 'rising' | 'active' | 'following';
   page?: number;
   limit?: number;
   search?: string;
@@ -106,18 +107,20 @@ export async function getDebates(options: GetDebatesOptions = {}) {
     ];
   }
 
-  // Sort order
+  // Sort order (PRD v1.0 Locked: Highest Value, Trending, New, For You, Following)
   let orderBy: any = [{ trendingScore: 'desc' }, { createdAt: 'desc' }];
-  if (sort === 'rising') {
-    orderBy = [{ lastContributionAt: 'desc' }, { trendingScore: 'desc' }];
-  } else if (sort === 'newest') {
-    orderBy = [{ createdAt: 'desc' }];
-  } else if (sort === 'top') {
+  if (sort === 'highest_value' || sort === 'top') {
     orderBy = [{ totalVerifiedContribution: 'desc' }, { createdAt: 'desc' }];
+  } else if (sort === 'trending') {
+    orderBy = [{ trendingScore: 'desc' }, { lastContributionAt: 'desc' }, { createdAt: 'desc' }];
+  } else if (sort === 'new' || sort === 'newest') {
+    orderBy = [{ createdAt: 'desc' }];
+  } else if (sort === 'rising') {
+    orderBy = [{ lastContributionAt: 'desc' }, { trendingScore: 'desc' }];
   } else if (sort === 'active') {
     orderBy = [{ contributionCount: 'desc' }, { lastContributionAt: 'desc' }];
   } else if (sort === 'for_you') {
-    orderBy = [{ trendingScore: 'desc' }, { likeCount: 'desc' }, { createdAt: 'desc' }];
+    orderBy = [{ trendingScore: 'desc' }, { totalVerifiedContribution: 'desc' }, { createdAt: 'desc' }];
   }
 
   const [total, debates] = await safeDb(() => Promise.all([
@@ -132,7 +135,7 @@ export async function getDebates(options: GetDebatesOptions = {}) {
           select: { id: true, name: true, slug: true, icon: true },
         },
         author: {
-          select: { avatarUrl: true, isVerified: true },
+          select: { avatarUrl: true, isVerified: true, role: true },
         },
       },
     }),
@@ -148,6 +151,7 @@ export async function getDebates(options: GetDebatesOptions = {}) {
     authorDisplayName: d.isAnonymous ? 'Anonymous' : d.authorDisplayName,
     authorAvatarUrl: d.isAnonymous ? null : d.author?.avatarUrl || null,
     authorIsVerified: d.isAnonymous ? false : d.author?.isVerified || false,
+    authorRole: d.isAnonymous ? null : d.author?.role || null,
     originalContribution: d.originalContribution,
     totalVerifiedContribution: d.totalVerifiedContribution,
     contributionCount: d.contributionCount,
@@ -185,14 +189,14 @@ export async function getDebateById(id: string) {
         select: { id: true, name: true, slug: true, icon: true },
       },
       author: {
-        select: { avatarUrl: true, isVerified: true },
+        select: { avatarUrl: true, isVerified: true, role: true },
       },
       contributions: {
         where: { status: 'verified' },
         orderBy: { sequence: 'asc' },
         include: {
           author: {
-            select: { avatarUrl: true, isVerified: true },
+            select: { avatarUrl: true, isVerified: true, role: true },
           },
         },
       },
@@ -223,16 +227,18 @@ export async function getDebateById(id: string) {
 
   for (const c of debate.contributions) {
     const isCreator = (c.authorUsername || '').toLowerCase().trim() === creatorClean;
-    if (c.sequence === 1) {
-      creatorInitialPaise += c.amount;
-    } else if (isCreator) {
-      creatorSelfContinuationsPaise += c.amount;
+    if (isCreator) {
+      if (c.sequence === 1 && debate.originalContribution > 0) {
+        creatorInitialPaise += c.amount;
+      } else {
+        creatorSelfContinuationsPaise += c.amount;
+      }
     } else {
       eligibleExternalBackingPaise += c.amount;
     }
   }
 
-  const creatorRewardPaise = Math.floor((eligibleExternalBackingPaise * 7000) / 10000);
+  const creatorRewardPaise = Math.floor((eligibleExternalBackingPaise * 1000) / 10000);
 
   return {
     ...debate,

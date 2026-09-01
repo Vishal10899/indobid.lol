@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D98A6C"/>
+      <stop offset="50%" stop-color="#E2987D"/>
+      <stop offset="100%" stop-color="#D8B257"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Rounded Rect -->
+  <rect width="512" height="512" rx="128" fill="#091114"/>
+  <rect width="512" height="512" rx="128" fill="none" stroke="url(#iconGrad)" stroke-width="16" opacity="0.8"/>
+  
+  <!-- Serif "I" -->
+  <rect x="110" y="96" width="160" height="40" rx="8" fill="#D98A6C"/>
+  <rect x="166" y="136" width="48" height="208" rx="8" fill="#D98A6C"/>
+  <rect x="110" y="344" width="160" height="40" rx="8" fill="#D98A6C"/>
+
+  <!-- Upward Conviction Arrow -->
+  <path d="M272 304L376 200L320 200V120H432V232H384L272 344V304Z" fill="#D98A6C"/>
+  <!-- Gold Conviction Node -->
+  <circle cx="368" cy="352" r="36" fill="#D8B257"/>
+</svg>

@@ -8,6 +8,7 @@ import {
   Compass,
   Flame,
   Activity,
+  Bell,
   Bookmark,
   MessageSquare,
   User,
@@ -15,11 +16,8 @@ import {
   ShieldCheck,
   LogOut,
   LogIn,
-  Sun,
-  Moon,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
 import { formatINR } from '@/lib/money';
 import { Logo } from '@/components/Logo';
 import { Avatar } from '@/components/Avatar';
@@ -31,37 +29,24 @@ interface SidebarProps {
 export function Sidebar({ onOpenCreate }: SidebarProps) {
   const pathname = usePathname();
   const { user, openAuthModal, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
 
   const navItems = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/explore', label: 'Explore', icon: Compass },
     { href: '/trending', label: 'Trending', icon: Flame },
     { href: '/activity', label: 'Activity', icon: Activity },
+    { href: '/notifications', label: 'Notifications', icon: Bell, requiresAuth: true, badge: user?.unreadNotificationsCount },
     { href: '/saved', label: 'Saved', icon: Bookmark, requiresAuth: true },
     { href: '/messages', label: 'Messages', icon: MessageSquare, requiresAuth: true, badge: user?.unreadMessagesCount },
     { href: user ? `/profile/${user.username}` : '/profile', label: 'Profile', icon: User },
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col justify-between w-64 h-screen sticky top-0 py-6 px-4 border-r border-[var(--border-subtle)] bg-[var(--bg-page)] shrink-0 select-none">
+    <aside className="hidden lg:flex flex-col justify-between w-[280px] h-screen sticky top-0 py-6 px-4 border-r border-[var(--border-subtle)] bg-[var(--bg-page)] shrink-0 select-none overflow-y-auto scrollbar-none">
       <div className="space-y-6">
-        {/* Brand Logo & Theme Switcher */}
-        <div className="flex items-center justify-between px-2">
+        {/* Brand Logo Header */}
+        <div className="px-2 pt-1 pb-1">
           <Logo size="md" />
-
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
-            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-[var(--color-amber)]" />
-            ) : (
-              <Moon className="w-4 h-4 text-[var(--color-slate)]" />
-            )}
-          </button>
         </div>
 
         {/* Navigation Links */}
@@ -80,22 +65,22 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
                     openAuthModal('login');
                   }
                 }}
-                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition ${
+                className={`flex items-center justify-between px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold transition group ${
                   isActive
-                    ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold'
+                    ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold shadow-xs border border-[var(--border-subtle)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]/60'
                 }`}
               >
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3.5">
                   <Icon
-                    className={`w-4 h-4 ${
-                      isActive ? 'text-[var(--color-coral)]' : 'text-[var(--text-muted)]'
+                    className={`w-4 h-4 transition-transform group-hover:scale-110 ${
+                      isActive ? 'text-[var(--color-coral)]' : 'text-[var(--text-muted)] group-hover:text-[var(--color-coral)]'
                     }`}
                   />
-                  <span>{item.label}</span>
+                  <span className="tracking-tight">{item.label}</span>
                 </div>
                 {Boolean(item.badge && item.badge > 0) && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-coral)] text-[#071B21]">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-coral)] text-[#071B21]">
                     {item.badge}
                   </span>
                 )}
@@ -104,20 +89,22 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
           })}
         </nav>
 
-        {/* Primary Action Button: + Post Opinion · ₹10 */}
-        <button
-          onClick={onOpenCreate}
-          className="w-full py-3 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs sm:text-sm rounded-xl shadow-md transition flex items-center justify-center space-x-1.5 cursor-pointer active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          <span>Post Opinion · ₹10</span>
-        </button>
+        {/* Primary Action Button: + Start Conversation · ₹10 */}
+        <div className="px-1 pt-2">
+          <button
+            onClick={onOpenCreate}
+            className="w-full py-3.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs sm:text-sm rounded-2xl shadow-md transition flex items-center justify-center space-x-2 cursor-pointer active:scale-[0.98]"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Start Conversation · ₹10</span>
+          </button>
+        </div>
       </div>
 
       {/* User Mini-Profile / Sign In CTA */}
-      <div className="pt-4 border-t border-[var(--border-subtle)]">
+      <div className="pt-4 border-t border-[var(--border-subtle)] px-1">
         {user ? (
-          <div className="bg-[var(--bg-surface)]/80 hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-xl p-2.5 flex items-center justify-between transition">
+          <div className="bg-[var(--bg-surface)]/90 hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-3 flex items-center justify-between transition">
             <Link
               href={`/profile/${user.username}`}
               className="flex items-center space-x-2.5 overflow-hidden flex-1 group"
@@ -128,9 +115,9 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
                 username={user.username}
                 size="sm"
               />
-              <div className="overflow-hidden leading-tight">
+              <div className="overflow-hidden leading-tight min-w-0">
                 <div className="flex items-center space-x-1">
-                  <span className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--color-coral)] transition truncate">
+                  <span className="text-xs font-bold text-[var(--text-primary)] group-hover:text-[var(--color-coral)] transition truncate block">
                     {user.displayName}
                   </span>
                   {user.isVerified && <ShieldCheck className="w-3 h-3 text-[var(--color-lime)] shrink-0" />}
@@ -143,19 +130,19 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
 
             <button
               onClick={logout}
-              className="p-1.5 text-[var(--text-muted)] hover:text-red-400 rounded-lg hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
+              className="p-1.5 text-[var(--text-muted)] hover:text-red-400 rounded-xl hover:bg-[var(--bg-page-deep)] transition cursor-pointer shrink-0 ml-1"
               title="Sign Out"
               aria-label="Sign Out"
             >
-              <LogOut className="w-3.5 h-3.5" />
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         ) : (
           <button
             onClick={() => openAuthModal('login')}
-            className="w-full py-2.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
+            className="w-full py-3 bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-2xl text-xs font-bold transition flex items-center justify-center space-x-2 cursor-pointer shadow-xs"
           >
-            <LogIn className="w-3.5 h-3.5 text-[var(--color-coral)]" />
+            <LogIn className="w-4 h-4 text-[var(--color-coral)]" />
             <span>Sign In / Join</span>
           </button>
         )}

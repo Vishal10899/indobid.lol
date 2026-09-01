@@ -39,36 +39,38 @@ export default function SavedPage() {
   }, [user]);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] w-full overflow-x-hidden">
-      <div className="lg:hidden w-full">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] w-full flex flex-col">
+      <div className="lg:hidden w-full shrink-0">
         <Navbar onOpenCreate={() => setIsCreateModalOpen(true)} />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto flex justify-center min-w-0">
+      <div className="w-full max-w-7xl mx-auto flex justify-center min-w-0 flex-1 lg:h-full lg:overflow-hidden">
         <Sidebar onOpenCreate={() => setIsCreateModalOpen(true)} />
 
-        <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12">
+        <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/90 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center space-x-2.5 w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center space-x-2.5 w-full min-w-0">
             <Bookmark className="w-5 h-5 text-[var(--color-coral)]" />
             <h1 className="text-lg font-black text-[var(--text-primary)]">Saved Opinions</h1>
           </div>
 
-          <div className="p-4 space-y-4">
+          <div>
             {!user ? (
-              <div className="py-20 text-center space-y-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8">
-                <Bookmark className="w-10 h-10 text-[var(--color-coral)] mx-auto opacity-70" />
-                <h3 className="text-base font-bold text-[var(--text-primary)]">Save debates for later</h3>
-                <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
-                  Sign in to bookmark opinions, follow the progression ladder, and track continuations.
-                </p>
-                <button
-                  onClick={() => openAuthModal('login')}
-                  className="mt-2 px-4 py-2 bg-[var(--color-coral)] text-[#071B21] font-black text-xs rounded-xl shadow cursor-pointer inline-flex items-center space-x-1.5"
-                >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Sign In</span>
-                </button>
+              <div className="p-4 sm:p-6">
+                <div className="py-20 text-center space-y-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8">
+                  <Bookmark className="w-10 h-10 text-[var(--color-coral)] mx-auto opacity-70" />
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">Save debates for later</h3>
+                  <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+                    Sign in to bookmark opinions, follow the progression ladder, and track continuations.
+                  </p>
+                  <button
+                    onClick={() => openAuthModal('login')}
+                    className="mt-2 px-4 py-2 bg-[var(--color-coral)] text-[#071B21] font-black text-xs rounded-xl shadow cursor-pointer inline-flex items-center space-x-1.5"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    <span>Sign In</span>
+                  </button>
+                </div>
               </div>
             ) : loading ? (
               <div className="py-20 text-center space-y-3">
@@ -76,14 +78,18 @@ export default function SavedPage() {
                 <p className="text-xs text-[var(--text-secondary)]">Loading saved bookmarks...</p>
               </div>
             ) : debates.length > 0 ? (
-              debates.map((d) => <DebateCard key={d.id} {...d} />)
+              <div className="divide-y divide-[var(--border-subtle)]">
+                {debates.map((d) => <DebateCard key={d.id} {...d} />)}
+              </div>
             ) : (
-              <div className="py-20 text-center space-y-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8">
-                <Bookmark className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
-                <h3 className="text-base font-bold text-[var(--text-primary)]">No saved debates yet</h3>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Click the bookmark icon on any debate card in your feed to save it here.
-                </p>
+              <div className="p-4 sm:p-6">
+                <div className="py-20 text-center space-y-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8">
+                  <Bookmark className="w-10 h-10 text-[var(--text-muted)] mx-auto opacity-50" />
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">No saved debates yet</h3>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Click the bookmark icon on any debate card in your feed to save it here.
+                  </p>
+                </div>
               </div>
             )}
           </div>

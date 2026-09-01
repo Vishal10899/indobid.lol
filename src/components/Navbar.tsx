@@ -61,21 +61,7 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
         </form>
 
         {/* Action Items */}
-        <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-1.5 sm:p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
-            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-            aria-label="Toggle theme"
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-[var(--color-amber)]" />
-            ) : (
-              <Moon className="w-4 h-4 text-[var(--color-slate)]" />
-            )}
-          </button>
-
+        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           {/* Notifications Bell */}
           <Link
             href={user ? '/notifications' : '#'}

@@ -5,6 +5,8 @@ import { razorpayProvider } from '@/lib/payments/razorpay-provider';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { MINIMUM_DEBATE_PAISE, formatINR } from '@/lib/money';
 import { getCurrentUser } from '@/lib/user-auth';
+import { isAuthorizedAdmin } from '@/lib/auth';
+import { isFounder, getOrCreateFounderUser } from '@/lib/founder';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -78,20 +80,10 @@ export async function POST(request: NextRequest) {
 
     const data = parsed.data;
 
-    // 3. Monetary validation (Minimum ₹10 = 1000 paise)
-    let contributionPaise = MINIMUM_DEBATE_PAISE;
-    if (data.amountPaise !== undefined && data.amountPaise !== null) {
-      contributionPaise = Math.floor(data.amountPaise);
-    } else if (data.amountRupees !== undefined && data.amountRupees !== null) {
-      contributionPaise = Math.round(data.amountRupees * 100);
-    }
-
-    if (contributionPaise < MINIMUM_DEBATE_PAISE) {
-      return NextResponse.json(
-        { error: `Starting a new debate requires a minimum contribution of ${formatINR(MINIMUM_DEBATE_PAISE)}.` },
-        { status: 400 }
-      );
-    }
+    // 3. Resolve user session & authoritative Founder / Admin status
+    const session = await getCurrentUser();
+    const isAdmin = isAuthorizedAdmin(request);
+    const userIsFounder = (session && isFounder(session)) || isAdmin;
 
     // 4. Resolve category
     let category = null;
@@ -111,18 +103,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Category not found' }, { status: 400 });
     }
 
-    // 5. Resolve user from session if authenticated
-    const session = await getCurrentUser();
-    let authorId = session?.userId || null;
-    let authorUsername = session?.username;
-    let authorDisplayName = session?.displayName;
-
-    if (!authorUsername) {
-      const rawUsername = (data.authorUsername || 'debater').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().substring(0, 20);
-      authorUsername = rawUsername || `user_${Math.random().toString(36).substring(2, 7)}`;
-      authorDisplayName = (data.authorDisplayName || authorUsername).trim().substring(0, 40);
-    }
-
     const isAnonymous = Boolean(data.isAnonymous);
 
     // Extract hashtags from content / title if not passed
@@ -134,7 +114,72 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Create Debate in pending_payment state (with verified total = 0)
+    // 5. FOUNDER / ADMIN FREE POSTING (Zero Razorpay, Instant Publish)
+    if (userIsFounder) {
+      const founderUser = session
+        ? (await prisma.user.findUnique({ where: { id: session.userId } })) || (await getOrCreateFounderUser())
+        : await getOrCreateFounderUser();
+
+      const authorUsername = isAnonymous ? 'anonymous' : founderUser.username || 'vishalchaudhary';
+      const authorDisplayName = isAnonymous ? 'Anonymous' : founderUser.displayName || 'Vishal Chaudhary';
+
+      const debate = await prisma.debate.create({
+        data: {
+          authorId: founderUser.id,
+          title: data.title.trim(),
+          content: data.content.trim(),
+          categoryId: category.id,
+          authorUsername,
+          authorDisplayName,
+          isAnonymous,
+          hashtags: hashtags || null,
+          originalContribution: 0,
+          totalVerifiedContribution: 0,
+          contributionCount: 0,
+          lastContributionAmount: 0,
+          status: 'active',
+          trendingScore: 10.0,
+        },
+        include: { category: true },
+      });
+
+      return NextResponse.json({
+        success: true,
+        debateId: debate.id,
+        debateTitle: debate.title,
+        categoryName: category.name,
+        authorUsername,
+        published: true,
+        isFounderFree: true,
+      });
+    }
+
+    // 6. NORMAL USERS: Strictly enforce ₹10 minimum contribution and Razorpay payment flow
+    let contributionPaise = MINIMUM_DEBATE_PAISE;
+    if (data.amountPaise !== undefined && data.amountPaise !== null) {
+      contributionPaise = Math.floor(data.amountPaise);
+    } else if (data.amountRupees !== undefined && data.amountRupees !== null) {
+      contributionPaise = Math.round(data.amountRupees * 100);
+    }
+
+    if (contributionPaise < MINIMUM_DEBATE_PAISE) {
+      return NextResponse.json(
+        { error: `Starting a new debate requires a minimum contribution of ${formatINR(MINIMUM_DEBATE_PAISE)}.` },
+        { status: 400 }
+      );
+    }
+
+    let authorId = session?.userId || null;
+    let authorUsername = session?.username;
+    let authorDisplayName = session?.displayName;
+
+    if (!authorUsername) {
+      const rawUsername = (data.authorUsername || 'debater').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().substring(0, 20);
+      authorUsername = rawUsername || `user_${Math.random().toString(36).substring(2, 7)}`;
+      authorDisplayName = (data.authorDisplayName || authorUsername).trim().substring(0, 40);
+    }
+
+    // 7. Create Debate in pending_payment state (with verified total = 0)
     const debate = await prisma.debate.create({
       data: {
         authorId,
@@ -154,7 +199,7 @@ export async function POST(request: NextRequest) {
       include: { category: true },
     });
 
-    // 7. Create pending sequence 1 Contribution
+    // 8. Create pending sequence 1 Contribution
     const contribution = await prisma.contribution.create({
       data: {
         debateId: debate.id,
@@ -169,7 +214,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 8. Create Razorpay Checkout Order Session
+    // 9. Create Razorpay Checkout Order Session
     const checkoutSession = await razorpayProvider.createCheckoutSession({
       debateId: debate.id,
       contributionId: contribution.id,

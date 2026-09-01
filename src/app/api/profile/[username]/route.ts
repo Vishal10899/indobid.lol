@@ -31,6 +31,7 @@ export async function GET(
         avatarUrl: true,
         isVerified: true,
         rank: true,
+        role: true,
         createdAt: true,
       },
     });

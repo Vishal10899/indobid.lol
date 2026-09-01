@@ -17,16 +17,18 @@ export interface AuthUser {
   unreadMessagesCount: number;
 }
 
+export type AuthModalMode = 'login' | 'signup' | 'forgot-password';
+
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   refreshUser: () => Promise<void>;
   logout: () => Promise<void>;
   isAuthModalOpen: boolean;
-  openAuthModal: (initialMode?: 'login' | 'signup') => void;
+  openAuthModal: (initialMode?: AuthModalMode) => void;
   closeAuthModal: () => void;
-  authModalMode: 'login' | 'signup';
-  setAuthModalMode: (mode: 'login' | 'signup') => void;
+  authModalMode: AuthModalMode;
+  setAuthModalMode: (mode: AuthModalMode) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -45,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode>('login');
 
   const refreshUser = useCallback(async () => {
     try {
@@ -80,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const openAuthModal = (mode: 'login' | 'signup' = 'login') => {
+  const openAuthModal = (mode: AuthModalMode = 'login') => {
     setAuthModalMode(mode);
     setIsAuthModalOpen(true);
   };

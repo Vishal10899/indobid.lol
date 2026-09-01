@@ -1,11 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyPassword, createSessionToken, AUTH_COOKIE_NAME } from '@/lib/user-auth';
+import { requestEmailOtp } from '@/lib/email-otp';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const rateLimit = checkRateLimit(`login_${ip}`, 15, 60);
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { success: false, error: 'Too many login attempts. Please wait a moment.' },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
-    const { login, password } = body; // login can be username or email
+    const { login, password } = body || {};
 
     if (!login || !password) {
       return NextResponse.json(
@@ -44,6 +57,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Invalid username or password' },
         { status: 401 }
+      );
+    }
+
+    // Require email verification for unverified accounts (excluding founder/admin)
+    const isFounderOrAdmin =
+      user.role === 'founder' ||
+      user.role === 'admin' ||
+      user.username === 'vishalchaudhary' ||
+      user.email === 'vishalchaudhary74096@gmail.com';
+
+    if (user.emailVerifiedAt === null && !user.isVerified && !isFounderOrAdmin) {
+      if (user.email) {
+        await requestEmailOtp(user.email);
+      }
+      return NextResponse.json(
+        {
+          success: false,
+          requiresVerification: true,
+          email: user.email,
+          error: 'Please verify your email before logging in. We sent a 6-digit code to your email.',
+        },
+        { status: 403 }
       );
     }
 

@@ -40,13 +40,13 @@ export function BottomNav({ onOpenCreate }: BottomNavProps) {
         </Link>
 
         {/* Center Floating + Post Button */}
-        <div className="relative -top-4">
+        <div className="relative -top-5">
           <button
             onClick={onOpenCreate}
-            className="w-11 h-11 rounded-xl bg-[var(--color-coral)] text-[#071B21] flex items-center justify-center shadow-lg shadow-[var(--color-coral)]/25 hover:scale-105 active:scale-95 transition cursor-pointer"
-            aria-label="Post Opinion"
+            className="w-12 h-12 rounded-2xl bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] flex items-center justify-center shadow-lg shadow-[var(--color-coral)]/30 hover:scale-105 active:scale-95 transition cursor-pointer"
+            aria-label="Start Conversation"
           >
-            <Plus className="w-5 h-5 stroke-[3]" />
+            <Plus className="w-6 h-6 stroke-[3]" />
           </button>
         </div>
 

@@ -10,6 +10,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { DebateCard } from '@/components/DebateCard';
 import { CreateDebateModal } from '@/components/CreateDebateModal';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { Avatar } from '@/components/Avatar';
 import {
   ShieldCheck,
@@ -34,6 +35,9 @@ import {
   ArrowRight,
   Lock,
   Wallet,
+  Sun,
+  Moon,
+  Laptop,
 } from 'lucide-react';
 import { formatINR } from '@/lib/money';
 
@@ -76,6 +80,7 @@ interface ProfileData {
   bio: string | null;
   avatarUrl: string | null;
   isVerified: boolean;
+  role?: string | null;
   rank: number;
   joinedDate: string | null;
   followersCount: number;
@@ -99,6 +104,7 @@ function UserProfileContent() {
   const username = decodeURIComponent(rawUsername);
 
   const { user, openAuthModal, refreshUser } = useAuth();
+  const { theme, themeMode, setThemeMode } = useTheme();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'debates' | 'contributions' | 'earnings' | 'saved'>('debates');
@@ -336,15 +342,15 @@ function UserProfileContent() {
   const isPayoutConnected = payoutAccount && payoutAccount.status === 'verified';
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] w-full overflow-x-hidden">
-      <div className="lg:hidden w-full">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] w-full flex flex-col">
+      <div className="lg:hidden w-full shrink-0">
         <Navbar onOpenCreate={() => setIsCreateModalOpen(true)} />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto flex justify-center min-w-0">
+      <div className="w-full max-w-7xl mx-auto flex justify-center min-w-0 flex-1 lg:h-full lg:overflow-hidden">
         <Sidebar onOpenCreate={() => setIsCreateModalOpen(true)} />
 
-        <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12">
+        <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {loading ? (
             <div className="py-32 text-center space-y-3">
               <RefreshCw className="w-8 h-8 text-[var(--color-coral)] animate-spin mx-auto" />
@@ -406,12 +412,17 @@ function UserProfileContent() {
                 </div>
 
                 <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-xl sm:text-2xl font-bold text-[var(--text-primary)] tracking-tight">
                       {profile.displayName}
                     </h1>
                     {profile.isVerified && (
                       <ShieldCheck className="w-4 h-4 text-[var(--color-lime)] shrink-0" />
+                    )}
+                    {(profile.role === 'founder' || profile.role === 'admin' || profile.username === 'vishalchaudhary' || profile.username === 'vishalkumar') && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
+                        Founder · IndoBid
+                      </span>
                     )}
                   </div>
                   <p className="text-xs text-[var(--text-muted)] font-mono">@{profile.username}</p>
@@ -905,6 +916,52 @@ function UserProfileContent() {
                   placeholder="Share your background, conviction, or areas of expertise..."
                   className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl p-3 text-xs text-[var(--text-primary)] focus:outline-none resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-2">
+                  Theme & Appearance
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setThemeMode('dark')}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center space-y-1 text-xs font-bold transition cursor-pointer ${
+                      themeMode === 'dark'
+                        ? 'bg-[var(--bg-elevated)] border-[var(--color-coral)] text-[var(--color-coral)] shadow-sm'
+                        : 'bg-[var(--bg-page-deep)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Moon className="w-4 h-4" />
+                    <span className="text-[11px]">Dark</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setThemeMode('light')}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center space-y-1 text-xs font-bold transition cursor-pointer ${
+                      themeMode === 'light'
+                        ? 'bg-[var(--bg-elevated)] border-[var(--color-coral)] text-[var(--color-coral)] shadow-sm'
+                        : 'bg-[var(--bg-page-deep)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Sun className="w-4 h-4" />
+                    <span className="text-[11px]">Light</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setThemeMode('system')}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center space-y-1 text-xs font-bold transition cursor-pointer ${
+                      themeMode === 'system'
+                        ? 'bg-[var(--bg-elevated)] border-[var(--color-coral)] text-[var(--color-coral)] shadow-sm'
+                        : 'bg-[var(--bg-page-deep)] border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <Laptop className="w-4 h-4" />
+                    <span className="text-[11px]">System</span>
+                  </button>
+                </div>
               </div>
 
               <button

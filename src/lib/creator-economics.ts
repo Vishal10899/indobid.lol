@@ -4,13 +4,17 @@ import { formatINR } from './money';
 /**
  * INDOBID.LOL — AUTHORITATIVE CREATOR ECONOMICS & EARNINGS ENGINE
  * 
- * ACCOUNTING RULES & SEMANTICS:
- * 1. Rate = 10% (1000 basis points).
+ * ACCOUNTING RULES & SEMANTICS (PRD v1.0 LOCKED):
+ * 1. 50 / 50 Revenue Split (5000 basis points).
+ *    For eligible external backing:
+ *    - 50% allocated to Creator / eligible recipient pool
+ *    - 50% allocated to IndoBid platform protocol
  *    Example:
- *    - 1000 paise (₹10)  -> 100 paise (₹1.00)
- *    - 1100 paise (₹11)  -> 110 paise (₹1.10)
- *    - 2500 paise (₹25)  -> 250 paise (₹2.50)
- *    - 10000 paise (₹100) -> 1000 paise (₹10.00)
+ *    - 1000 paise (₹10)   -> 500 paise (₹5.00 creator) / 500 paise (₹5.00 platform)
+ *    - 1100 paise (₹11)   -> 550 paise (₹5.50 creator) / 550 paise (₹5.50 platform)
+ *    - 2000 paise (₹20)   -> 1000 paise (₹10.00 creator) / 1000 paise (₹10.00 platform)
+ *    - 2500 paise (₹25)   -> 1250 paise (₹12.50 creator) / 1250 paise (₹12.50 platform)
+ *    - 10000 paise (₹100) -> 5000 paise (₹50.00 creator) / 5000 paise (₹50.00 platform)
  * 
  * 2. Creator Initial Starting Payment (Sequence #1 / Origin):
  *    - Creator pays ₹10 minimum to publish the opinion.
@@ -30,15 +34,15 @@ import { formatINR } from './money';
  *    - The creator does not retain reward money from invalidated contributions.
  */
 
-export const CREATOR_SHARE_BPS = 1000; // 10.00%
+export const CREATOR_SHARE_BPS = 5000; // 50.00% (50/50 Revenue Split)
 export const BPS_DENOMINATOR = 10000;
 
 /**
  * Authoritative backend function to calculate creator reward in paise from a contribution amount.
  * 
  * @param amountPaise The gross contribution amount in paise (e.g. 2500 for ₹25)
- * @param rateBps Optional custom basis points (defaults to 1000 = 10%)
- * @returns creator reward in paise (e.g. 250 for ₹2.50)
+ * @param rateBps Optional custom basis points (defaults to 5000 = 50%)
+ * @returns creator reward in paise (e.g. 1250 for ₹12.50)
  */
 export function calculateCreatorReward(
   amountPaise: number,
@@ -91,7 +95,7 @@ export interface CreatorEconomicsBreakdown {
   paidEarningsRupees: number;
   formattedPaidEarnings: string;
 
-  // Platform Protocol Fee (90%)
+  // Platform Protocol Fee (50%)
   platformFeePaise: number;
   platformFeeRupees: number;
   formattedPlatformFee: string;
@@ -120,11 +124,11 @@ export interface DebateRewardBreakdown {
   eligibleExternalBackingPaise: number;
   formattedEligibleExternalBacking: string;
 
-  // Creator Reward / Earnings generated from this debate (10%)
+  // Creator Reward / Earnings generated from this debate (50%)
   creatorRewardPaise: number;
   formattedCreatorReward: string;
 
-  // Platform Fee generated from this debate (90%)
+  // Platform Fee generated from this debate (50%)
   platformFeePaise: number;
   formattedPlatformFee: string;
 
@@ -132,7 +136,7 @@ export interface DebateRewardBreakdown {
   contributionCount: number;
   externalContributionsCount: number;
 
-  // Public display label (e.g. "₹500 backed · Creator earns ₹50 (10%)")
+  // Public display label (e.g. "₹500 backed · Creator pool: ₹250 (50%)")
   publicDisplayLabel: string;
 }
 
@@ -163,10 +167,12 @@ export async function calculateDebateReward(
 
   for (const c of debate.contributions) {
     const isCreator = (c.authorUsername || '').toLowerCase().trim() === creatorClean;
-    if (c.sequence === 1) {
-      creatorInitialPaise += c.amount;
-    } else if (isCreator) {
-      creatorSelfContinuationsPaise += c.amount;
+    if (isCreator) {
+      if (c.sequence === 1 && debate.originalContribution > 0) {
+        creatorInitialPaise += c.amount;
+      } else {
+        creatorSelfContinuationsPaise += c.amount;
+      }
     } else {
       eligibleExternalBackingPaise += c.amount;
       externalContributionsCount++;

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import { prisma } from './db';
 
 const AUTH_COOKIE_NAME = 'indobid_session';
@@ -70,12 +71,31 @@ export function verifySessionToken(token: string): UserSession | null {
 }
 
 /**
- * Retrieve current logged-in user from request cookies
+ * Retrieve current logged-in user from request cookies or Next.js headers
  */
-export async function getCurrentUser(): Promise<UserSession | null> {
+export async function getCurrentUser(request?: NextRequest | Request): Promise<UserSession | null> {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+    let token: string | undefined;
+
+    if (request && 'cookies' in request && typeof (request as any).cookies?.get === 'function') {
+      token = (request as any).cookies.get(AUTH_COOKIE_NAME)?.value;
+    }
+
+    if (!token && request) {
+      const cookieHeader = request.headers.get('cookie') || '';
+      const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${AUTH_COOKIE_NAME}=([^;]+)`));
+      if (match) {
+        token = decodeURIComponent(match[1]);
+      }
+    }
+
+    if (!token) {
+      try {
+        const cookieStore = await cookies();
+        token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
+      } catch {}
+    }
+
     if (!token) return null;
 
     const session = verifySessionToken(token);

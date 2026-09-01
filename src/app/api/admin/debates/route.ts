@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { isAuthorizedAdmin } from '@/lib/auth';
+import { getOrCreateFounderUser } from '@/lib/founder';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,73 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Admin get debates error:', error);
     return NextResponse.json({ error: 'Failed to fetch debates' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  if (!isAuthorizedAdmin(request)) {
+    return NextResponse.json({ error: 'Unauthorized admin access' }, { status: 401 });
+  }
+
+  try {
+    const body = await request.json();
+    const { title, content, categorySlug, categoryId, hashtags, isAnonymous } = body;
+
+    if (!title || typeof title !== 'string' || title.trim().length < 5) {
+      return NextResponse.json({ error: 'Post title must be at least 5 characters' }, { status: 400 });
+    }
+    if (!content || typeof content !== 'string' || content.trim().length < 5) {
+      return NextResponse.json({ error: 'Post content must be at least 5 characters' }, { status: 400 });
+    }
+
+    // Resolve Category
+    let category = null;
+    if (categoryId) {
+      category = await prisma.category.findUnique({ where: { id: categoryId } });
+    } else if (categorySlug) {
+      category = await prisma.category.findFirst({ where: { slug: categorySlug.toLowerCase().trim() } });
+    }
+    if (!category) {
+      category = await prisma.category.findFirst({ orderBy: { sortOrder: 'asc' } });
+    }
+    if (!category) {
+      return NextResponse.json({ error: 'Category not found' }, { status: 400 });
+    }
+
+    // Provision/Retrieve Founder User
+    const founderUser = await getOrCreateFounderUser();
+    const isAnon = Boolean(isAnonymous);
+    const authorUsername = isAnon ? 'anonymous' : founderUser.username || 'vishalchaudhary';
+    const authorDisplayName = isAnon ? 'Anonymous' : founderUser.displayName || 'Vishal Chaudhary';
+
+    const debate = await prisma.debate.create({
+      data: {
+        authorId: founderUser.id,
+        title: title.trim(),
+        content: content.trim(),
+        categoryId: category.id,
+        authorUsername,
+        authorDisplayName,
+        isAnonymous: isAnon,
+        hashtags: hashtags ? hashtags.trim() : null,
+        originalContribution: 0,
+        totalVerifiedContribution: 0,
+        contributionCount: 0,
+        lastContributionAmount: 0,
+        status: 'active',
+        trendingScore: 10.0,
+      },
+      include: { category: true },
+    });
+
+    return NextResponse.json({
+      success: true,
+      debate,
+      message: 'Post created and published directly as Founder',
+    });
+  } catch (error) {
+    console.error('Admin create debate error:', error);
+    return NextResponse.json({ error: 'Failed to create debate as Founder' }, { status: 500 });
   }
 }
 

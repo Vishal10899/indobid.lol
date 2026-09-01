@@ -16,6 +16,7 @@ model User {
   bio              String?
   passwordHash     String?         @map("password_hash")
   isVerified       Boolean         @default(false) @map("is_verified")
+  emailVerifiedAt  DateTime?       @map("email_verified_at")
   isSuspended      Boolean         @default(false) @map("is_suspended")
   interests        String?
   rank             Int             @default(0)
@@ -463,3 +464,35 @@ model ListingVisit {
   @@index([listingId, createdAt(sort: Desc)])
   @@map("listing_visits")
 }
+
+model EmailOtp {
+  id         String   @id @default(cuid())
+  email      String
+  codeHash   String   @map("code_hash")
+  salt       String
+  expiresAt  DateTime @map("expires_at")
+  attempts   Int      @default(0)
+  used       Boolean  @default(false)
+  lastSentAt DateTime @default(now()) @map("last_sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([email, expiresAt])
+  @@index([email, used])
+  @@map("email_otps")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  tokenHash String   @map("token_hash")
+  salt      String
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email, expiresAt])
+  @@index([email, used])
+  @@map("password_reset_tokens")
+}
+
+

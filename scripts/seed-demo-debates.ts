@@ -4,6 +4,11 @@ import { hashPassword } from '../src/lib/user-auth';
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' || !process.env.ALLOW_DEMO_SEED) {
+    console.log('⚠️ Demo data seeding is disabled for production safety.');
+    console.log('IndoBid uses real database records only. Set ALLOW_DEMO_SEED=1 explicitly if needed in isolated local development.');
+    return;
+  }
   console.log('Seeding rich test debates for IndoBid.lol visual preview...');
 
   // Database wakeup retry loop

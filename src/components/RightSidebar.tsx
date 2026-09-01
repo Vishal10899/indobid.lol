@@ -162,10 +162,8 @@ export function RightSidebar() {
           <Link href="/trending" className="hover:underline">Trending</Link>
           <span>·</span>
           <Link href="/activity" className="hover:underline">Activity</Link>
-          <span>·</span>
-          <Link href="/admin" className="hover:underline">Admin</Link>
         </div>
-        <p>© {new Date().getFullYear()} IndoBid.lol · Back opinions with conviction.</p>
+        <p>© 2026 IndoBid · Back opinions with conviction.</p>
         <p className="font-montserrat text-[10px] text-[var(--text-secondary)]">
           Built &amp; Designed by <span className="font-bold text-[var(--color-coral)]">Vishal Chaudhary</span>
         </p>

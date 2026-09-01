@@ -31,6 +31,7 @@ interface AdminStats {
   debates: {
     total: number;
     active: number;
+    todayNew?: number;
     pendingPayment: number;
     hidden: number;
     removed: number;
@@ -49,6 +50,8 @@ interface AdminStats {
     todayRevenueRupees: number;
     weekRevenueRupees: number;
     monthRevenueRupees: number;
+    totalCreatorRewardsPaise?: number;
+    totalCreatorRewardsRupees?: number;
   };
   payments: {
     total: number;
@@ -59,6 +62,7 @@ interface AdminStats {
   };
   users: {
     total: number;
+    todayNew?: number;
   };
   moderation: {
     pendingReports: number;
@@ -99,12 +103,12 @@ interface AdminReport {
 
 interface AdminPayment {
   id: string;
-  amount: number;
-  status: string;
   providerPaymentId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  customerEmail: string | null;
   createdAt: string;
-  debateId?: string | null;
-  customerEmail?: string | null;
 }
 
 interface AdminUser {
@@ -123,7 +127,7 @@ interface AdminUser {
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('vishalkumar75912@gmail.com');
+  const [adminEmail, setAdminEmail] = useState('vishalchaudhary74096@gmail.com');
   const [adminKey, setAdminKey] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -139,6 +143,16 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
 
   const [userSearch, setUserSearch] = useState('');
+
+  // Founder Post Creation State
+  const [founderPostTitle, setFounderPostTitle] = useState('');
+  const [founderPostContent, setFounderPostContent] = useState('');
+  const [founderCategorySlug, setFounderCategorySlug] = useState('ai');
+  const [founderHashtags, setFounderHashtags] = useState('');
+  const [founderIsAnonymous, setFounderIsAnonymous] = useState(false);
+  const [founderPostLoading, setFounderPostLoading] = useState(false);
+  const [founderPostSuccess, setFounderPostSuccess] = useState<string | null>(null);
+  const [founderPostError, setFounderPostError] = useState<string | null>(null);
 
   // Check existing session
   useEffect(() => {
@@ -234,6 +248,51 @@ export default function AdminPage() {
       await fetch('/api/admin/logout', { method: 'POST' });
     } catch {}
     setIsAuthenticated(false);
+  };
+
+  const handleCreateFounderPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFounderPostLoading(true);
+    setFounderPostError(null);
+    setFounderPostSuccess(null);
+
+    try {
+      const text = founderPostContent.trim();
+      if (!text || text.length < 5) {
+        throw new Error('Post content must be at least 5 characters');
+      }
+
+      const lines = text.split('\n').filter((l) => l.trim().length > 0);
+      let title = founderPostTitle.trim() || lines[0] || text;
+      if (title.length < 5) title = text.substring(0, 180).trim();
+
+      const res = await fetch('/api/admin/debates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          content: text,
+          categorySlug: founderCategorySlug,
+          hashtags: founderHashtags.trim() || undefined,
+          isAnonymous: founderIsAnonymous,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to publish Founder post');
+      }
+
+      setFounderPostSuccess(`Post "${data.debate.title}" published directly as Founder to public feed!`);
+      setFounderPostTitle('');
+      setFounderPostContent('');
+      setFounderHashtags('');
+      loadAdminData();
+    } catch (err) {
+      setFounderPostError(err instanceof Error ? err.message : 'Failed to publish Founder post');
+    } finally {
+      setFounderPostLoading(false);
+    }
   };
 
   const handleToggleDebateStatus = async (debateId: string, currentStatus: string) => {
@@ -502,51 +561,217 @@ export default function AdminPage() {
 
         {/* 1. OVERVIEW TAB */}
         {activeTab === 'overview' && stats && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+          <div className="space-y-6 w-full min-w-0">
+            {/* Analytics KPI Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 w-full min-w-0">
+              {/* Total Users */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
-                  Total Verified Revenue
+                  Total Users
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-[var(--color-amber)] font-mono mt-1 block">
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono block">
+                  {stats.users.total.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-[var(--color-lime)] font-medium block truncate">
+                  +{stats.users.todayNew || 0} joined today
+                </span>
+              </div>
+
+              {/* Live Visitors */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 block">
+                    Live Now
+                  </span>
+                </div>
+                <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono block">
+                  {stats.visitors?.liveActive ?? 0}
+                </span>
+                <span className="text-[10px] text-[var(--text-secondary)] block truncate">
+                  Active past 5 mins
+                </span>
+              </div>
+
+              {/* Published Posts */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Published Posts
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono block">
+                  {stats.debates.active.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-[var(--color-coral)] font-medium block truncate">
+                  +{stats.debates.todayNew || 0} today
+                </span>
+              </div>
+
+              {/* Total Backing (Revenue) */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Total Backing
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--color-amber)] font-mono block">
                   ₹{stats.financials.totalRevenueRupees.toLocaleString()}
                 </span>
-                <span className="text-[10px] text-[var(--text-secondary)]">
-                  From {stats.payments.successful} verified payments
+                <span className="text-[10px] text-[var(--text-secondary)] block truncate">
+                  {stats.payments.successful} payments
                 </span>
               </div>
 
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+              {/* Creator Rewards */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
-                  Today&apos;s Revenue
+                  Creator Rewards
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-[var(--color-amber)] font-mono mt-1 block">
-                  ₹{stats.financials.todayRevenueRupees.toLocaleString()}
+                <span className="text-2xl sm:text-3xl font-black text-[var(--color-lime)] font-mono block">
+                  ₹{((stats.financials as any).totalCreatorRewardsRupees || 0).toLocaleString()}
                 </span>
-                <span className="text-[10px] text-[var(--text-secondary)]">Past 24 hours</span>
-              </div>
-
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
-                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
-                  Active Debates
-                </span>
-                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono mt-1 block">
-                  {stats.debates.active}
-                </span>
-                <span className="text-[10px] text-[var(--text-secondary)]">
-                  {stats.debates.total} total submitted
+                <span className="text-[10px] text-[var(--text-muted)] block truncate">
+                  10% distributed
                 </span>
               </div>
 
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+              {/* Verified Payments */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl space-y-1">
                 <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
-                  Total Debaters
+                  Verified Payments
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono mt-1 block">
-                  {stats.users.total}
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono block">
+                  {stats.payments.successful.toLocaleString()}
                 </span>
-                <span className="text-[10px] text-[var(--text-secondary)]">Registered accounts</span>
+                <span className="text-[10px] text-[var(--text-secondary)] block truncate">
+                  Razorpay verified
+                </span>
               </div>
+            </div>
+
+            {/* FOUNDER POST CREATOR STUDIO */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl w-full min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border-subtle)] pb-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30">
+                      Founder Publishing Studio
+                    </span>
+                    <span className="text-xs font-bold text-[var(--text-primary)]">
+                      Author: Vishal Chaudhary (@vishalchaudhary)
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Publish official Founder opinions directly to feed with ₹0 payment requirement. Community can still back and debate.
+                  </p>
+                </div>
+                <div className="text-[11px] font-mono text-[var(--color-amber)] font-bold">
+                  ₹0 Cost · Instant Live
+                </div>
+              </div>
+
+              {founderPostSuccess && (
+                <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs rounded-xl flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{founderPostSuccess}</span>
+                </div>
+              )}
+
+              {founderPostError && (
+                <div className="p-3 bg-red-500/15 border border-red-500/30 text-red-300 text-xs rounded-xl flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{founderPostError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateFounderPost} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                    Post Content / Opinion
+                  </label>
+                  <textarea
+                    required
+                    rows={4}
+                    value={founderPostContent}
+                    onChange={(e) => setFounderPostContent(e.target.value)}
+                    placeholder="Write the official Founder opinion or viewpoint..."
+                    className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl p-3 text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none resize-none font-medium leading-relaxed"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                      Headline / Title (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={founderPostTitle}
+                      onChange={(e) => setFounderPostTitle(e.target.value)}
+                      placeholder="Auto-derived if empty"
+                      className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                      Topic / Category
+                    </label>
+                    <select
+                      value={founderCategorySlug}
+                      onChange={(e) => setFounderCategorySlug(e.target.value)}
+                      className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none font-medium cursor-pointer"
+                    >
+                      <option value="ai">AI & Models</option>
+                      <option value="startups">Startups & Venture</option>
+                      <option value="money">Markets & Economy</option>
+                      <option value="technology">Tech & Dev</option>
+                      <option value="society">Society & Culture</option>
+                      <option value="business">Business Strategy</option>
+                      <option value="general">General Opinions</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">
+                      Hashtags (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={founderHashtags}
+                      onChange={(e) => setFounderHashtags(e.target.value)}
+                      placeholder="#IndoBid #Conviction"
+                      className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                  <label className="flex items-center space-x-2 cursor-pointer text-xs text-[var(--text-secondary)]">
+                    <input
+                      type="checkbox"
+                      checked={founderIsAnonymous}
+                      onChange={(e) => setFounderIsAnonymous(e.target.checked)}
+                      className="rounded text-[var(--color-coral)] focus:ring-0"
+                    />
+                    <span>Post anonymously (hide Founder name)</span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={founderPostLoading || founderPostContent.trim().length < 5}
+                    className="w-full sm:w-auto px-6 py-2.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {founderPostLoading ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Publishing as Founder...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Publish Post as Founder · ₹0 Free</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

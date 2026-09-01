@@ -86,12 +86,27 @@ export async function GET(request: NextRequest) {
       prisma.payment.count({ where: { status: 'pending' } }),
     ]);
 
-    // 5. Total Users & Reports
-    const [totalUsers, pendingReportsCount, visitorAnalytics] = await Promise.all([
+    // 5. Total Users, Today's New Users/Posts & Reports
+    const [
+      totalUsers,
+      todayNewUsers,
+      todayNewPosts,
+      creatorRewardsAgg,
+      pendingReportsCount,
+      visitorAnalytics,
+    ] = await Promise.all([
       prisma.user.count(),
+      prisma.user.count({ where: { createdAt: { gte: startOfToday } } }),
+      prisma.debate.count({ where: { status: 'active', createdAt: { gte: startOfToday } } }),
+      prisma.creatorEarningsLedger.aggregate({
+        _sum: { creatorRewardPaise: true },
+        where: { status: { in: ['pending', 'available', 'paid'] } },
+      }),
       prisma.debateReport.count({ where: { status: 'pending' } }),
       getAdminVisitorAnalytics(5),
     ]);
+
+    const totalCreatorRewardsPaise = creatorRewardsAgg._sum?.creatorRewardPaise || 0;
 
     // 6. Top Debates
     const [topSupportedDebates, mostActiveDebates, topTrendingDebates] = await Promise.all([
@@ -121,6 +136,7 @@ export async function GET(request: NextRequest) {
         debates: {
           total: totalDebates,
           active: activeDebates,
+          todayNew: todayNewPosts,
           pendingPayment: pendingPaymentDebates,
           hidden: hiddenDebates,
           removed: removedDebates,
@@ -139,6 +155,8 @@ export async function GET(request: NextRequest) {
           todayRevenueRupees: todayRevenuePaise / 100,
           weekRevenueRupees: weekRevenuePaise / 100,
           monthRevenueRupees: monthRevenuePaise / 100,
+          totalCreatorRewardsPaise,
+          totalCreatorRewardsRupees: totalCreatorRewardsPaise / 100,
         },
         payments: {
           total: totalPayments,
@@ -149,6 +167,7 @@ export async function GET(request: NextRequest) {
         },
         users: {
           total: totalUsers,
+          todayNew: todayNewUsers,
         },
         moderation: {
           pendingReports: pendingReportsCount,

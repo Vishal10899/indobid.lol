@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="ibGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D98A6C"/>
+      <stop offset="60%" stop-color="#E2987D"/>
+      <stop offset="100%" stop-color="#D8B257"/>
+    </linearGradient>
+  </defs>
+  <!-- Dark Background Plate -->
+  <rect width="32" height="32" rx="8" fill="#091114"/>
+  <rect width="32" height="32" rx="8" fill="none" stroke="url(#ibGrad)" stroke-width="1.5" opacity="0.6"/>
+  
+  <!-- Monogram Serif "I" -->
+  <rect x="7" y="6" width="10" height="2.5" rx="0.5" fill="#D98A6C"/>
+  <rect x="10.5" y="8.5" width="3" height="13" rx="0.5" fill="#D98A6C" fill-opacity="0.95"/>
+  <rect x="7" y="21.5" width="10" height="2.5" rx="0.5" fill="#D98A6C"/>
+
+  <!-- Upward Conviction Arrow -->
+  <path d="M17 19L23.5 12.5L20 12.5V7.5H27V14.5H24L17 21.5V19Z" fill="#D98A6C"/>
+  <!-- Gold Conviction Node -->
+  <circle cx="23" cy="22" r="2.2" fill="#D8B257"/>
+</svg>
