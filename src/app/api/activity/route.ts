@@ -1,58 +1,54 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { formatINR } from '@/lib/money';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const activities = await prisma.activityEvent.findMany({
-      where: {
-        listing: {
-          status: 'active',
-          verifiedBid: { gt: 0 },
-        },
-      },
+    const activities = await prisma.debateActivityEvent.findMany({
       take: 20,
       orderBy: { createdAt: 'desc' },
       include: {
-        listing: {
+        debate: {
           select: {
             id: true,
             title: true,
-            logoUrl: true,
-            destinationType: true,
-            verifiedBid: true,
             status: true,
+            category: { select: { name: true, slug: true } },
           },
+        },
+      },
+      where: {
+        debate: {
+          status: 'active',
         },
       },
     });
 
-    const formatted = activities
-      .filter((act) => act.listing && act.listing.status === 'active' && act.listing.verifiedBid > 0)
-      .map((act) => ({
-        id: act.id,
-        listingId: act.listingId,
-        type: act.type,
-        title: act.title,
-        destinationType: act.destinationType,
-        amount: act.amount,
-        rank: act.rank,
-        message: act.message,
-        createdAt: act.createdAt,
-        logoUrl: act.listing?.logoUrl || null,
-      }));
+    const formatted = activities.map((a) => ({
+      id: a.id,
+      debateId: a.debateId,
+      type: a.type,
+      title: a.title,
+      authorUsername: a.authorUsername,
+      authorDisplayName: a.authorDisplayName,
+      amount: a.amount,
+      formattedAmount: formatINR(a.amount),
+      message: a.message,
+      categoryName: a.debate.category.name,
+      createdAt: a.createdAt,
+    }));
 
-    return NextResponse.json(
-      { activities: formatted },
-      {
-        headers: {
-          'Cache-Control': 'no-store, max-age=0',
-        },
-      }
-    );
+    return NextResponse.json({
+      success: true,
+      activities: formatted,
+    });
   } catch (error) {
-    console.error('Error fetching activity feed:', error);
-    return NextResponse.json({ error: 'Failed to fetch activity feed' }, { status: 500 });
+    console.error('Activity API error:', error);
+    return NextResponse.json(
+      { success: false, activities: [] },
+      { status: 500 }
+    );
   }
 }

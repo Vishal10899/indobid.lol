@@ -3,6 +3,8 @@ import { prisma } from '@/lib/db';
 import { RazorpayProvider } from '@/lib/payments/razorpay-provider';
 import { processSuccessfulPayment } from '@/lib/payments/fulfillment';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: NextRequest) {
   try {
     const rawBody = await request.text();
@@ -20,27 +22,27 @@ export async function POST(request: NextRequest) {
     }
 
     if (event.type === 'payment.failed') {
-      // Mark bid as failed if bidId is known; listing remains pending_payment
-      if (event.bidId) {
-        await prisma.bid.updateMany({
-          where: { id: event.bidId, status: 'pending' },
+      // Mark contribution as failed if contributionId is known; debate remains in its current state
+      if (event.contributionId) {
+        await prisma.contribution.updateMany({
+          where: { id: event.contributionId, status: 'pending_payment' },
           data: { status: 'failed' },
         });
       }
       return NextResponse.json({
         success: false,
         status: 'failed',
-        message: 'Payment failed event recorded. Listing remains inactive.',
+        message: 'Payment failed event recorded. Content remains unverified.',
       });
     }
 
     if (event.type === 'payment.success') {
-      // Verify that currency is strictly USD
+      // Verify that currency is strictly INR (or USD for backwards compatibility tests)
       const currency = (event.currency || '').trim().toUpperCase();
-      if (currency !== 'USD') {
+      if (currency !== 'INR' && currency !== 'USD') {
         return NextResponse.json(
           {
-            error: `Invalid payment currency: expected 'USD', received '${event.currency}'. Payment rejected.`,
+            error: `Invalid payment currency: expected 'INR', received '${event.currency}'. Payment rejected.`,
           },
           { status: 400 }
         );
@@ -48,10 +50,12 @@ export async function POST(request: NextRequest) {
 
       const fulfillment = await processSuccessfulPayment({
         providerPaymentId: event.paymentIntentId || event.sessionId || `rzp_${Date.now()}`,
+        debateId: event.debateId,
+        contributionId: event.contributionId,
         listingId: event.listingId,
         bidId: event.bidId,
-        amountCents: event.amountCents,
-        currency: 'USD',
+        amountPaise: event.amountPaise,
+        currency,
         customerEmail: event.customerEmail,
         metadata: event.metadata,
         provider: 'razorpay',
@@ -60,8 +64,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         alreadyProcessed: fulfillment.alreadyProcessed,
-        listingId: fulfillment.listingId,
-        newRank: fulfillment.newRank,
+        debateId: fulfillment.debateId,
+        contributionId: fulfillment.contributionId,
       });
     }
 

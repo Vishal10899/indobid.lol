@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { isAuthorizedAdmin } from '@/lib/auth';
-import { getAdminVisitorAnalytics, getTopVisitedListings } from '@/lib/visitor-tracker';
+import { getAdminVisitorAnalytics } from '@/lib/visitor-tracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,164 +11,155 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 1. Listing metrics
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // 1. Debates counts
     const [
-      totalListings,
-      activeListings,
-      pendingPaymentListings,
-      hiddenListings,
-      specialListings,
+      totalDebates,
+      activeDebates,
+      pendingPaymentDebates,
+      hiddenDebates,
+      removedDebates,
     ] = await Promise.all([
-      prisma.listing.count(),
-      prisma.listing.count({ where: { status: 'active' } }),
-      prisma.listing.count({ where: { status: 'pending_payment' } }),
-      prisma.listing.count({ where: { status: 'hidden' } }),
-      prisma.listing.count({ where: { isSpecial: true } }),
+      prisma.debate.count(),
+      prisma.debate.count({ where: { status: 'active' } }),
+      prisma.debate.count({ where: { status: 'pending_payment' } }),
+      prisma.debate.count({ where: { status: 'hidden' } }),
+      prisma.debate.count({ where: { status: 'removed' } }),
     ]);
 
-    // 2. Verified bids sum (cents)
-    const verifiedBidsAgg = await prisma.listing.aggregate({
-      _sum: { verifiedBid: true },
-      where: { status: 'active', verifiedBid: { gt: 0 } },
-    });
-    const totalVerifiedBidsCents = verifiedBidsAgg._sum.verifiedBid || 0;
+    // 2. Contributions counts
+    const [
+      totalContributions,
+      verifiedContributions,
+      pendingContributions,
+      failedContributions,
+      canceledContributions,
+    ] = await Promise.all([
+      prisma.contribution.count(),
+      prisma.contribution.count({ where: { status: 'verified' } }),
+      prisma.contribution.count({ where: { status: 'pending_payment' } }),
+      prisma.contribution.count({ where: { status: 'failed' } }),
+      prisma.contribution.count({ where: { status: 'canceled' } }),
+    ]);
 
-    // 3. Real verified revenue (calculated EXCLUSIVELY from Payment records with status: 'succeeded')
-    const revenueAgg = await prisma.payment.aggregate({
-      _sum: { amount: true },
-      where: { status: 'succeeded' },
-    });
-    const totalRevenueCents = revenueAgg._sum.amount || 0;
+    // 3. Real Verified Revenue (EXCLUSIVELY from Payment records with status: 'succeeded')
+    const [totalRevAgg, todayRevAgg, weekRevAgg, monthRevAgg] = await Promise.all([
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: 'succeeded' },
+      }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: 'succeeded', createdAt: { gte: startOfToday } },
+      }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: 'succeeded', createdAt: { gte: startOfWeek } },
+      }),
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: { status: 'succeeded', createdAt: { gte: startOfMonth } },
+      }),
+    ]);
 
-    // 4. Payment breakdown
+    const totalRevenuePaise = totalRevAgg._sum.amount || 0;
+    const todayRevenuePaise = todayRevAgg._sum.amount || 0;
+    const weekRevenuePaise = weekRevAgg._sum.amount || 0;
+    const monthRevenuePaise = monthRevAgg._sum.amount || 0;
+
+    // 4. Payments breakdown
     const [
       totalPayments,
       successfulPayments,
       failedPayments,
       canceledPayments,
+      pendingPayments,
     ] = await Promise.all([
       prisma.payment.count(),
       prisma.payment.count({ where: { status: 'succeeded' } }),
       prisma.payment.count({ where: { status: 'failed' } }),
       prisma.payment.count({ where: { status: 'canceled' } }),
+      prisma.payment.count({ where: { status: 'pending' } }),
     ]);
 
-    // 5. Bid attempt records breakdown
-    const [
-      totalBids,
-      completedBids,
-      failedBids,
-      canceledBids,
-      pendingBids,
-    ] = await Promise.all([
-      prisma.bid.count(),
-      prisma.bid.count({ where: { status: 'completed' } }),
-      prisma.bid.count({ where: { status: 'failed' } }),
-      prisma.bid.count({ where: { status: 'canceled' } }),
-      prisma.bid.count({ where: { status: 'pending' } }),
-    ]);
-
-    // 6. User and Traffic metrics & Real Visitor Analytics
-    const [totalUsers, totalClicks, visitorAnalytics, topVisitedListings] = await Promise.all([
+    // 5. Total Users & Reports
+    const [totalUsers, pendingReportsCount, visitorAnalytics] = await Promise.all([
       prisma.user.count(),
-      prisma.click.count(),
+      prisma.debateReport.count({ where: { status: 'pending' } }),
       getAdminVisitorAnalytics(5),
-      getTopVisitedListings(10),
     ]);
 
-    // 7. Category distribution
-    const categoriesWithCount = await prisma.category.findMany({
-      orderBy: { sortOrder: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        _count: {
-          select: {
-            listings: {
-              where: { status: 'active', verifiedBid: { gt: 0 } },
-            },
-          },
-        },
-      },
-    });
-
-    // 8. Recent activity lists
-    const [recentListings, recentPayments, recentBids] = await Promise.all([
-      prisma.listing.findMany({
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-        include: { category: true },
+    // 6. Top Debates
+    const [topSupportedDebates, mostActiveDebates, topTrendingDebates] = await Promise.all([
+      prisma.debate.findMany({
+        where: { status: 'active' },
+        orderBy: { totalVerifiedContribution: 'desc' },
+        take: 5,
+        include: { category: { select: { name: true } } },
       }),
-      prisma.payment.findMany({
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          listing: {
-            select: { id: true, title: true, canonicalUrl: true },
-          },
-        },
+      prisma.debate.findMany({
+        where: { status: 'active' },
+        orderBy: { contributionCount: 'desc' },
+        take: 5,
+        include: { category: { select: { name: true } } },
       }),
-      prisma.bid.findMany({
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          listing: {
-            select: { id: true, title: true, canonicalUrl: true },
-          },
-        },
+      prisma.debate.findMany({
+        where: { status: 'active' },
+        orderBy: { trendingScore: 'desc' },
+        take: 5,
+        include: { category: { select: { name: true } } },
       }),
     ]);
 
     return NextResponse.json({
       success: true,
       metrics: {
-        listings: {
-          total: totalListings,
-          active: activeListings,
-          pendingPayment: pendingPaymentListings,
-          hidden: hiddenListings,
-          specialPromotional: specialListings,
+        debates: {
+          total: totalDebates,
+          active: activeDebates,
+          pendingPayment: pendingPaymentDebates,
+          hidden: hiddenDebates,
+          removed: removedDebates,
+        },
+        contributions: {
+          total: totalContributions,
+          verified: verifiedContributions,
+          pending: pendingContributions,
+          failed: failedContributions,
+          canceled: canceledContributions,
         },
         financials: {
-          totalRevenueDollars: totalRevenueCents / 100,
-          totalRevenueCents,
-          totalVerifiedBidsDollars: totalVerifiedBidsCents / 100,
-          totalVerifiedBidsCents,
-          currency: 'USD',
+          currency: 'INR',
+          totalRevenuePaise,
+          totalRevenueRupees: totalRevenuePaise / 100,
+          todayRevenueRupees: todayRevenuePaise / 100,
+          weekRevenueRupees: weekRevenuePaise / 100,
+          monthRevenueRupees: monthRevenuePaise / 100,
         },
         payments: {
           total: totalPayments,
           successful: successfulPayments,
           failed: failedPayments,
           canceled: canceledPayments,
-        },
-        bids: {
-          total: totalBids,
-          completed: completedBids,
-          pending: pendingBids,
-          failed: failedBids,
-          canceled: canceledBids,
+          pending: pendingPayments,
         },
         users: {
           total: totalUsers,
         },
-        traffic: {
-          totalRecordedClicks: totalClicks,
-          trafficModelNote: 'Tracks outbound clicks to listings deduplicated by IP hash (1 per hour).',
+        moderation: {
+          pendingReports: pendingReportsCount,
         },
         visitors: visitorAnalytics,
-        topVisitedListings,
+        rankings: {
+          topSupported: topSupportedDebates,
+          mostActive: mostActiveDebates,
+          topTrending: topTrendingDebates,
+        },
       },
-      categories: categoriesWithCount.map((c) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        activeListingsCount: c._count.listings,
-      })),
-      recentListings,
-      recentPayments,
-      recentBids,
     });
   } catch (error) {
     console.error('Admin stats error:', error);

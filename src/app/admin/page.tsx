@@ -6,66 +6,62 @@ import {
   ShieldAlert,
   Key,
   Mail,
-  Eye,
-  EyeOff,
-  Search,
   RefreshCw,
   ArrowLeft,
   DollarSign,
-  Layers,
-  Sparkles,
   BarChart3,
-  TrendingUp,
+  Flame,
   CreditCard,
-  MousePointerClick,
-  Plus,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
   ShieldCheck,
   Tag,
   Users,
-  Activity,
-  Trophy,
+  MessageSquare,
+  Coins,
+  Eye,
+  EyeOff,
+  Flag,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
-import { PlatformIcon } from '@/components/PlatformIcon';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { POPULAR_COUNTRIES, DEFAULT_COUNTRY_CODE, getCountryFlag, getCountryName } from '@/lib/countries';
+import { formatINR } from '@/lib/money';
 
 interface AdminStats {
-  listings: {
+  debates: {
     total: number;
     active: number;
     pendingPayment: number;
     hidden: number;
-    specialPromotional: number;
+    removed: number;
+  };
+  contributions: {
+    total: number;
+    verified: number;
+    pending: number;
+    failed: number;
+    canceled: number;
   };
   financials: {
-    totalRevenueDollars: number;
-    totalRevenueCents: number;
-    totalVerifiedBidsDollars: number;
-    totalVerifiedBidsCents: number;
     currency: string;
+    totalRevenuePaise: number;
+    totalRevenueRupees: number;
+    todayRevenueRupees: number;
+    weekRevenueRupees: number;
+    monthRevenueRupees: number;
   };
   payments: {
     total: number;
     successful: number;
     failed: number;
     canceled: number;
-  };
-  bids: {
-    total: number;
-    completed: number;
     pending: number;
-    failed: number;
-    canceled: number;
   };
   users: {
     total: number;
   };
-  traffic: {
-    totalRecordedClicks: number;
-    trafficModelNote: string;
+  moderation: {
+    pendingReports: number;
   };
   visitors?: {
     liveActive: number;
@@ -76,128 +72,126 @@ interface AdminStats {
     allTime: number;
     totalPageViews: number;
   };
-  topVisitedListings?: Array<{
-    id: string;
-    title: string;
-    canonicalUrl: string;
-    destinationType: string;
-    verifiedBid: number;
-    visitCount: number;
-    clickCount: number;
-    countryCode?: string | null;
-    category: { name: string; slug: string };
-  }>;
 }
 
-interface AdminListing {
+interface AdminDebate {
   id: string;
   title: string;
-  destinationUrl: string;
-  canonicalUrl: string;
-  destinationType: string;
-  description: string;
-  logoUrl: string | null;
-  categoryId: string;
-  category: { id: string; name: string; slug: string };
-  verifiedBid: number;
-  clickCount: number;
-  visitCount?: number;
+  content: string;
+  authorUsername: string;
+  originalContribution: number;
+  totalVerifiedContribution: number;
+  contributionCount: number;
   status: string;
-  isSpecial: boolean;
-  countryCode?: string | null;
   createdAt: string;
-  bidReachedAt: string;
-  _count: { bids: number; payments: number; clicks: number };
+  category: { name: string };
+  _count: { contributions: number; payments: number; reports: number };
+}
+
+interface AdminReport {
+  id: string;
+  debateId: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+  debate: { id: string; title: string; authorUsername: string; status: string };
 }
 
 interface AdminPayment {
   id: string;
-  listingId: string;
-  listing: { id: string; title: string; canonicalUrl: string };
-  provider: string;
-  providerPaymentId: string;
   amount: number;
-  currency: string;
   status: string;
+  providerPaymentId: string;
   createdAt: string;
+  debateId?: string | null;
+  customerEmail?: string | null;
+}
+
+interface AdminUser {
+  id: string;
+  username: string;
+  displayName: string;
+  email: string | null;
+  bio: string | null;
+  isVerified: boolean;
+  isSuspended: boolean;
+  role: string;
+  rank: number;
+  createdAt: string;
+  _count: { debates: number; contributions: number; followers: number; following: number };
 }
 
 export default function AdminPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminEmail, setAdminEmail] = useState('vishalkumar75912@gmail.com');
   const [adminKey, setAdminKey] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'listings' | 'payments' | 'special'>('overview');
-
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [listings, setListings] = useState<AdminListing[]>([]);
-  const [payments, setPayments] = useState<AdminPayment[]>([]);
-  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
-
-  const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Special Listing Form State
-  const [specialUrl, setSpecialUrl] = useState('');
-  const [specialTitle, setSpecialTitle] = useState('');
-  const [specialDesc, setSpecialDesc] = useState('');
-  const [specialCategory, setSpecialCategory] = useState('');
-  const [specialCountry, setSpecialCountry] = useState(DEFAULT_COUNTRY_CODE);
-  const [specialBidDollars, setSpecialBidDollars] = useState(50);
-  const [specialSubmitting, setSpecialSubmitting] = useState(false);
-  const [specialSuccessMsg, setSpecialSuccessMsg] = useState<string | null>(null);
-  const [specialErrorMsg, setSpecialErrorMsg] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'debates' | 'users' | 'reports' | 'payments' | 'creators'>('overview');
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [debates, setDebates] = useState<AdminDebate[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [reports, setReports] = useState<AdminReport[]>([]);
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [creatorEconomy, setCreatorEconomy] = useState<any>(null);
+  const [ledgerSearch, setLedgerSearch] = useState('');
+  const [ledgerStatusFilter, setLedgerStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
 
-  // Check active session on mount
+  const [userSearch, setUserSearch] = useState('');
+
+  // Check existing session
   useEffect(() => {
-    checkActiveSession();
-  }, []);
-
-  const checkActiveSession = async () => {
-    try {
-      const res = await fetch('/api/admin/me');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.authenticated) {
-          setIsAuthenticated(true);
-          loadAdminData();
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/admin/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated) {
+            setIsAuthenticated(true);
+            loadAdminData();
+          }
         }
-      }
-    } catch {
-      // Not authenticated
-    }
-  };
+      } catch {}
+    };
+    checkSession();
+  }, []);
 
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [statsRes, listingsRes, paymentsRes, categoriesRes] = await Promise.all([
+      const [statsRes, debatesRes, usersRes, reportsRes, paymentsRes, creatorRes] = await Promise.all([
         fetch('/api/admin/stats'),
-        fetch('/api/admin/listings'),
+        fetch('/api/admin/debates'),
+        fetch('/api/admin/users'),
+        fetch('/api/admin/reports?status=all'),
         fetch('/api/admin/payments'),
-        fetch('/api/categories'),
+        fetch('/api/admin/creator-economy'),
       ]);
 
       if (statsRes.ok) {
         const data = await statsRes.json();
         setStats(data.metrics || null);
       }
-      if (listingsRes.ok) {
-        const data = await listingsRes.json();
-        setListings(data.listings || []);
+      if (debatesRes.ok) {
+        const data = await debatesRes.json();
+        setDebates(data.debates || []);
+      }
+      if (usersRes.ok) {
+        const data = await usersRes.json();
+        setUsers(data.users || []);
+      }
+      if (creatorRes.ok) {
+        const data = await creatorRes.json();
+        setCreatorEconomy(data);
+      }
+      if (reportsRes.ok) {
+        const data = await reportsRes.json();
+        setReports(data.reports || []);
       }
       if (paymentsRes.ok) {
         const data = await paymentsRes.json();
         setPayments(data.payments || []);
-      }
-      if (categoriesRes.ok) {
-        const data = await categoriesRes.json();
-        const cats = data.categories || [];
-        setCategories(cats);
-        if (cats.length > 0 && !specialCategory) {
-          setSpecialCategory(cats[0].id);
-        }
       }
     } catch (e) {
       console.error('Failed to load admin data:', e);
@@ -229,8 +223,8 @@ export default function AdminPage() {
       setAdminKey('');
       loadAdminData();
     } catch (err) {
-      console.error('Login request failed:', err);
-      setAuthError('Connection error. Please try again.');
+      console.error('Login error:', err);
+      setAuthError('Connection error.');
       setLoading(false);
     }
   };
@@ -238,137 +232,150 @@ export default function AdminPage() {
   const handleLogout = async () => {
     try {
       await fetch('/api/admin/logout', { method: 'POST' });
-    } catch {
-      // Logout
-    }
+    } catch {}
     setIsAuthenticated(false);
   };
 
-  const handleToggleStatus = async (listingId: string, currentStatus: string) => {
+  const handleToggleDebateStatus = async (debateId: string, currentStatus: string) => {
     const newStatus = currentStatus === 'active' ? 'hidden' : 'active';
     try {
-      const res = await fetch('/api/admin/listings', {
+      const res = await fetch('/api/admin/debates', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: listingId, status: newStatus }),
+        body: JSON.stringify({ id: debateId, status: newStatus }),
       });
 
       if (res.ok) {
-        setListings((prev) =>
-          prev.map((l) => (l.id === listingId ? { ...l, status: newStatus } : l))
+        setDebates((prev) =>
+          prev.map((d) => (d.id === debateId ? { ...d, status: newStatus } : d))
         );
         loadAdminData();
       }
     } catch (e) {
-      console.error('Toggle status failed:', e);
+      console.error('Toggle status error:', e);
     }
   };
 
-  const handleCreateSpecialListing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSpecialSubmitting(true);
-    setSpecialSuccessMsg(null);
-    setSpecialErrorMsg(null);
-
+  const handleToggleUserSuspension = async (userId: string, isSuspended: boolean) => {
     try {
-      const res = await fetch('/api/admin/listings', {
-        method: 'POST',
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          destinationUrl: specialUrl,
-          title: specialTitle || undefined,
-          description: specialDesc || undefined,
-          categoryId: specialCategory,
-          countryCode: specialCountry,
-          verifiedBidDollars: specialBidDollars,
-        }),
+        body: JSON.stringify({ userId, isSuspended: !isSuspended }),
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to create promotional listing');
+      if (res.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, isSuspended: !isSuspended } : u))
+        );
       }
-
-      setSpecialSuccessMsg(
-        `Successfully placed promotional listing for ${specialUrl} at $${specialBidDollars} rank. Zero fake payment records created.`
-      );
-      setSpecialUrl('');
-      setSpecialTitle('');
-      setSpecialDesc('');
-      loadAdminData();
-    } catch (err) {
-      setSpecialErrorMsg(err instanceof Error ? err.message : 'Error creating special listing');
-    } finally {
-      setSpecialSubmitting(false);
+    } catch (e) {
+      console.error('Toggle user suspension error:', e);
     }
   };
 
-  // Login Screen
+  const handleToggleUserVerification = async (userId: string, isVerified: boolean) => {
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, isVerified: !isVerified }),
+      });
+
+      if (res.ok) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, isVerified: !isVerified } : u))
+        );
+      }
+    } catch (e) {
+      console.error('Toggle user verification error:', e);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string, status: 'resolved' | 'dismissed') => {
+    try {
+      const res = await fetch('/api/admin/reports', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: reportId, status }),
+      });
+      if (res.ok) {
+        setReports((prev) =>
+          prev.map((r) => (r.id === reportId ? { ...r, status } : r))
+        );
+        loadAdminData();
+      }
+    } catch (e) {
+      console.error('Report status error:', e);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center p-4 text-[var(--text-primary)]">
-        <div className="max-w-md w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl p-6 sm:p-8 shadow-2xs">
-          <div className="text-center mb-6">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-3 shadow-2xs">
-              <ShieldAlert className="w-5 h-5 text-amber-500" />
+        <div className="max-w-md w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-5">
+          <div className="text-center space-y-1">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--bg-page-deep)] border border-[var(--border-color)] text-[var(--color-coral)] flex items-center justify-center mx-auto mb-2">
+              <ShieldAlert className="w-6 h-6" />
             </div>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">Admin Moderation</h1>
-            <p className="text-xs text-[var(--text-secondary)] mt-1">Authorized site administrators only</p>
+            <h1 className="text-2xl font-black text-[var(--text-primary)]">Admin Authentication</h1>
+            <p className="text-xs text-[var(--text-secondary)]">
+              IndoBid Operations & Moderation Console
+            </p>
           </div>
 
           {authError && (
-            <div className="mb-4 p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs rounded-lg text-center">
+            <div className="p-3 bg-red-500/15 border border-red-500/30 text-red-300 text-xs rounded-xl text-center">
               {authError}
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-3.5">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+              <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
                 Admin Email
               </label>
               <div className="relative">
                 <input
                   type="email"
+                  required
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="vishalkumar75912@gmail.com"
-                  required
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 rounded-lg py-2 pl-9 pr-3 text-xs text-[var(--text-primary)] focus:outline-none transition"
+                  className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none"
                 />
-                <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5" />
+                <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+              <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
                 Admin Secret Key
               </label>
               <div className="relative">
                 <input
                   type="password"
+                  required
                   value={adminKey}
                   onChange={(e) => setAdminKey(e.target.value)}
                   placeholder="Enter ADMIN_SECRET_KEY..."
-                  required
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-amber-500 rounded-lg py-2 pl-9 pr-3 text-xs text-[var(--text-primary)] focus:outline-none transition"
+                  className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none"
                 />
-                <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-2.5" />
+                <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
               </div>
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs transition cursor-pointer mt-2 disabled:opacity-50"
+              className="w-full py-3 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-black rounded-xl text-xs transition cursor-pointer disabled:opacity-50"
             >
-              {loading ? 'Authenticating...' : 'Sign In'}
+              {loading ? 'Authenticating...' : 'Sign In as Administrator'}
             </button>
           </form>
 
-          <div className="mt-5 pt-3 border-t border-[var(--border-color)] text-center">
-            <Link href="/" className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition">
-              &larr; Return to public marketplace
+          <div className="pt-2 text-center">
+            <Link href="/" className="text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+              &larr; Return to public feed
             </Link>
           </div>
         </div>
@@ -376,673 +383,629 @@ export default function AdminPage() {
     );
   }
 
-  const filteredListings = listings.filter((l) => {
-    if (statusFilter !== 'all' && l.status !== statusFilter) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      l.title.toLowerCase().includes(q) ||
-      l.canonicalUrl.toLowerCase().includes(q) ||
-      l.description.toLowerCase().includes(q)
-    );
-  });
-
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] p-4 sm:p-6">
-      <div className="max-w-6xl mx-auto space-y-4">
+    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] p-3 sm:p-6 space-y-6 w-full overflow-x-hidden">
+      <div className="max-w-6xl mx-auto space-y-6 min-w-0">
         {/* Admin Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[var(--border-color)]">
-          <div className="flex items-center space-x-2.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[var(--border-subtle)] w-full min-w-0">
+          <div className="flex items-center space-x-3">
             <Link
               href="/"
-              className="p-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+              className="p-2 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <div>
-              <h1 className="text-lg font-bold text-[var(--text-primary)] flex items-center space-x-2">
-                <span>Admin Operations & Moderation</span>
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-semibold border border-emerald-500/20">
-                  vishalkumar75912@gmail.com
+              <h1 className="text-xl font-black text-[var(--text-primary)] flex items-center space-x-2">
+                <span>IndoBid Admin Console</span>
+                <span className="text-[10px] bg-[var(--color-coral)]/15 text-[var(--color-coral)] px-2 py-0.5 rounded-full font-bold border border-[var(--color-coral)]/30">
+                  Authoritative Server
                 </span>
               </h1>
-              <p className="text-xs text-[var(--text-secondary)]">Production metrics, listing moderation, promotional placements</p>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Verified INR financial ledgers, content moderation, reports, and analytics.
+              </p>
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
-            <ThemeToggle />
-
             <button
               onClick={loadAdminData}
-              className="px-2.5 py-1.5 bg-[var(--bg-card)] hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg border border-[var(--border-color)] text-xs flex items-center space-x-1 cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-[var(--color-coral)] border border-[var(--border-color)] rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer"
             >
-              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span>Refresh</span>
             </button>
-
             <button
               onClick={handleLogout}
-              className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 rounded-lg border border-rose-500/20 text-xs font-semibold cursor-pointer transition"
+              className="px-3 py-1.5 bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-red-400 border border-[var(--border-color)] rounded-xl text-xs font-bold transition cursor-pointer"
             >
-              Logout
+              Log Out
             </button>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border-color)] pb-2">
+        {/* Tab Controls */}
+        <div className="flex items-center space-x-2 border-b border-[var(--border-subtle)] pb-3 overflow-x-auto scrollbar-none w-full min-w-0">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'overview'
-                ? 'bg-[var(--text-primary)] text-[var(--bg-card)]'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            <span>Dashboard Overview</span>
+            <span>Revenue & Metrics</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('listings')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
-              activeTab === 'listings'
-                ? 'bg-[var(--text-primary)] text-[var(--bg-card)]'
+            onClick={() => setActiveTab('debates')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'debates'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Listings ({listings.length})</span>
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Debates ({debates.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'users'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Users ({users.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'reports'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
+            }`}
+          >
+            <Flag className="w-3.5 h-3.5" />
+            <span>Reports ({reports.filter((r) => r.status === 'pending').length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('payments')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'payments'
-                ? 'bg-[var(--text-primary)] text-[var(--bg-card)]'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
             }`}
           >
             <CreditCard className="w-3.5 h-3.5" />
-            <span>Payments ({payments.length})</span>
+            <span>Payment Ledger ({payments.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('special')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer flex items-center space-x-1.5 ${
-              activeTab === 'special'
-                ? 'bg-amber-500 text-slate-950 font-bold'
-                : 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20'
+            onClick={() => setActiveTab('creators')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'creators'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>+ Special Admin Listing</span>
+            <Coins className="w-3.5 h-3.5" />
+            <span>Creator Economy</span>
           </button>
         </div>
 
         {/* 1. OVERVIEW TAB */}
         {activeTab === 'overview' && stats && (
-          <div className="space-y-4">
-            {/* Top Stat Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
-                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Verified Revenue</div>
-                <div className="text-xl sm:text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
-                  ${stats.financials.totalRevenueDollars.toLocaleString()}
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1">
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Total Verified Revenue
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--color-amber)] font-mono mt-1 block">
+                  ₹{stats.financials.totalRevenueRupees.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-[var(--text-secondary)]">
                   From {stats.payments.successful} verified payments
-                </div>
+                </span>
               </div>
 
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
-                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Verified Bids Sum</div>
-                <div className="text-xl sm:text-2xl font-extrabold text-amber-500 font-mono mt-1">
-                  ${stats.financials.totalVerifiedBidsDollars.toLocaleString()}
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1">
-                  Across {stats.listings.active} active listings
-                </div>
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Today&apos;s Revenue
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--color-amber)] font-mono mt-1 block">
+                  ₹{stats.financials.todayRevenueRupees.toLocaleString()}
+                </span>
+                <span className="text-[10px] text-[var(--text-secondary)]">Past 24 hours</span>
               </div>
 
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
-                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Total Listings</div>
-                <div className="text-xl sm:text-2xl font-extrabold text-[var(--text-primary)] mt-1">
-                  {stats.listings.total}
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1">
-                  {stats.listings.active} active · {stats.listings.pendingPayment} pending
-                </div>
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Active Debates
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono mt-1 block">
+                  {stats.debates.active}
+                </span>
+                <span className="text-[10px] text-[var(--text-secondary)]">
+                  {stats.debates.total} total submitted
+                </span>
               </div>
 
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl shadow-2xs">
-                <div className="text-[11px] text-[var(--text-secondary)] font-semibold uppercase">Outbound Clicks</div>
-                <div className="text-xl sm:text-2xl font-extrabold text-sky-500 mt-1">
-                  {stats.traffic.totalRecordedClicks}
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1">
-                  Deduplicated by IP hash
-                </div>
-              </div>
-            </div>
-
-            {/* Second Row: Payment Breakdown & Listing Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-2">
-                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
-                  <span>Payment Ledger Status</span>
-                  <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
-                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)]">Successful</div>
-                    <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{stats.payments.successful}</div>
-                  </div>
-                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)]">Failed</div>
-                    <div className="text-base font-bold text-rose-500 mt-0.5">{stats.payments.failed}</div>
-                  </div>
-                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)]">Canceled</div>
-                    <div className="text-base font-bold text-[var(--text-secondary)] mt-0.5">{stats.payments.canceled}</div>
-                  </div>
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] pt-1">
-                  Revenue is computed strictly from successful settled payments.
-                </div>
-              </div>
-
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-2">
-                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
-                  <span>Listings & Promotional Status</span>
-                  <Tag className="w-4 h-4 text-amber-500" />
-                </div>
-                <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
-                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)]">Active Public</div>
-                    <div className="text-base font-bold text-[var(--text-primary)] mt-0.5">{stats.listings.active}</div>
-                  </div>
-                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)]">Pending Pay</div>
-                    <div className="text-base font-bold text-amber-500 mt-0.5">{stats.listings.pendingPayment}</div>
-                  </div>
-                  <div className="bg-[var(--bg-surface)] p-2 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)]">Admin Special</div>
-                    <div className="text-base font-bold text-purple-500 mt-0.5">{stats.listings.specialPromotional}</div>
-                  </div>
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] pt-1">
-                  Pending listings are strictly invisible to the public leaderboard.
-                </div>
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Total Debaters
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono mt-1 block">
+                  {stats.users.total}
+                </span>
+                <span className="text-[10px] text-[var(--text-secondary)]">Registered accounts</span>
               </div>
             </div>
-
-            {/* Third Row: Real Production Visitor Analytics */}
-            {stats.visitors && (
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-3">
-                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5">
-                    <Users className="w-4 h-4 text-emerald-500" />
-                    <span>Real Production Visitor Analytics</span>
-                  </div>
-                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded font-semibold border border-emerald-500/20">
-                    100% Genuine Browser Sessions
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs">
-                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Live Active (2m)</div>
-                    <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center space-x-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                      <span>{stats.visitors.liveActive}</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Today</div>
-                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
-                      {stats.visitors.today}
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Yesterday</div>
-                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
-                      {stats.visitors.yesterday}
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Last 7 Days</div>
-                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
-                      {stats.visitors.last7Days}
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)] font-medium">Last 30 Days</div>
-                    <div className="text-lg font-bold text-[var(--text-primary)] mt-0.5">
-                      {stats.visitors.last30Days}
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-2.5 rounded-lg border border-[var(--border-color)]">
-                    <div className="text-[10px] text-[var(--text-muted)] font-medium">All-Time Unique</div>
-                    <div className="text-lg font-bold text-amber-500 mt-0.5">
-                      {stats.visitors.allTime.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-[10px] text-[var(--text-muted)] pt-0.5">
-                  Calculated exclusively from verified database browser sessions. Bot traffic, Render health checks (/api/health), and API polling are strictly excluded.
-                </div>
-              </div>
-            )}
-
-            {/* Fourth Row: Top Listings by Real Visits */}
-            {stats.topVisitedListings && stats.topVisitedListings.length > 0 && (
-              <div className="bg-[var(--bg-card)] border border-[var(--border-color)] p-4 rounded-xl space-y-3">
-                <div className="text-xs font-bold text-[var(--text-primary)] border-b border-[var(--border-color)] pb-2 flex items-center justify-between">
-                  <div className="flex items-center space-x-1.5">
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                    <span>Top Listings by Real Page Visits (Best of All)</span>
-                  </div>
-                  <span className="text-[10px] text-[var(--text-muted)]">
-                    Individual /listing/[id] view analytics
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
-                    <thead>
-                      <tr className="border-b border-[var(--border-color)] text-[10px] text-[var(--text-muted)] uppercase">
-                        <th className="pb-2 font-semibold">Rank</th>
-                        <th className="pb-2 font-semibold">Listing</th>
-                        <th className="pb-2 font-semibold">Category</th>
-                        <th className="pb-2 font-semibold">Verified Bid</th>
-                        <th className="pb-2 font-semibold text-right">Real Visits</th>
-                        <th className="pb-2 font-semibold text-right">Clicks</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--border-color)]">
-                      {stats.topVisitedListings.map((item, index) => (
-                        <tr key={item.id} className="hover:bg-[var(--bg-surface)] transition">
-                          <td className="py-2.5 font-bold text-amber-500 font-mono">
-                            #{index + 1}
-                          </td>
-                          <td className="py-2.5">
-                            <div className="flex items-center space-x-1.5">
-                              <PlatformIcon type={item.destinationType} className="w-3.5 h-3.5 text-[var(--text-muted)]" />
-                              <Link
-                                href={`/listing/${item.id}`}
-                                className="font-semibold text-[var(--text-primary)] hover:text-amber-500 transition"
-                              >
-                                {item.title}
-                              </Link>
-                              {item.countryCode && (
-                                <span className="text-xs">{getCountryFlag(item.countryCode)}</span>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-[var(--text-muted)] font-mono truncate max-w-[200px]">
-                              {item.canonicalUrl}
-                            </div>
-                          </td>
-                          <td className="py-2.5 text-[var(--text-secondary)]">
-                            {item.category.name}
-                          </td>
-                          <td className="py-2.5 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                            ${(item.verifiedBid / 100).toLocaleString()}
-                          </td>
-                          <td className="py-2.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                            👁 {item.visitCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 text-right font-mono text-[var(--text-secondary)]">
-                            {item.clickCount.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* 2. SPECIAL ADMIN LISTING FORM */}
-        {activeTab === 'special' && (
-          <div className="max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-5 sm:p-6 space-y-4">
-            <div>
-              <div className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold mb-1">
-                <Sparkles className="w-3.5 h-3.5 mr-1" />
-                <span>Admin Special Placement</span>
+        {/* 2. DEBATES TAB */}
+        {activeTab === 'debates' && (
+          <div className="space-y-4 w-full min-w-0">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-x-auto shadow-xl w-full min-w-0">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
+                  <tr>
+                    <th className="py-3 px-4">Debate Opinion</th>
+                    <th className="py-3 px-4">Author</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Total Backed</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Moderation Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)]">
+                  {debates.map((d) => (
+                    <tr key={d.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                      <td className="py-3 px-4 font-bold text-[var(--text-primary)] max-w-xs truncate">
+                        {d.title}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">
+                        @{d.authorUsername}
+                      </td>
+                      <td className="py-3 px-4 text-[var(--text-secondary)]">{d.category?.name}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-[var(--color-amber)]">
+                        {formatINR(d.totalVerifiedContribution)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            d.status === 'active'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-amber-500/20 text-amber-400'
+                          }`}
+                        >
+                          {d.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => handleToggleDebateStatus(d.id, d.status)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            d.status === 'active'
+                              ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30'
+                              : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                          }`}
+                        >
+                          {d.status === 'active' ? 'Hide Debate' : 'Unhide Debate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 3. USERS TAB */}
+        {activeTab === 'users' && (
+          <div className="space-y-4 w-full min-w-0">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-x-auto shadow-xl w-full min-w-0">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
+                  <tr>
+                    <th className="py-3 px-4">User</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Debates</th>
+                    <th className="py-3 px-4">Followers</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)]">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-[var(--text-primary)]">{u.displayName}</span>
+                          <span className="text-[11px] text-[var(--text-muted)]">@{u.username}</span>
+                          {u.isVerified && <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)]" />}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-[var(--text-secondary)]">{u.email || '—'}</td>
+                      <td className="py-3 px-4 font-mono">{u._count.debates}</td>
+                      <td className="py-3 px-4 font-mono">{u._count.followers}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            u.isSuspended
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-emerald-500/20 text-emerald-400'
+                          }`}
+                        >
+                          {u.isSuspended ? 'Suspended' : 'Active'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-2">
+                        <button
+                          onClick={() => handleToggleUserVerification(u.id, u.isVerified)}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[var(--bg-page-deep)] hover:bg-[var(--bg-elevated)] border border-[var(--border-subtle)] text-[var(--text-secondary)] transition cursor-pointer"
+                        >
+                          {u.isVerified ? 'Unverify' : 'Verify'}
+                        </button>
+                        <button
+                          onClick={() => handleToggleUserSuspension(u.id, u.isSuspended)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                            u.isSuspended
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-red-500/15 text-red-300 border border-red-500/30'
+                          }`}
+                        >
+                          {u.isSuspended ? 'Restore' : 'Suspend'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 4. REPORTS TAB */}
+        {activeTab === 'reports' && (
+          <div className="space-y-4 w-full min-w-0">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-x-auto shadow-xl w-full min-w-0">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
+                  <tr>
+                    <th className="py-3 px-4">Report Reason</th>
+                    <th className="py-3 px-4">Reported Debate</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Moderation Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)]">
+                  {reports.map((r) => (
+                    <tr key={r.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                      <td className="py-3 px-4 text-red-300 font-medium">{r.reason}</td>
+                      <td className="py-3 px-4 text-[var(--text-primary)]">
+                        {r.debate?.title || 'Unknown debate'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            r.status === 'pending'
+                              ? 'bg-amber-500/20 text-amber-400'
+                              : 'bg-emerald-500/20 text-emerald-400'
+                          }`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-2">
+                        {r.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => handleResolveReport(r.id, 'resolved')}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-pointer"
+                            >
+                              Resolve
+                            </button>
+                            <button
+                              onClick={() => handleResolveReport(r.id, 'dismissed')}
+                              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-[var(--bg-page-deep)] text-[var(--text-muted)] border border-[var(--border-subtle)] cursor-pointer"
+                            >
+                              Dismiss
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 5. PAYMENTS LEDGER TAB */}
+        {activeTab === 'payments' && (
+          <div className="space-y-4 w-full min-w-0">
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-x-auto shadow-xl w-full min-w-0">
+              <table className="w-full min-w-[640px] text-left text-xs">
+                <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
+                  <tr>
+                    <th className="py-3 px-4">Payment ID</th>
+                    <th className="py-3 px-4">Amount (INR)</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Email</th>
+                    <th className="py-3 px-4">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--border-subtle)]">
+                  {payments.map((p) => (
+                    <tr key={p.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                      <td className="py-3 px-4 font-mono text-[var(--color-coral)]">
+                        {p.providerPaymentId}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold text-[var(--color-amber)]">
+                        {formatINR(p.amount)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            p.status === 'succeeded'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-red-500/20 text-red-400'
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-[var(--text-secondary)]">{p.customerEmail || '—'}</td>
+                      <td className="py-3 px-4 text-[var(--text-muted)]">
+                        {new Date(p.createdAt).toLocaleDateString('en-IN', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 6. CREATOR ECONOMY TAB */}
+        {activeTab === 'creators' && (
+          <div className="space-y-6">
+            {/* KPI Summary Row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Creator Rewards Generated
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--color-amber)] font-mono mt-1 block">
+                  {formatINR(creatorEconomy?.summary?.totalCreatorRewardsPaise || 0)}
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">10% of external backing</span>
               </div>
-              <h2 className="text-lg font-bold text-[var(--text-primary)]">Add Promotional / Special Listing</h2>
-              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                Place a legitimate promotional listing at any rank without going through user payment. Creates <strong>zero fake payment/revenue records</strong>.
-              </p>
+
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Eligible Community Backing
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-primary)] font-mono mt-1 block">
+                  {formatINR(creatorEconomy?.summary?.totalVerifiedBackingPaise || 0)}
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">Verified challenger responses</span>
+              </div>
+
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Pending / In Settlement
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-[var(--text-secondary)] font-mono mt-1 block">
+                  {formatINR(creatorEconomy?.summary?.totalPendingRewardsPaise || 0)}
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">Settlement verification</span>
+              </div>
+
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-4 rounded-2xl">
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[var(--text-muted)] block">
+                  Earning Creators
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono mt-1 block">
+                  {creatorEconomy?.summary?.earningCreatorsCount || 0}
+                </span>
+                <span className="text-[11px] text-[var(--text-muted)]">Active opinion authors</span>
+              </div>
             </div>
 
-            {specialSuccessMsg && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 rounded-lg text-xs flex items-start space-x-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span>{specialSuccessMsg}</span>
-              </div>
-            )}
+            {/* Top Earners Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Top Earning Creators */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                    Top Earning Creators
+                  </h3>
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">10% Rate</span>
+                </div>
 
-            {specialErrorMsg && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-800 dark:text-rose-300 rounded-lg text-xs flex items-start space-x-2">
-                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                <span>{specialErrorMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateSpecialListing} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                  Destination URL <span className="text-amber-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={specialUrl}
-                  onChange={(e) => setSpecialUrl(e.target.value)}
-                  placeholder="https://partner-startup.com"
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
-                />
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {creatorEconomy?.topEarningCreators?.length > 0 ? (
+                    creatorEconomy.topEarningCreators.map((c: any, i: number) => (
+                      <div key={i} className="py-2.5 flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-[var(--text-muted)] text-[11px]">#{i + 1}</span>
+                          <span className="font-bold text-[var(--text-primary)]">@{c.username}</span>
+                          <span className="text-[10px] text-[var(--text-muted)]">({c.count} responses)</span>
+                        </div>
+                        <span className="font-mono font-bold text-[var(--color-amber)]">
+                          {formatINR(c.totalEarnedPaise)}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-xs text-[var(--text-muted)]">No creator earnings recorded yet.</div>
+                  )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Top Earning Opinions */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                    Top Earning Opinions
+                  </h3>
+                  <span className="text-[10px] text-[var(--text-muted)] font-mono">Ranked by Reward</span>
+                </div>
+
+                <div className="divide-y divide-[var(--border-subtle)]">
+                  {creatorEconomy?.topEarningOpinions?.length > 0 ? (
+                    creatorEconomy.topEarningOpinions.map((o: any, i: number) => (
+                      <div key={i} className="py-2.5 space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[var(--text-primary)] truncate max-w-[240px]">
+                            {o.title}
+                          </span>
+                          <span className="font-mono font-bold text-[var(--color-amber)]">
+                            {formatINR(o.creatorRewardPaise)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
+                          <span>by @{o.creatorUsername}</span>
+                          <span>Total Backed: {formatINR(o.totalBackingPaise)}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-6 text-center text-xs text-[var(--text-muted)]">No opinions with external backing yet.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Auditable Creator Earnings Ledger Table */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-5 space-y-4 shadow-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                    Display Title
-                  </label>
+                  <h3 className="text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                    Immutable Creator Earnings Ledger
+                  </h3>
+                  <p className="text-[11px] text-[var(--text-secondary)]">
+                    Audit trail: Opinion → Contribution → Verified Payment → Creator Reward (10%)
+                  </p>
+                </div>
+
+                <div className="flex items-center space-x-2">
                   <input
                     type="text"
-                    value={specialTitle}
-                    onChange={(e) => setSpecialTitle(e.target.value)}
-                    placeholder="e.g. Acme AI"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                    placeholder="Search by creator, opinion..."
+                    value={ledgerSearch}
+                    onChange={(e) => setLedgerSearch(e.target.value)}
+                    className="bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none w-56"
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                    Category <span className="text-amber-500">*</span>
-                  </label>
                   <select
-                    value={specialCategory}
-                    onChange={(e) => setSpecialCategory(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
+                    value={ledgerStatusFilter}
+                    onChange={(e) => setLedgerStatusFilter(e.target.value)}
+                    className="bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] rounded-xl px-2.5 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none"
                   >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                    Country <span className="text-amber-500">*</span>
-                  </label>
-                  <select
-                    value={specialCountry}
-                    onChange={(e) => setSpecialCountry(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
-                  >
-                    {POPULAR_COUNTRIES.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.flag} {c.name}
-                      </option>
-                    ))}
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="available">Available</option>
+                    <option value="paid">Paid</option>
+                    <option value="reversed">Reversed</option>
                   </select>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                  Displayed Ranking Bid ($ USD) <span className="text-amber-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-xs font-semibold text-[var(--text-muted)]">$</span>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={specialBidDollars}
-                    onChange={(e) => setSpecialBidDollars(parseInt(e.target.value, 10) || 0)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 pl-7 pr-3 text-xs text-[var(--text-primary)] font-mono font-bold focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div className="text-[10px] text-[var(--text-muted)] mt-1">
-                  This sets the public leaderboard ranking position. It will NOT inflate verified revenue.
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-primary)] mb-1">
-                  Description
-                </label>
-                <textarea
-                  rows={2}
-                  value={specialDesc}
-                  onChange={(e) => setSpecialDesc(e.target.value)}
-                  placeholder="Official promotional partner..."
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg py-2 px-3 text-xs text-[var(--text-primary)] focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={specialSubmitting}
-                className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs shadow-2xs transition cursor-pointer disabled:opacity-50"
-              >
-                {specialSubmitting ? 'Creating Special Listing...' : 'Activate Special Listing'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* 3. LISTINGS TAB */}
-        {activeTab === 'listings' && (
-          <div className="space-y-3">
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter listings..."
-                  className="w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg py-1.5 pl-8 pr-3 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center space-x-1.5">
-                {['all', 'active', 'hidden', 'pending_payment'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize transition cursor-pointer ${
-                      statusFilter === status
-                        ? 'bg-[var(--text-primary)] text-[var(--bg-card)] font-semibold'
-                        : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:bg-[var(--bg-surface)]'
-                    }`}
-                  >
-                    {status.replace('_', ' ')}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Listings Table */}
-            <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl overflow-hidden shadow-2xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="text-[var(--text-secondary)] border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
+                  <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
                     <tr>
-                      <th className="py-2.5 px-3 font-semibold">Listing</th>
-                      <th className="py-2.5 px-3 font-semibold">Category</th>
-                      <th className="py-2.5 px-3 font-semibold">Country</th>
-                      <th className="py-2.5 px-3 font-semibold">Verified Bid</th>
-                      <th className="py-2.5 px-3 font-semibold">Type</th>
-                      <th className="py-2.5 px-3 font-semibold">Visits</th>
-                      <th className="py-2.5 px-3 font-semibold">Clicks</th>
-                      <th className="py-2.5 px-3 font-semibold">Status</th>
-                      <th className="py-2.5 px-3 font-semibold text-right">Actions</th>
+                      <th className="py-3 px-4">Creator</th>
+                      <th className="py-3 px-4">Opinion Topic</th>
+                      <th className="py-3 px-4">Contributed By</th>
+                      <th className="py-3 px-4">Gross Backing</th>
+                      <th className="py-3 px-4">Creator Reward (10%)</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Timestamp</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--border-color)]">
-                    {filteredListings.length === 0 ? (
+                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                    {creatorEconomy?.ledger?.items?.length > 0 ? (
+                      creatorEconomy.ledger.items
+                        .filter((e: any) => {
+                          if (ledgerStatusFilter !== 'all' && e.status !== ledgerStatusFilter) return false;
+                          if (ledgerSearch) {
+                            const q = ledgerSearch.toLowerCase();
+                            return (
+                              e.creatorUsername.toLowerCase().includes(q) ||
+                              e.debateTitle.toLowerCase().includes(q) ||
+                              e.contributorUsername.toLowerCase().includes(q)
+                            );
+                          }
+                          return true;
+                        })
+                        .map((e: any) => (
+                          <tr key={e.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                            <td className="py-3 px-4 font-bold text-[var(--text-primary)]">
+                              @{e.creatorUsername}
+                            </td>
+                            <td className="py-3 px-4 text-[var(--text-secondary)] max-w-xs truncate">
+                              {e.debateTitle}
+                            </td>
+                            <td className="py-3 px-4 text-[var(--text-muted)]">
+                              @{e.contributorUsername} (Seq #{e.contributionSequence})
+                            </td>
+                            <td className="py-3 px-4 font-mono font-bold text-[var(--text-primary)]">
+                              {formatINR(e.grossAmountPaise)}
+                            </td>
+                            <td className="py-3 px-4 font-mono font-bold text-[var(--color-amber)]">
+                              {formatINR(e.creatorRewardPaise)}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  e.status === 'available' || e.status === 'paid'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : e.status === 'reversed'
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-amber-500/20 text-amber-400'
+                                }`}
+                              >
+                                {e.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-[var(--text-muted)]">
+                              {new Date(e.createdAt).toLocaleDateString('en-IN', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                          </tr>
+                        ))
+                    ) : (
                       <tr>
-                        <td colSpan={9} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                          No listings matching filter.
+                        <td colSpan={7} className="py-8 text-center text-xs text-[var(--text-muted)]">
+                          No creator earnings ledger entries recorded yet.
                         </td>
                       </tr>
-                    ) : (
-                      filteredListings.map((l) => (
-                        <tr key={l.id} className="hover:bg-[var(--bg-surface)] transition">
-                          <td className="py-3 px-3">
-                            <div className="flex items-center space-x-2.5">
-                              <div className="w-7 h-7 rounded bg-[var(--bg-surface)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] shrink-0">
-                                <PlatformIcon type={l.destinationType} className="w-3.5 h-3.5" />
-                              </div>
-                              <div className="min-w-0 max-w-xs">
-                                <div className="font-semibold text-[var(--text-primary)] truncate">{l.title}</div>
-                                <div className="text-[10px] text-[var(--text-muted)] truncate">{l.canonicalUrl}</div>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="py-3 px-3 text-[var(--text-secondary)]">
-                            {l.category?.name || 'Uncategorized'}
-                          </td>
-
-                          <td className="py-3 px-3 text-[var(--text-secondary)]">
-                            <span className="inline-flex items-center space-x-1 font-medium">
-                              <span>{getCountryFlag(l.countryCode)}</span>
-                              <span>{getCountryName(l.countryCode)}</span>
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                            ${(l.verifiedBid / 100).toLocaleString()}
-                          </td>
-
-                          <td className="py-3 px-3">
-                            {l.isSpecial ? (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                                Admin Special
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-surface)] text-[var(--text-secondary)] border border-[var(--border-color)]">
-                                Standard Paid
-                              </span>
-                            )}
-                          </td>
-
-                          <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                            👁 {l.visitCount ?? 0}
-                          </td>
-
-                          <td className="py-3 px-3 font-mono text-[var(--text-secondary)]">
-                            {l.clickCount}
-                          </td>
-
-                          <td className="py-3 px-3">
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-semibold capitalize ${
-                                l.status === 'active'
-                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                  : l.status === 'pending_payment'
-                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
-                                  : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                              }`}
-                            >
-                              {l.status.replace('_', ' ')}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-3 text-right">
-                            <button
-                              onClick={() => handleToggleStatus(l.id, l.status)}
-                              className="px-2 py-1 bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded border border-[var(--border-color)] text-[11px] font-medium transition cursor-pointer"
-                            >
-                              {l.status === 'active' ? 'Hide' : 'Activate'}
-                            </button>
-                          </td>
-                        </tr>
-                      ))
                     )}
                   </tbody>
                 </table>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* 4. PAYMENTS TAB */}
-        {activeTab === 'payments' && (
-          <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl overflow-hidden shadow-2xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="text-[var(--text-secondary)] border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
-                  <tr>
-                    <th className="py-2.5 px-3 font-semibold">Payment ID</th>
-                    <th className="py-2.5 px-3 font-semibold">Listing</th>
-                    <th className="py-2.5 px-3 font-semibold">Gateway</th>
-                    <th className="py-2.5 px-3 font-semibold">Amount</th>
-                    <th className="py-2.5 px-3 font-semibold">Status</th>
-                    <th className="py-2.5 px-3 font-semibold">Time (UTC)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-color)]">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-8 text-center text-xs text-[var(--text-muted)]">
-                        No payment records in ledger.
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map((p) => (
-                      <tr key={p.id} className="hover:bg-[var(--bg-surface)] transition">
-                        <td className="py-3 px-3 font-mono text-[11px] text-[var(--text-secondary)]">
-                          {p.providerPaymentId}
-                        </td>
-                        <td className="py-3 px-3 font-semibold text-[var(--text-primary)]">
-                          {p.listing?.title || 'Unknown'}
-                        </td>
-                        <td className="py-3 px-3 uppercase text-[10px] text-[var(--text-muted)] font-bold">
-                          {p.provider}
-                        </td>
-                        <td className="py-3 px-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          ${(p.amount / 100).toLocaleString()}
-                        </td>
-                        <td className="py-3 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                              p.status === 'succeeded'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
-                            }`}
-                          >
-                            {p.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 font-mono text-[10px] text-[var(--text-muted)]">
-                          {new Date(p.createdAt).toISOString().replace('T', ' ').substring(0, 19)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
             </div>
           </div>
         )}

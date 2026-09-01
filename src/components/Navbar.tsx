@@ -2,137 +2,222 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Building2, PlusCircle, Menu, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  Search,
+  Bell,
+  MessageSquare,
+  Sun,
+  Moon,
+  Plus,
+  LogIn,
+  ShieldCheck,
+  LogOut,
+  User as UserIcon,
+  Bookmark,
+  Coins,
+} from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
+import { Logo } from '@/components/Logo';
+import { Avatar } from '@/components/Avatar';
 
 interface NavbarProps {
-  onOpenBidModal?: (initialData?: { url?: string; targetBidDollars?: number; categoryId?: string }) => void;
-  minToTakeFirstDollars?: number;
+  onOpenCreate?: () => void;
 }
 
-export function Navbar({ onOpenBidModal, minToTakeFirstDollars }: NavbarProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+export function Navbar({ onOpenCreate }: NavbarProps) {
+  const router = useRouter();
+  const { user, openAuthModal, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const [search, setSearch] = useState('');
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
-  const handleClaimClick = () => {
-    if (onOpenBidModal) {
-      onOpenBidModal({ targetBidDollars: minToTakeFirstDollars || 2 });
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (search.trim()) {
+      router.push(`/explore?search=${encodeURIComponent(search.trim())}`);
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[var(--border-color)] bg-[#F8F6EF]/95 backdrop-blur-md transition-colors">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-15 sm:h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-40 w-full bg-[var(--bg-page)]/90 backdrop-blur-md border-b border-[var(--border-subtle)]">
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2 sm:gap-4 min-w-0">
         {/* Brand Logo */}
-        <Link href="/" className="flex items-center space-x-2.5 group">
-          <div className="w-8 h-8 rounded-lg bg-[#087F78] flex items-center justify-center text-white font-bold shadow-xs transition-transform group-hover:scale-105">
-            <Building2 className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="font-extrabold text-base tracking-tight text-[#102536]">
-              indobid<span className="text-[#DE8063] font-black">.lol</span>
-            </span>
-            <span className="inline-flex items-center space-x-1 text-[10px] font-bold tracking-wider uppercase bg-[#DDF2EF] text-[#087F78] px-2 py-0.5 rounded-full border border-[#B9DFDA]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#087F78] animate-pulse" />
-              <span>City Live</span>
-            </span>
-          </div>
-        </Link>
+        <div className="shrink-0">
+          <Logo size="sm" />
+        </div>
 
-        {/* Desktop Navigation Links */}
-        <nav className="hidden md:flex items-center space-x-7 text-sm font-medium text-[#405866]">
-          <Link
-            href="/#live-office"
-            className="text-[#102536] font-bold relative pb-0.5 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-[#087F78] after:rounded-full transition flex items-center space-x-1"
-          >
-            <span>Live Office</span>
-          </Link>
-          <Link
-            href="/#leaderboard"
-            className="hover:text-[#102536] transition"
-          >
-            Leaderboard
-          </Link>
-          <Link
-            href="/#best-of-all"
-            className="hover:text-[#102536] transition flex items-center space-x-1"
-          >
-            <span>Best of All</span>
-          </Link>
-          <Link
-            href="/#how-it-works"
-            className="hover:text-[#102536] transition"
-          >
-            How it Works
-          </Link>
-        </nav>
+        {/* Global Search Bar (Medium & Up) */}
+        <form onSubmit={handleSearchSubmit} className="hidden md:flex flex-1 max-w-sm relative min-w-0">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search opinions, debaters..."
+            className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition"
+          />
+          <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-2.5" />
+        </form>
 
-        {/* Desktop CTA & Mobile Toggle */}
-        <div className="flex items-center space-x-3">
-          {onOpenBidModal && (
+        {/* Action Items */}
+        <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-1.5 sm:p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? (
+              <Sun className="w-4 h-4 text-[var(--color-amber)]" />
+            ) : (
+              <Moon className="w-4 h-4 text-[var(--color-slate)]" />
+            )}
+          </button>
+
+          {/* Notifications Bell */}
+          <Link
+            href={user ? '/notifications' : '#'}
+            onClick={(e) => {
+              if (!user) {
+                e.preventDefault();
+                openAuthModal('login');
+              }
+            }}
+            className="p-1.5 sm:p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition relative"
+            title="Notifications"
+            aria-label="Notifications"
+          >
+            <Bell className="w-4 h-4" />
+            {Boolean(user?.unreadNotificationsCount && user.unreadNotificationsCount > 0) && (
+              <span className="w-2 h-2 rounded-full bg-[var(--color-coral)] absolute top-1 right-1" />
+            )}
+          </Link>
+
+          {/* Messages Link (Desktop & Tablet) */}
+          <Link
+            href={user ? '/messages' : '#'}
+            onClick={(e) => {
+              if (!user) {
+                e.preventDefault();
+                openAuthModal('login');
+              }
+            }}
+            className="p-2 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition relative hidden sm:flex"
+            title="Messages"
+            aria-label="Messages"
+          >
+            <MessageSquare className="w-4 h-4" />
+            {Boolean(user?.unreadMessagesCount && user.unreadMessagesCount > 0) && (
+              <span className="w-2 h-2 rounded-full bg-[var(--color-coral)] absolute top-1.5 right-1.5" />
+            )}
+          </Link>
+
+          {/* + Post Button */}
+          {onOpenCreate ? (
             <button
-              onClick={handleClaimClick}
-              className="hidden md:inline-flex px-4 py-2 bg-[#DE8063] hover:bg-[#CF6F55] text-white font-bold rounded-xl text-xs sm:text-sm shadow-xs transition-all duration-150 items-center space-x-1.5 cursor-pointer hover:shadow-sm active:scale-[0.98]"
+              onClick={onOpenCreate}
+              className="px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center space-x-1 cursor-pointer shrink-0"
             >
-              <PlusCircle className="w-4 h-4 text-white" />
-              <span>+ Claim Your Spot</span>
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span className="hidden sm:inline">Post · ₹10</span>
+              <span className="sm:hidden font-bold">Post</span>
             </button>
+          ) : (
+            <Link
+              href="/?create=true"
+              className="px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center space-x-1 shrink-0"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3]" />
+              <span className="hidden sm:inline">Post · ₹10</span>
+              <span className="sm:hidden font-bold">Post</span>
+            </Link>
           )}
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden w-9 h-9 rounded-lg border border-[var(--border-color)] bg-white flex items-center justify-center text-[#102536] hover:bg-[var(--bg-surface)] transition cursor-pointer"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-          </button>
+          {/* Profile Dropdown or Sign In */}
+          {user ? (
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                className="rounded-xl overflow-hidden cursor-pointer transition focus:outline-none p-0.5"
+                aria-label="User menu"
+              >
+                <Avatar
+                  src={user.avatarUrl}
+                  name={user.displayName}
+                  username={user.username}
+                  size="sm"
+                />
+              </button>
+
+              {profileDropdownOpen && (
+                <div
+                  className="absolute right-0 mt-2 w-48 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl py-1.5 z-50 text-xs"
+                  onClick={() => setProfileDropdownOpen(false)}
+                >
+                  <div className="px-3 py-2 border-b border-[var(--border-subtle)]">
+                    <p className="font-bold text-[var(--text-primary)] truncate">{user.displayName}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">@{user.username}</p>
+                  </div>
+
+                  <Link
+                    href={`/profile/${user.username}`}
+                    className="flex items-center space-x-2 px-3 py-2 text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition"
+                  >
+                    <UserIcon className="w-3.5 h-3.5 text-[var(--color-coral)]" />
+                    <span>View Profile</span>
+                  </Link>
+
+                  <Link
+                    href={`/profile/${user.username}?tab=earnings`}
+                    className="flex items-center space-x-2 px-3 py-2 text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition"
+                  >
+                    <Coins className="w-3.5 h-3.5 text-[var(--color-amber)]" />
+                    <span>Creator Earnings</span>
+                  </Link>
+
+                  <Link
+                    href="/saved"
+                    className="flex items-center space-x-2 px-3 py-2 text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition"
+                  >
+                    <Bookmark className="w-3.5 h-3.5 text-[var(--color-amber)]" />
+                    <span>Saved Opinions</span>
+                  </Link>
+
+                  {user.role === 'admin' && (
+                    <Link
+                      href="/admin"
+                      className="flex items-center space-x-2 px-3 py-2 text-[var(--color-amber)] hover:bg-[var(--bg-card-hover)] transition"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Admin Console</span>
+                    </Link>
+                  )}
+
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center space-x-2 px-3 py-2 text-red-400 hover:bg-[var(--bg-card-hover)] transition cursor-pointer text-left"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => openAuthModal('login')}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-xs font-bold transition flex items-center space-x-1 cursor-pointer shrink-0"
+            >
+              <LogIn className="w-3.5 h-3.5 text-[var(--color-coral)]" />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
-
-      {/* Mobile Menu Drawer */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-[var(--border-color)] bg-white px-4 py-3 space-y-2 animate-in slide-in-from-top-2 duration-150">
-          <Link
-            href="/#live-office"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-lg text-sm font-bold text-[#087F78] bg-[#DDF2EF]"
-          >
-            Live Office
-          </Link>
-          <Link
-            href="/#leaderboard"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-lg text-sm font-medium text-[#102536] hover:bg-[var(--bg-surface)]"
-          >
-            Leaderboard
-          </Link>
-          <Link
-            href="/#best-of-all"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-lg text-sm font-medium text-[#102536] hover:bg-[var(--bg-surface)]"
-          >
-            Best of All
-          </Link>
-          <Link
-            href="/#how-it-works"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-lg text-sm font-medium text-[#102536] hover:bg-[var(--bg-surface)]"
-          >
-            How it Works
-          </Link>
-          {onOpenBidModal && (
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                handleClaimClick();
-              }}
-              className="w-full mt-2 px-4 py-2.5 bg-[#DE8063] text-white font-bold rounded-xl text-sm shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 text-white" />
-              <span>+ Claim Your Spot</span>
-            </button>
-          )}
-        </div>
-      )}
     </header>
   );
 }
+
+export default Navbar;

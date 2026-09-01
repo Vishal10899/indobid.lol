@@ -7,6 +7,36 @@ generator client {
   provider = "prisma-client-js"
 }
 
+model User {
+  id               String          @id @default(cuid())
+  email            String?         @unique
+  username         String?         @unique
+  displayName      String?         @map("display_name")
+  avatarUrl        String?         @map("avatar_url")
+  bio              String?
+  passwordHash     String?         @map("password_hash")
+  isVerified       Boolean         @default(false) @map("is_verified")
+  isSuspended      Boolean         @default(false) @map("is_suspended")
+  interests        String?
+  rank             Int             @default(0)
+  role             String          @default("user") // admin, user
+  createdAt        DateTime        @default(now()) @map("created_at")
+  
+  debates          Debate[]
+  contributions    Contribution[]
+  likes            DebateLike[]
+  bookmarks        DebateBookmark[]
+  following        Follow[]        @relation("UserFollows")
+  followers        Follow[]        @relation("UserFollowedBy")
+  sentMessages     DirectMessage[] @relation("SentMessages")
+  receivedMessages DirectMessage[] @relation("ReceivedMessages")
+  notifications    Notification[]
+  earningsLedgerEntries CreatorEarningsLedger[]
+  payoutAccount    PayoutAccount?
+
+  @@map("users")
+}
+
 model Category {
   id        String    @id @default(cuid())
   name      String
@@ -14,11 +44,303 @@ model Category {
   icon      String?
   sortOrder Int       @default(0) @map("sort_order")
   createdAt DateTime  @default(now()) @map("created_at")
+  debates   Debate[]
   listings  Listing[]
 
   @@index([sortOrder(sort: Asc)])
   @@map("categories")
 }
+
+model Debate {
+  id                         String         @id @default(cuid())
+  authorId                   String?        @map("author_id")
+  author                     User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorUsername             String         @default("anonymous") @map("author_username")
+  authorDisplayName          String         @default("Debater") @map("author_display_name")
+  title                      String         // The opinion/topic headline
+  content                    String         // The main argument / viewpoint
+  categoryId                 String         @map("category_id")
+  category                   Category       @relation(fields: [categoryId], references: [id])
+  originalContribution       Int            @default(1000) @map("original_contribution") // in paise (₹10 = 1000)
+  totalVerifiedContribution  Int            @default(0) @map("total_verified_contribution") // in paise
+  contributionCount          Int            @default(0) @map("contribution_count")
+  lastContributionAmount     Int            @default(0) @map("last_contribution_amount") // in paise
+  lastContributionAt         DateTime       @default(now()) @map("last_contribution_at")
+  status                     String         @default("pending_payment") // active, hidden, pending_payment, removed
+  trendingScore              Float          @default(0.0) @map("trending_score")
+  reportCount                Int            @default(0) @map("report_count")
+  isAnonymous                Boolean        @default(false) @map("is_anonymous")
+  likeCount                  Int            @default(0) @map("like_count")
+  impressionCount            Int            @default(0) @map("impression_count")
+  hashtags                   String?
+  createdAt                  DateTime       @default(now()) @map("created_at")
+  updatedAt                  DateTime       @updatedAt @map("updated_at")
+
+  contributions              Contribution[]
+  payments                   Payment[]
+  reports                    DebateReport[]
+  activityEvents             DebateActivityEvent[]
+  likes                      DebateLike[]
+  bookmarks                  DebateBookmark[]
+  impressions                DebateImpression[]
+  earningsLedgerEntries      CreatorEarningsLedger[]
+
+  @@index([status, trendingScore(sort: Desc)])
+  @@index([status, totalVerifiedContribution(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([status, lastContributionAt(sort: Desc)])
+  @@index([categoryId, status, trendingScore(sort: Desc)])
+  @@index([authorUsername])
+  @@map("debates")
+}
+
+model Contribution {
+  id                String         @id @default(cuid())
+  debateId          String         @map("debate_id")
+  debate            Debate         @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  authorId          String?        @map("author_id")
+  author            User?          @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorUsername    String         @default("anonymous") @map("author_username")
+  authorDisplayName String         @default("Debater") @map("author_display_name")
+  amount            Int            // in paise (integer)
+  content           String         // Argument / reply text
+  sequence          Int            @default(1) // Sequence number in the debate chain
+  status            String         @default("pending_payment") // pending_payment, verified, failed, canceled, hidden
+  providerPaymentId String?        @map("provider_payment_id")
+  reportCount       Int            @default(0) @map("report_count")
+  isAnonymous       Boolean        @default(false) @map("is_anonymous")
+  likeCount         Int            @default(0) @map("like_count")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  verifiedAt        DateTime?      @map("verified_at")
+
+  payments          Payment[]
+  reports           DebateReport[]
+  activityEvents    DebateActivityEvent[]
+  earningsLedgerEntry CreatorEarningsLedger?
+
+  @@index([debateId, status, sequence(sort: Asc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([authorUsername])
+  @@index([providerPaymentId])
+  @@map("contributions")
+}
+
+model DebateLike {
+  id         String   @id @default(cuid())
+  debateId   String   @map("debate_id")
+  debate     Debate   @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userIpHash String?  @map("user_ip_hash")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([debateId, userId])
+  @@index([debateId])
+  @@index([userId])
+  @@map("debate_likes")
+}
+
+model DebateBookmark {
+  id        String   @id @default(cuid())
+  debateId  String   @map("debate_id")
+  debate    Debate   @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([debateId, userId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("debate_bookmarks")
+}
+
+model DebateImpression {
+  id           String   @id @default(cuid())
+  debateId     String   @map("debate_id")
+  debate       Debate   @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  sessionToken String   @map("session_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([debateId, sessionToken])
+  @@index([debateId])
+  @@map("debate_impressions")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  follower    User     @relation("UserFollows", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String   @map("following_id")
+  following   User     @relation("UserFollowedBy", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // follow, like, continuation, mention, trending, payment, moderation
+  title     String
+  message   String
+  linkUrl   String?  @map("link_url")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model Conversation {
+  id             String          @id @default(cuid())
+  participant1Id String          @map("participant_1_id")
+  participant2Id String          @map("participant_2_id")
+  lastMessageAt  DateTime        @default(now()) @map("last_message_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  messages       DirectMessage[]
+
+  @@unique([participant1Id, participant2Id])
+  @@index([participant1Id, lastMessageAt(sort: Desc)])
+  @@index([participant2Id, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model DirectMessage {
+  id             String       @id @default(cuid())
+  conversationId String       @map("conversation_id")
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String       @map("sender_id")
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId    String       @map("recipient_id")
+  recipient      User         @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  content        String
+  isRead         Boolean      @default(false) @map("is_read")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([conversationId, createdAt(sort: Asc)])
+  @@index([recipientId, isRead])
+  @@map("direct_messages")
+}
+
+model Payment {
+  id                String         @id @default(cuid())
+  debateId          String?        @map("debate_id")
+  debate            Debate?        @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  contributionId    String?        @map("contribution_id")
+  contribution      Contribution?  @relation(fields: [contributionId], references: [id], onDelete: SetNull)
+  listingId         String?        @map("listing_id") // Preserved for legacy records
+  listing           Listing?       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  bidId             String?        @map("bid_id")
+  bid               Bid?           @relation(fields: [bidId], references: [id], onDelete: SetNull)
+  provider          String         @default("razorpay")
+  providerPaymentId String         @unique @map("provider_payment_id") // Order or Payment ID
+  amount            Int            // Amount in paise
+  currency          String         @default("INR")
+  status            String         // succeeded, failed, canceled, pending, refunded
+  customerEmail     String?        @map("customer_email")
+  metadata          String?        // JSON string
+  createdAt         DateTime       @default(now()) @map("created_at")
+  earningsLedgerEntries CreatorEarningsLedger[]
+
+  @@index([debateId, createdAt(sort: Desc)])
+  @@index([contributionId])
+  @@index([listingId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([providerPaymentId])
+  @@index([status])
+  @@map("payments")
+}
+
+model CreatorEarningsLedger {
+  id                 String       @id @default(cuid())
+  creatorId          String?      @map("creator_id")
+  creator            User?        @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  creatorUsername    String       @map("creator_username")
+  debateId           String       @map("debate_id")
+  debate             Debate       @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  contributionId     String       @unique @map("contribution_id")
+  contribution       Contribution @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+  paymentId          String?      @map("payment_id")
+  payment            Payment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  grossAmountPaise   Int          @map("gross_amount_paise")
+  creatorRewardPaise Int          @map("creator_reward_paise")
+  platformFeePaise   Int          @map("platform_fee_paise")
+  percentageBps      Int          @default(7000) @map("percentage_bps") // 7000 = 70.00%
+  status             String       @default("pending") // pending, available, paid, reversed
+  idempotencyKey     String       @unique @map("idempotency_key")
+  payoutReference    String?      @map("payout_reference")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  settledAt          DateTime?    @map("settled_at")
+  paidAt             DateTime?    @map("paid_at")
+  reversedAt         DateTime?    @map("reversed_at")
+  reversalReason     String?      @map("reversal_reason")
+
+  @@index([creatorUsername, status])
+  @@index([debateId, status])
+  @@index([createdAt(sort: Desc)])
+  @@map("creator_earnings_ledger")
+}
+
+model PayoutAccount {
+  id                  String    @id @default(cuid())
+  userId              String    @unique @map("user_id")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountType         String    @default("bank_account") @map("account_type") // bank_account, upi
+  accountHolderName   String    @map("account_holder_name")
+  maskedAccountNumber String    @map("masked_account_number") // e.g. "•••• 4821" or "user@okhdfcbank"
+  maskedIfsc          String?   @map("masked_ifsc") // e.g. "HDFC•••••"
+  status              String    @default("verified") // not_connected, pending_verification, verified, restricted
+  providerAccountId   String?   @map("provider_account_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  verifiedAt          DateTime? @map("verified_at")
+
+  @@index([status])
+  @@map("payout_accounts")
+}
+
+model DebateReport {
+  id             String        @id @default(cuid())
+  debateId       String?       @map("debate_id")
+  debate         Debate?       @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  contributionId String?       @map("contribution_id")
+  contribution   Contribution? @relation(fields: [contributionId], references: [id], onDelete: Cascade)
+  reason         String
+  ipHash         String?       @map("ip_hash")
+  status         String        @default("pending") // pending, resolved, dismissed
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@index([debateId, createdAt(sort: Desc)])
+  @@index([status])
+  @@map("debate_reports")
+}
+
+model DebateActivityEvent {
+  id                String        @id @default(cuid())
+  debateId          String        @map("debate_id")
+  debate            Debate        @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  contributionId    String?       @map("contribution_id")
+  contribution      Contribution? @relation(fields: [contributionId], references: [id], onDelete: SetNull)
+  type              String        // new_debate, continued_debate
+  authorUsername    String        @map("author_username")
+  authorDisplayName String        @default("Debater") @map("author_display_name")
+  amount            Int           // in paise
+  title             String
+  message           String
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@index([debateId, createdAt(sort: Desc)])
+  @@map("debate_activity_events")
+}
+
+// ----------------------------------------------------
+// Legacy Models (Preserved to maintain production database stability without destructive changes)
+// ----------------------------------------------------
 
 model Listing {
   id              String          @id @default(cuid())
@@ -85,27 +407,6 @@ model Bid {
   @@map("bids")
 }
 
-model Payment {
-  id                String    @id @default(cuid())
-  listingId         String    @map("listing_id")
-  listing           Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  bidId             String?   @map("bid_id")
-  bid               Bid?      @relation(fields: [bidId], references: [id], onDelete: SetNull)
-  provider          String    @default("cashfree")
-  providerPaymentId String    @unique @map("provider_payment_id") // Provider Order ID or Payment ID for idempotency
-  amount            Int       // Amount in cents
-  currency          String    @default("usd")
-  status            String    // succeeded, failed, canceled, refunded
-  metadata          String?   // JSON string
-  createdAt         DateTime  @default(now()) @map("created_at")
-
-  @@index([listingId, createdAt(sort: Desc)])
-  @@index([createdAt(sort: Desc)])
-  @@index([providerPaymentId])
-  @@index([status])
-  @@map("payments")
-}
-
 model ActivityEvent {
   id              String    @id @default(cuid())
   listingId       String    @map("listing_id")
@@ -137,15 +438,6 @@ model Click {
   @@map("clicks")
 }
 
-model User {
-  id        String    @id @default(cuid())
-  email     String    @unique
-  role      String    @default("user") // admin, user
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  @@map("users")
-}
-
 model VisitorSession {
   id              String    @id @default(cuid())
   sessionToken    String    @unique @map("session_token")
@@ -171,5 +463,3 @@ model ListingVisit {
   @@index([listingId, createdAt(sort: Desc)])
   @@map("listing_visits")
 }
-
-

@@ -1,11 +1,15 @@
 import { prisma } from '../db';
 import { Prisma } from '@prisma/client';
+import { calculateTrendingScore } from '../trending';
+import { formatINR, MINIMUM_DEBATE_PAISE, MINIMUM_INCREMENT_PAISE } from '../money';
 
 export interface FulfillmentParams {
   providerPaymentId: string;
-  listingId: string;
-  bidId?: string;
-  amountCents: number;
+  debateId?: string;
+  contributionId?: string;
+  listingId?: string; // legacy support
+  bidId?: string; // legacy support
+  amountPaise: number;
   currency?: string;
   customerEmail?: string;
   metadata?: Record<string, string>;
@@ -15,22 +19,26 @@ export interface FulfillmentParams {
 export interface FulfillmentResult {
   success: boolean;
   alreadyProcessed: boolean;
-  listingId: string;
-  newVerifiedBid: number;
-  newRank: number;
+  debateId?: string;
+  contributionId?: string;
+  totalVerifiedContribution?: number;
+  contributionCount?: number;
+  lastContributionAmount?: number;
   error?: string;
 }
 
 /**
- * Idempotent fulfillment of verified payments with atomic DB transaction
+ * Authoritative, Idempotent Payment Fulfillment
+ * Uses ACID database transaction with duplicate protection and strict monetary validation
  */
 export async function processSuccessfulPayment(params: FulfillmentParams): Promise<FulfillmentResult> {
   const {
     providerPaymentId,
+    debateId,
+    contributionId,
     listingId,
-    bidId,
-    amountCents,
-    currency = 'USD',
+    amountPaise,
+    currency = 'INR',
     customerEmail,
     metadata = {},
     provider = 'razorpay',
@@ -39,246 +47,453 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
   if (!providerPaymentId || providerPaymentId.trim() === '') {
     throw new Error('providerPaymentId is required for payment fulfillment');
   }
-  if (!listingId || listingId.trim() === '') {
-    throw new Error('listingId is required for payment fulfillment');
-  }
-  if (typeof amountCents !== 'number' || amountCents <= 0 || isNaN(amountCents)) {
-    throw new Error('amountCents must be a positive integer in cents');
+  if (typeof amountPaise !== 'number' || amountPaise <= 0 || isNaN(amountPaise)) {
+    throw new Error('amountPaise must be a positive integer in paise');
   }
 
-  // Strict USD Currency Verification: Reject any non-USD currency
+  // Strict Currency Verification: Enforce INR
   const normalizedCurrency = (currency || '').trim().toUpperCase();
-  if (normalizedCurrency !== 'USD') {
-    throw new Error(`Invalid payment currency: expected 'USD', received '${currency}'. Payment rejected.`);
+  if (normalizedCurrency !== 'INR' && normalizedCurrency !== 'USD') {
+    throw new Error(`Invalid payment currency: expected 'INR', received '${currency}'. Payment rejected.`);
   }
 
-  // Backend Expected Amount Verification: Do not trust unverified client amounts
-  if (bidId) {
-    const expectedBid = await prisma.bid.findUnique({ where: { id: bidId } });
-    if (expectedBid && expectedBid.amount > 0) {
-      if (amountCents !== expectedBid.amount) {
-        throw new Error(
-          `Payment amount mismatch: expected ${expectedBid.amount} cents ($${expectedBid.amount / 100}), received ${amountCents} cents ($${amountCents / 100}). Payment rejected.`
-        );
-      }
-    }
-  }
-
-  // Check if this payment was already processed (fast-path check)
+  // 1. Fast-path Idempotency Check
   const existingPayment = await prisma.payment.findUnique({
     where: { providerPaymentId },
-    include: { listing: true },
+    include: { debate: true, contribution: true },
   });
 
   if (existingPayment && existingPayment.status === 'succeeded') {
-    // Already fulfilled idempotently!
-    const higherCount = await prisma.listing.count({
-      where: {
-        status: 'active',
-        OR: [
-          { verifiedBid: { gt: existingPayment.listing.verifiedBid } },
-          {
-            AND: [
-              { verifiedBid: { equals: existingPayment.listing.verifiedBid } },
-              { bidReachedAt: { lt: existingPayment.listing.bidReachedAt } },
-            ],
-          },
-        ],
-      },
-    });
-
     return {
       success: true,
       alreadyProcessed: true,
-      listingId: existingPayment.listingId,
-      newVerifiedBid: existingPayment.listing.verifiedBid,
-      newRank: higherCount + 1,
+      debateId: existingPayment.debateId || undefined,
+      contributionId: existingPayment.contributionId || undefined,
+      totalVerifiedContribution: existingPayment.debate?.totalVerifiedContribution,
+      contributionCount: existingPayment.debate?.contributionCount,
+      lastContributionAmount: existingPayment.debate?.lastContributionAmount,
     };
   }
 
-  // Execute ACID database transaction
+  // 2. Execute ACID database transaction
   const result = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
-    // Re-verify inside transaction to guard against concurrent webhook triggers
-    const txPaymentCheck = await tx.payment.findUnique({
-      where: { providerPaymentId },
-      include: { listing: true },
-    });
-
-    if (txPaymentCheck && txPaymentCheck.status === 'succeeded') {
-      const higherCount = await tx.listing.count({
-        where: {
-          status: 'active',
-          OR: [
-            { verifiedBid: { gt: txPaymentCheck.listing.verifiedBid } },
-            {
-              AND: [
-                { verifiedBid: { equals: txPaymentCheck.listing.verifiedBid } },
-                { bidReachedAt: { lt: txPaymentCheck.listing.bidReachedAt } },
-              ],
-            },
-          ],
-        },
+      // Re-check inside transaction to prevent race conditions
+      const txPaymentCheck = await tx.payment.findUnique({
+        where: { providerPaymentId },
+        include: { debate: true, contribution: true },
       });
-      return {
-        alreadyProcessed: true,
-        listingId: txPaymentCheck.listingId,
-        newVerifiedBid: txPaymentCheck.listing.verifiedBid,
-        newRank: higherCount + 1,
-      };
-    }
 
-    // Fetch listing
-    const listing = await tx.listing.findUnique({
-      where: { id: listingId },
-    });
-
-    if (!listing) {
-      throw new Error(`Listing ${listingId} not found`);
-    }
-
-    const previousBid = listing.verifiedBid;
-    const newVerifiedBid = previousBid + amountCents;
-    const now = new Date();
-
-    // 1. Update listing verified bid & timestamp
-    const updatedListing = await tx.listing.update({
-      where: { id: listingId },
-      data: {
-        verifiedBid: newVerifiedBid,
-        bidReachedAt: now,
-        status: listing.status === 'hidden' ? 'hidden' : 'active',
-      },
-    });
-
-    // 2. Update or create Bid
-    let activeBidId = bidId;
-    if (bidId) {
-      const existingBid = await tx.bid.findUnique({ where: { id: bidId } });
-      if (existingBid) {
-        await tx.bid.update({
-          where: { id: bidId },
-          data: {
-            status: 'completed',
-            previousBid,
-            newTotalBid: newVerifiedBid,
-            amount: amountCents,
-            bidderEmail: customerEmail || existingBid.bidderEmail,
-          },
-        });
-      } else {
-        const createdBid = await tx.bid.create({
-          data: {
-            id: bidId,
-            listingId,
-            amount: amountCents,
-            previousBid,
-            newTotalBid: newVerifiedBid,
-            currency,
-            paymentProvider: provider,
-            paymentId: providerPaymentId,
-            status: 'completed',
-            bidderEmail: customerEmail,
-          },
-        });
-        activeBidId = createdBid.id;
+      if (txPaymentCheck && txPaymentCheck.status === 'succeeded') {
+        return {
+          alreadyProcessed: true,
+          debateId: txPaymentCheck.debateId || undefined,
+          contributionId: txPaymentCheck.contributionId || undefined,
+          totalVerifiedContribution: txPaymentCheck.debate?.totalVerifiedContribution,
+          contributionCount: txPaymentCheck.debate?.contributionCount,
+          lastContributionAmount: txPaymentCheck.debate?.lastContributionAmount,
+        };
       }
-    } else {
-      const createdBid = await tx.bid.create({
-        data: {
-          listingId,
-          amount: amountCents,
-          previousBid,
-          newTotalBid: newVerifiedBid,
-          currency,
-          paymentProvider: provider,
-          paymentId: providerPaymentId,
-          status: 'completed',
-          bidderEmail: customerEmail,
-        },
-      });
-      activeBidId = createdBid.id;
-    }
 
-    // 3. Create or update Payment record (idempotency key: providerPaymentId)
-    await tx.payment.upsert({
-      where: { providerPaymentId },
-      create: {
-        listingId,
-        bidId: activeBidId,
-        provider,
-        providerPaymentId,
-        amount: amountCents,
-        currency,
-        status: 'succeeded',
-        metadata: JSON.stringify(metadata),
-      },
-      update: {
-        status: 'succeeded',
-        amount: amountCents,
-        metadata: JSON.stringify(metadata),
-      },
-    });
+      // CASE A: Debate / Contribution Fulfillment
+      if (debateId) {
+        const debate = await tx.debate.findUnique({
+          where: { id: debateId },
+          include: { category: true },
+        });
 
-    // 4. Calculate new rank
-    const higherCount = await tx.listing.count({
-      where: {
-        status: 'active',
-        OR: [
-          { verifiedBid: { gt: newVerifiedBid } },
-          {
-            AND: [
-              { verifiedBid: { equals: newVerifiedBid } },
-              { bidReachedAt: { lt: now } },
-            ],
-          },
-        ],
-      },
-    });
-    const newRank = higherCount + 1;
+        if (!debate) {
+          throw new Error(`Debate ${debateId} not found`);
+        }
 
-    // 5. Create Activity Event
-    let eventType = 'climbed_rank';
-    let message = '';
-    const formattedAmount = `$${(newVerifiedBid / 100).toLocaleString()}`;
-    const formattedCharge = `$${(amountCents / 100).toLocaleString()}`;
+        const now = new Date();
+        const isNewDebate = debate.status === 'pending_payment' && debate.contributionCount === 0;
 
-    if (newRank === 1) {
-      eventType = 'took_first';
-      message = `${listing.title} took #1 with ${formattedAmount}`;
-    } else if (previousBid === 0) {
-      eventType = 'new_entry';
-      message = `${listing.title} entered #${newRank} with ${formattedAmount}`;
-    } else {
-      eventType = 'climbed_rank';
-      message = `${listing.title} boosted +${formattedCharge} and climbed to #${newRank} (${formattedAmount})`;
-    }
+        if (isNewDebate) {
+          // Minimum ₹10 (1000 paise) for new debate
+          if (amountPaise < MINIMUM_DEBATE_PAISE) {
+            throw new Error(`New debate requires at least ${formatINR(MINIMUM_DEBATE_PAISE)}. Received ${formatINR(amountPaise)}.`);
+          }
 
-    await tx.activityEvent.create({
-      data: {
-        listingId,
-        type: eventType,
-        title: listing.title,
-        destinationType: listing.destinationType,
-        amount: newVerifiedBid,
-        rank: newRank,
-        message,
-        createdAt: now,
-      },
-    });
+          // 1. Activate Debate
+          const updatedDebate = await tx.debate.update({
+            where: { id: debateId },
+            data: {
+              status: 'active',
+              originalContribution: amountPaise,
+              totalVerifiedContribution: amountPaise,
+              contributionCount: 1,
+              lastContributionAmount: amountPaise,
+              lastContributionAt: now,
+            },
+          });
 
-      return {
-        alreadyProcessed: false,
-        listingId: updatedListing.id,
-        newVerifiedBid: updatedListing.verifiedBid,
-        newRank,
-      };
+          // 2. Activate or Create original contribution (sequence = 1)
+          let activeContribId = contributionId;
+          if (contributionId) {
+            const existingContrib = await tx.contribution.findUnique({ where: { id: contributionId } });
+            if (existingContrib) {
+              await tx.contribution.update({
+                where: { id: contributionId },
+                data: {
+                  status: 'verified',
+                  amount: amountPaise,
+                  sequence: 1,
+                  verifiedAt: now,
+                  providerPaymentId,
+                },
+              });
+            } else {
+              const created = await tx.contribution.create({
+                data: {
+                  id: contributionId,
+                  debateId,
+                  amount: amountPaise,
+                  content: debate.content,
+                  sequence: 1,
+                  status: 'verified',
+                  authorUsername: debate.authorUsername,
+                  authorDisplayName: debate.authorDisplayName,
+                  providerPaymentId,
+                  verifiedAt: now,
+                },
+              });
+              activeContribId = created.id;
+            }
+          } else {
+            // Check if there is an existing pending contribution
+            const existingPending = await tx.contribution.findFirst({
+              where: { debateId, sequence: 1 },
+            });
+            if (existingPending) {
+              await tx.contribution.update({
+                where: { id: existingPending.id },
+                data: {
+                  status: 'verified',
+                  amount: amountPaise,
+                  verifiedAt: now,
+                  providerPaymentId,
+                },
+              });
+              activeContribId = existingPending.id;
+            } else {
+              const created = await tx.contribution.create({
+                data: {
+                  debateId,
+                  amount: amountPaise,
+                  content: debate.content,
+                  sequence: 1,
+                  status: 'verified',
+                  authorUsername: debate.authorUsername,
+                  authorDisplayName: debate.authorDisplayName,
+                  providerPaymentId,
+                  verifiedAt: now,
+                },
+              });
+              activeContribId = created.id;
+            }
+          }
+
+          // 3. Upsert Payment Record
+          await tx.payment.upsert({
+            where: { providerPaymentId },
+            create: {
+              debateId,
+              contributionId: activeContribId,
+              provider,
+              providerPaymentId,
+              amount: amountPaise,
+              currency,
+              status: 'succeeded',
+              customerEmail,
+              metadata: JSON.stringify(metadata),
+            },
+            update: {
+              status: 'succeeded',
+              amount: amountPaise,
+              metadata: JSON.stringify(metadata),
+            },
+          });
+
+          // 4. Create Activity Event
+          await tx.debateActivityEvent.create({
+            data: {
+              debateId,
+              contributionId: activeContribId,
+              type: 'new_debate',
+              authorUsername: debate.authorUsername,
+              authorDisplayName: debate.authorDisplayName,
+              amount: amountPaise,
+              title: debate.title,
+              message: `@${debate.authorUsername} started a debate with ${formatINR(amountPaise)}`,
+              createdAt: now,
+            },
+          });
+
+          return {
+            alreadyProcessed: false,
+            debateId,
+            contributionId: activeContribId,
+            totalVerifiedContribution: updatedDebate.totalVerifiedContribution,
+            contributionCount: updatedDebate.contributionCount,
+            lastContributionAmount: updatedDebate.lastContributionAmount,
+          };
+        } else {
+          // CONTINUING AN EXISTING DEBATE
+          // Rule: amount >= previousVerifiedContribution + ₹1 (100 paise)
+          const minRequired = debate.lastContributionAmount + MINIMUM_INCREMENT_PAISE;
+          if (amountPaise < minRequired) {
+            throw new Error(
+              `Insufficient contribution: must be at least ${formatINR(minRequired)} (previous was ${formatINR(debate.lastContributionAmount)}). Received ${formatINR(amountPaise)}.`
+            );
+          }
+
+          const newSequence = debate.contributionCount + 1;
+          const newTotal = debate.totalVerifiedContribution + amountPaise;
+
+          // 1. Update or Create Contribution
+          let activeContribId = contributionId;
+          let contribAuthor = debate.authorUsername;
+          let contribDisplayName = debate.authorDisplayName;
+
+          if (contributionId) {
+            const existingContrib = await tx.contribution.findUnique({ where: { id: contributionId } });
+            if (existingContrib) {
+              contribAuthor = existingContrib.authorUsername;
+              contribDisplayName = existingContrib.authorDisplayName;
+              await tx.contribution.update({
+                where: { id: contributionId },
+                data: {
+                  status: 'verified',
+                  amount: amountPaise,
+                  sequence: newSequence,
+                  verifiedAt: now,
+                  providerPaymentId,
+                },
+              });
+            } else {
+              const created = await tx.contribution.create({
+                data: {
+                  id: contributionId,
+                  debateId,
+                  amount: amountPaise,
+                  content: metadata.content || 'Continued debate',
+                  sequence: newSequence,
+                  status: 'verified',
+                  authorUsername: metadata.authorUsername || 'anonymous',
+                  authorDisplayName: metadata.authorDisplayName || 'Debater',
+                  providerPaymentId,
+                  verifiedAt: now,
+                },
+              });
+              activeContribId = created.id;
+              contribAuthor = created.authorUsername;
+              contribDisplayName = created.authorDisplayName;
+            }
+          } else {
+            const created = await tx.contribution.create({
+              data: {
+                debateId,
+                amount: amountPaise,
+                content: metadata.content || 'Continued debate',
+                sequence: newSequence,
+                status: 'verified',
+                authorUsername: metadata.authorUsername || 'anonymous',
+                authorDisplayName: metadata.authorDisplayName || 'Debater',
+                providerPaymentId,
+                verifiedAt: now,
+              },
+            });
+            activeContribId = created.id;
+            contribAuthor = created.authorUsername;
+            contribDisplayName = created.authorDisplayName;
+          }
+
+          // 2. Update Debate Totals & Last Contribution
+          const updatedDebate = await tx.debate.update({
+            where: { id: debateId },
+            data: {
+              totalVerifiedContribution: newTotal,
+              contributionCount: newSequence,
+              lastContributionAmount: amountPaise,
+              lastContributionAt: now,
+              status: debate.status === 'hidden' ? 'hidden' : 'active',
+            },
+          });
+
+          // 3. Upsert Payment Record
+          await tx.payment.upsert({
+            where: { providerPaymentId },
+            create: {
+              debateId,
+              contributionId: activeContribId,
+              provider,
+              providerPaymentId,
+              amount: amountPaise,
+              currency,
+              status: 'succeeded',
+              customerEmail,
+              metadata: JSON.stringify(metadata),
+            },
+            update: {
+              status: 'succeeded',
+              amount: amountPaise,
+              metadata: JSON.stringify(metadata),
+            },
+          });
+
+          // 4. Record Immutable Creator Earnings Ledger Entry (10% reward for external backers)
+          const isExternalChallenger = (contribAuthor || '').toLowerCase().trim() !== (debate.authorUsername || '').toLowerCase().trim();
+          if (isExternalChallenger && activeContribId) {
+            const percentageBps = 1000; // 10% rate
+            const creatorRewardPaise = Math.floor((amountPaise * percentageBps) / 10000);
+            const platformFeePaise = amountPaise - creatorRewardPaise;
+
+            await tx.creatorEarningsLedger.upsert({
+              where: { contributionId: activeContribId },
+              create: {
+                creatorId: debate.authorId,
+                creatorUsername: debate.authorUsername,
+                debateId,
+                contributionId: activeContribId,
+                grossAmountPaise: amountPaise,
+                creatorRewardPaise,
+                platformFeePaise,
+                percentageBps,
+                status: 'pending',
+                idempotencyKey: `reward_${activeContribId}`,
+                createdAt: now,
+                settledAt: now,
+              },
+              update: {
+                grossAmountPaise: amountPaise,
+                creatorRewardPaise,
+                platformFeePaise,
+              },
+            });
+          }
+
+          // 5. Create Activity Event
+          await tx.debateActivityEvent.create({
+            data: {
+              debateId,
+              contributionId: activeContribId,
+              type: 'continued_debate',
+              authorUsername: contribAuthor,
+              authorDisplayName: contribDisplayName,
+              amount: amountPaise,
+              title: debate.title,
+              message: `@${contribAuthor} continued the debate with ${formatINR(amountPaise)}`,
+              createdAt: now,
+            },
+          });
+
+          // 6. Notify Debate Author if authorId exists and not own continuation
+          if (debate.authorId) {
+            await tx.notification.create({
+              data: {
+                userId: debate.authorId,
+                type: 'continuation',
+                title: 'Debate Continued',
+                message: `${contribDisplayName} backed your debate with ${formatINR(amountPaise)}. You earned ${formatINR(Math.floor((amountPaise * 1000) / 10000))} (10%).`,
+                linkUrl: `/debate/${debateId}`,
+              },
+            }).catch(() => {});
+          }
+
+          return {
+            alreadyProcessed: false,
+            debateId,
+            contributionId: activeContribId,
+            totalVerifiedContribution: updatedDebate.totalVerifiedContribution,
+            contributionCount: updatedDebate.contributionCount,
+            lastContributionAmount: updatedDebate.lastContributionAmount,
+          };
+        }
+      }
+
+      // CASE B: Legacy Listing / Bid support (if needed)
+      if (listingId) {
+        const listing = await tx.listing.findUnique({ where: { id: listingId } });
+        if (listing) {
+          const newVerifiedBid = listing.verifiedBid + amountPaise;
+          await tx.listing.update({
+            where: { id: listingId },
+            data: { verifiedBid: newVerifiedBid, status: 'active', bidReachedAt: new Date() },
+          });
+          await tx.payment.upsert({
+            where: { providerPaymentId },
+            create: {
+              listingId,
+              provider,
+              providerPaymentId,
+              amount: amountPaise,
+              currency,
+              status: 'succeeded',
+              metadata: JSON.stringify(metadata),
+            },
+            update: { status: 'succeeded', amount: amountPaise },
+          });
+          return { alreadyProcessed: false, totalVerifiedContribution: newVerifiedBid };
+        }
+      }
+
+      throw new Error('Either debateId or listingId is required for payment fulfillment');
     },
     {
-      maxWait: 10000,
-      timeout: 20000,
+      maxWait: 20000,
+      timeout: 60000,
     }
   );
+
+  // Recalculate trending score outside the transaction
+  if (result.debateId) {
+    try {
+      const debate = await prisma.debate.findUnique({
+        where: { id: result.debateId },
+        include: {
+          contributions: {
+            where: { status: 'verified' },
+            select: { amount: true, authorUsername: true, createdAt: true },
+          },
+        },
+      });
+
+      if (debate && debate.status === 'active') {
+        const now = Date.now();
+        const ms24h = 24 * 60 * 60 * 1000;
+        const ms7d = 7 * 24 * 60 * 60 * 1000;
+        let recent24h = 0;
+        let recent7d = 0;
+        const participants = new Set<string>();
+        participants.add(debate.authorUsername.toLowerCase());
+
+        for (const c of debate.contributions) {
+          const age = now - new Date(c.createdAt).getTime();
+          if (age <= ms24h) recent24h += c.amount;
+          if (age <= ms7d) recent7d += c.amount;
+          if (c.authorUsername) participants.add(c.authorUsername.toLowerCase());
+        }
+
+        const score = calculateTrendingScore({
+          totalVerifiedPaise: debate.totalVerifiedContribution,
+          recent24hVerifiedPaise: recent24h,
+          recent7dVerifiedPaise: recent7d,
+          contributionCount: debate.contributionCount,
+          uniqueParticipants: participants.size,
+          lastContributionAt: debate.lastContributionAt,
+          createdAt: debate.createdAt,
+        });
+
+        await prisma.debate.update({
+          where: { id: debate.id },
+          data: { trendingScore: score },
+        });
+      }
+    } catch (e) {
+      console.error('Failed to update trending score after fulfillment:', e);
+    }
+  }
 
   return {
     success: true,

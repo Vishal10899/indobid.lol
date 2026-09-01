@@ -10,19 +10,34 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const searchParams = request.nextUrl.searchParams;
+    const status = searchParams.get('status') || 'all';
+
+    const where: any = {};
+    if (status !== 'all') {
+      where.status = status;
+    }
+
     const payments = await prisma.payment.findMany({
-      take: 100,
+      where,
       orderBy: { createdAt: 'desc' },
+      take: 100,
       include: {
-        listing: {
-          select: { id: true, title: true, canonicalUrl: true },
+        debate: {
+          select: { id: true, title: true, authorUsername: true },
+        },
+        contribution: {
+          select: { id: true, content: true, authorUsername: true, sequence: true },
         },
       },
     });
 
-    return NextResponse.json({ payments });
+    return NextResponse.json({
+      success: true,
+      payments,
+    });
   } catch (error) {
-    console.error('Admin payments fetch error:', error);
+    console.error('Admin payments error:', error);
     return NextResponse.json({ error: 'Failed to fetch payments' }, { status: 500 });
   }
 }

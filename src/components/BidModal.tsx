@@ -241,8 +241,8 @@ export function BidModal({
   const estimatedRank = estimation?.estimatedGlobalRank || 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-xl relative my-8 text-[var(--text-primary)]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto w-full">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-xl relative my-0 sm:my-8 text-[var(--text-primary)] max-h-[92vh] overflow-y-auto min-w-0">
         {/* Close Button */}
         <button
           onClick={onClose}

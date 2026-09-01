@@ -1,18 +1,32 @@
-export interface CreateCheckoutParams {
-  listingId: string;
-  bidId: string;
+export interface CreateDebateCheckoutParams {
+  debateId: string;
+  contributionId?: string;
   title: string;
-  chargeAmountCents: number;
-  targetTotalBidCents: number;
-  canonicalUrl: string;
+  amountPaise: number;
+  authorUsername: string;
   customerEmail?: string;
-  successUrl: string;
-  cancelUrl: string;
+  isNewDebate?: boolean;
+}
+
+export interface CreateCheckoutParams {
+  listingId?: string;
+  bidId?: string;
+  debateId?: string;
+  contributionId?: string;
+  title: string;
+  chargeAmountCents?: number;
+  amountPaise?: number;
+  targetTotalBidCents?: number;
+  canonicalUrl?: string;
+  authorUsername?: string;
+  customerEmail?: string;
+  successUrl?: string;
+  cancelUrl?: string;
 }
 
 export interface CheckoutSessionResult {
   sessionId: string;
-  checkoutUrl: string;
+  checkoutUrl?: string;
   orderId?: string;
   keyId?: string;
   amount?: number;
@@ -24,9 +38,11 @@ export interface WebhookEventPayload {
   type: string;
   sessionId?: string;
   paymentIntentId?: string;
-  listingId: string;
-  bidId: string;
-  amountCents: number;
+  debateId?: string;
+  contributionId?: string;
+  listingId?: string;
+  bidId?: string;
+  amountPaise: number;
   currency: string;
   customerEmail?: string;
   metadata: Record<string, string>;

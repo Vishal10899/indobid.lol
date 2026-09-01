@@ -36,8 +36,6 @@ import {
   UserPlus,
   Cpu,
   HardDrive,
-  Dna,
-  Sprout,
   Globe,
 } from 'lucide-react';
 
@@ -95,8 +93,6 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   deeptech: <Cpu className="w-3.5 h-3.5" />,
   hardware: <HardDrive className="w-3.5 h-3.5" />,
   robotics: <Bot className="w-3.5 h-3.5" />,
-  biotech: <Dna className="w-3.5 h-3.5" />,
-  agritech: <Sprout className="w-3.5 h-3.5" />,
   other: <Globe className="w-3.5 h-3.5" />,
 };
 
@@ -107,24 +103,24 @@ export function CategoryNav({
   totalListings,
 }: CategoryNavProps) {
   return (
-    <div className="w-full overflow-x-auto py-2 scrollbar-none">
+    <div className="w-full overflow-x-auto py-2 scrollbar-none min-w-0">
       <div className="flex items-center space-x-2 min-w-max pb-1">
         {/* All Categories Button */}
         <button
           onClick={() => onSelectCategory('all')}
           className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
             selectedCategory === 'all'
-              ? 'bg-[#087F78] text-white shadow-xs border border-[#087F78]'
-              : 'bg-white text-[#405866] hover:text-[#102536] hover:bg-[#F5F2E9] border border-[#E5DDCC]'
+              ? 'bg-[var(--color-coral)] text-[#071B21] shadow-xs border border-[var(--color-coral)]'
+              : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)]'
           }`}
         >
           <Layers className="w-3.5 h-3.5" />
-          <span>All Sectors</span>
+          <span>All Topics</span>
           <span
             className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
               selectedCategory === 'all'
-                ? 'bg-[#DDF2EF] text-[#087F78]'
-                : 'bg-[#EEE9DD] text-[#405866]'
+                ? 'bg-black/20 text-[#071B21]'
+                : 'bg-[var(--bg-page-deep)] text-[var(--text-muted)]'
             }`}
           >
             {totalListings}
@@ -140,8 +136,8 @@ export function CategoryNav({
               onClick={() => onSelectCategory(cat.slug)}
               className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                 isSelected
-                  ? 'bg-[#087F78] text-white shadow-xs border border-[#087F78]'
-                  : 'bg-white text-[#405866] hover:text-[#102536] hover:bg-[#F5F2E9] border border-[#E5DDCC]'
+                  ? 'bg-[var(--color-coral)] text-[#071B21] shadow-xs border border-[var(--color-coral)]'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)]'
               }`}
             >
               {ICON_MAP[cat.slug] || <Globe className="w-3.5 h-3.5" />}
@@ -149,8 +145,8 @@ export function CategoryNav({
               <span
                 className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                   isSelected
-                    ? 'bg-[#DDF2EF] text-[#087F78]'
-                    : 'bg-[#EEE9DD] text-[#405866]'
+                    ? 'bg-black/20 text-[#071B21]'
+                    : 'bg-[var(--bg-page-deep)] text-[var(--text-muted)]'
                 }`}
               >
                 {cat.count}
@@ -162,3 +158,5 @@ export function CategoryNav({
     </div>
   );
 }
+
+export default CategoryNav;
