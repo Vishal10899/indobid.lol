@@ -1,7 +1,11 @@
+/**
+ * INDOBID — ADMIN DEBATES CONTROLLER
+ * Thin controller delegating to adminService.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { isAuthorizedAdmin } from '@/lib/auth';
-import { getOrCreateFounderUser } from '@/lib/founder';
+import { adminService } from '@/modules/admin/admin.service';
+import { isAuthorizedAdmin } from '@/modules/auth/authorization';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,36 +17,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status') || 'all';
-    const search = searchParams.get('search') || '';
-
-    const where: any = {};
-    if (status !== 'all') {
-      where.status = status;
-    }
-    if (search.trim()) {
-      const q = search.trim();
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { content: { contains: q, mode: 'insensitive' } },
-        { authorUsername: { contains: q, mode: 'insensitive' } },
-      ];
-    }
-
-    const debates = await prisma.debate.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-      include: {
-        category: true,
-        _count: {
-          select: { contributions: true, payments: true, reports: true },
-        },
-      },
-    });
+    const debates = await adminService.listDebates(0, 100, status);
 
     return NextResponse.json({
       success: true,
-      debates,
+      debates: debates.debates,
     });
   } catch (error) {
     console.error('Admin get debates error:', error);
@@ -66,44 +45,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Post content must be at least 5 characters' }, { status: 400 });
     }
 
-    // Resolve Category
-    let category = null;
-    if (categoryId) {
-      category = await prisma.category.findUnique({ where: { id: categoryId } });
-    } else if (categorySlug) {
-      category = await prisma.category.findFirst({ where: { slug: categorySlug.toLowerCase().trim() } });
-    }
-    if (!category) {
-      category = await prisma.category.findFirst({ orderBy: { sortOrder: 'asc' } });
-    }
-    if (!category) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 400 });
-    }
-
-    // Provision/Retrieve Founder User
-    const founderUser = await getOrCreateFounderUser();
-    const isAnon = Boolean(isAnonymous);
-    const authorUsername = isAnon ? 'anonymous' : founderUser.username || 'vishalchaudhary';
-    const authorDisplayName = isAnon ? 'Anonymous' : founderUser.displayName || 'Vishal Chaudhary';
-
-    const debate = await prisma.debate.create({
-      data: {
-        authorId: founderUser.id,
-        title: title.trim(),
-        content: content.trim(),
-        categoryId: category.id,
-        authorUsername,
-        authorDisplayName,
-        isAnonymous: isAnon,
-        hashtags: hashtags ? hashtags.trim() : null,
-        originalContribution: 0,
-        totalVerifiedContribution: 0,
-        contributionCount: 0,
-        lastContributionAmount: 0,
-        status: 'active',
-        trendingScore: 10.0,
-      },
-      include: { category: true },
+    const debate = await adminService.createFounderDebate({
+      title,
+      content,
+      categorySlug,
+      categoryId,
+      hashtags,
+      isAnonymous,
     });
 
     return NextResponse.json({
@@ -111,9 +59,9 @@ export async function POST(request: NextRequest) {
       debate,
       message: 'Post created and published directly as Founder',
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Admin create debate error:', error);
-    return NextResponse.json({ error: 'Failed to create debate as Founder' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to create debate as Founder' }, { status: 500 });
   }
 }
 
@@ -135,10 +83,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const updated = await prisma.debate.update({
-      where: { id },
-      data: { status },
-    });
+    const updated = await adminService.updateDebate(id, { status });
 
     return NextResponse.json({
       success: true,

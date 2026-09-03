@@ -23,6 +23,18 @@ export class LedgerRepository {
     );
   }
 
+  async updateByContributionId(
+    contributionId: string,
+    data: Prisma.CreatorEarningsLedgerUpdateInput
+  ): Promise<CreatorEarningsLedger> {
+    return safeDb(() =>
+      prisma.creatorEarningsLedger.update({
+        where: { contributionId },
+        data,
+      })
+    );
+  }
+
   async create(data: Prisma.CreatorEarningsLedgerCreateInput): Promise<CreatorEarningsLedger> {
     return safeDb(() => prisma.creatorEarningsLedger.create({ data }));
   }

@@ -3,20 +3,11 @@
  * Gateway for the 3 locked feed modes: For You, Trending, Following.
  */
 
-import { forYouService, FeedItem } from './for-you/for-you.service';
+import { forYouService } from './for-you/for-you.service';
 import { followingFeedService } from './following/following.service';
 import { prisma } from '../../infrastructure/database/prisma';
 import { safeDb } from '../../infrastructure/database/transactions';
-
-export interface FeedQueryOptions {
-  feedType?: 'for_you' | 'trending' | 'following' | 'recent';
-  categoryId?: string;
-  authorId?: string;
-  search?: string;
-  skip?: number;
-  take?: number;
-  userId?: string | null;
-}
+import { FeedItem, FeedQueryOptions } from './feed.types';
 
 export class FeedService {
   async getFeed(options: FeedQueryOptions = {}): Promise<FeedItem[]> {

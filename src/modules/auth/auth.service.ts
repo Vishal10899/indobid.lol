@@ -1,13 +1,21 @@
 /**
  * INDOBID — AUTHENTICATION SERVICE
+ * Authoritative signup, login, session token creation, and admin authorization.
  */
 
-import { userRepository } from '../../infrastructure/database/repositories/user.repository';
-import { hashPassword, verifyPassword } from '../../lib/security/password';
-import { createSessionToken } from '../../lib/security/session';
-import { isFounderEmail, verifyAdminSecret, checkAdminLoginRateLimit, recordAdminLoginAttempt } from '../../lib/security/admin';
-import { resendEmailProvider } from '../../infrastructure/email/resend.email';
-import { prisma } from '../../infrastructure/database/prisma';
+import { authRepository } from './auth.repository';
+import { passwordService } from './password.service';
+import { sessionService } from './session.service';
+import { otpService } from './otp.service';
+import {
+  isFounder,
+  isAuthorizedAdmin,
+  checkAdminLoginRateLimit,
+  recordFailedAdminLogin,
+  clearAdminLoginRateLimit,
+  normalizeEmail,
+  ADMIN_EMAIL,
+} from './authorization';
 import {
   AuthenticationError,
   AuthorizationError,
@@ -16,68 +24,52 @@ import {
   ValidationError,
 } from '../../lib/errors';
 import { SignupDTO, LoginDTO, AdminLoginDTO } from './auth.types';
-import crypto from 'crypto';
+import { env } from '../../config/env';
 
 export class AuthService {
   async signup(dto: SignupDTO) {
-    const normalizedEmail = dto.email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(dto.email);
     const normalizedUsername = dto.username.toLowerCase().trim();
 
-    const existingEmail = await userRepository.findByEmail(normalizedEmail);
+    const existingEmail = await authRepository.findUserByEmail(normalizedEmail);
     if (existingEmail) {
       throw new ConflictError('An account with this email already exists');
     }
 
-    const existingUsername = await userRepository.findByUsername(normalizedUsername);
+    const existingUsername = await authRepository.findUserByUsername(normalizedUsername);
     if (existingUsername) {
       throw new ConflictError('This username is already taken');
     }
 
-    const { hash, salt } = hashPassword(dto.password);
-    const isFounder = isFounderEmail(normalizedEmail);
+    const passwordHash = passwordService.hashPassword(dto.password);
+    const isFounderAccount = normalizedEmail === env.ADMIN_EMAIL;
 
-    const user = await userRepository.create({
+    const user = await authRepository.createUser({
       email: normalizedEmail,
       username: normalizedUsername,
       displayName: dto.displayName?.trim() || dto.username.trim(),
-      passwordHash: `${salt}:${hash}`,
-      role: isFounder ? 'founder' : 'user',
-      isVerified: isFounder,
-      emailVerifiedAt: isFounder ? new Date() : null,
+      passwordHash,
+      role: isFounderAccount ? 'founder' : 'user',
+      isVerified: isFounderAccount,
+      emailVerifiedAt: isFounderAccount ? new Date() : null,
     });
 
-    // Generate initial OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpSalt = crypto.randomBytes(16).toString('hex');
-    const otpHash = crypto.pbkdf2Sync(otpCode, otpSalt, 1000, 32, 'sha256').toString('hex');
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    await prisma.emailOtp.create({
-      data: {
-        email: normalizedEmail,
-        codeHash: otpHash,
-        salt: otpSalt,
-        expiresAt,
-      },
-    });
-
-    await resendEmailProvider.sendEmail({
-      to: normalizedEmail,
-      subject: 'Verify your IndoBid Account',
-      html: `<p>Your verification code is: <strong>${otpCode}</strong>. Valid for 10 minutes.</p>`,
-    });
+    if (!isFounderAccount) {
+      // Send initial email OTP
+      await otpService.requestEmailOtp(normalizedEmail);
+    }
 
     return {
       userId: user.id,
       email: user.email || normalizedEmail,
       username: user.username || normalizedUsername,
-      requiresEmailVerification: !isFounder,
+      requiresEmailVerification: !isFounderAccount,
     };
   }
 
   async login(dto: LoginDTO) {
-    const normalizedEmail = dto.email.toLowerCase().trim();
-    const user = await userRepository.findByEmail(normalizedEmail);
+    const normalizedEmail = normalizeEmail(dto.email);
+    const user = await authRepository.findUserByEmail(normalizedEmail);
 
     if (!user || !user.passwordHash || !user.email || !user.username) {
       throw new AuthenticationError('Invalid email or password');
@@ -87,110 +79,72 @@ export class AuthService {
       throw new AuthorizationError('This account has been suspended by administration');
     }
 
-    const isMatch = verifyPassword(dto.password, user.passwordHash);
+    const isMatch = passwordService.verifyPassword(dto.password, user.passwordHash);
     if (!isMatch) {
       throw new AuthenticationError('Invalid email or password');
     }
 
-    if (!user.emailVerifiedAt) {
+    if (!user.emailVerifiedAt && user.role !== 'founder') {
       return {
         requiresEmailVerification: true,
         email: user.email,
+        token: undefined,
+        user: undefined,
       };
     }
 
-    const token = createSessionToken({
+    const sessionPayload = {
       userId: user.id,
-      email: user.email,
       username: user.username,
+      email: user.email,
+      displayName: user.displayName || user.username,
       role: user.role,
-      isVerified: user.isVerified,
-    });
+    };
+
+    const token = sessionService.createSessionToken(sessionPayload);
 
     return {
-      success: true,
+      requiresEmailVerification: false,
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        displayName: user.displayName || user.username,
-        avatarUrl: user.avatarUrl,
-        role: user.role,
-        isVerified: user.isVerified,
-      },
+      user: sessionPayload,
     };
   }
 
   async adminLogin(dto: AdminLoginDTO, ip: string) {
-    const rateCheck = checkAdminLoginRateLimit(ip);
-    if (!rateCheck.allowed) {
-      throw new RateLimitError(`Admin login locked. Please wait ${rateCheck.remainingSeconds} seconds.`);
+    const rateLimit = checkAdminLoginRateLimit(ip);
+    if (!rateLimit.allowed) {
+      throw new RateLimitError(
+        `Too many failed attempts. Try again in ${rateLimit.retryAfterSeconds}s.`
+      );
     }
 
-    const normalizedEmail = dto.email.toLowerCase().trim();
-    const isFounder = isFounderEmail(normalizedEmail);
-    const isSecretValid = verifyAdminSecret(dto.secretKey);
+    const normalizedEmail = normalizeEmail(dto.email);
+    const trimmedSecret = dto.secretKey.trim();
 
-    if (!isFounder || !isSecretValid) {
-      recordAdminLoginAttempt(ip, false);
-      throw new AuthenticationError('Invalid admin credentials');
+    const expectedEmail = env.ADMIN_EMAIL;
+    const expectedSecret = env.ADMIN_SECRET_KEY;
+
+    if (!expectedSecret) {
+      throw new AuthorizationError('Admin authentication not configured on server');
     }
 
-    recordAdminLoginAttempt(ip, true);
+    const emailMatches = normalizedEmail === expectedEmail;
+    const secretMatches =
+      trimmedSecret.length === expectedSecret.length &&
+      require('crypto').timingSafeEqual(
+        Buffer.from(trimmedSecret),
+        Buffer.from(expectedSecret)
+      );
 
-    const token = createSessionToken({
-      userId: 'admin_session',
-      email: normalizedEmail,
-      username: 'admin',
-      role: 'founder',
-      isVerified: true,
-    });
-
-    return {
-      success: true,
-      token,
-      email: normalizedEmail,
-      role: 'founder',
-    };
-  }
-
-  async verifyOtp(email: string, otp: string) {
-    const normalizedEmail = email.toLowerCase().trim();
-    const records = await prisma.emailOtp.findMany({
-      where: {
-        email: normalizedEmail,
-        used: false,
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
-
-    let matchedRecord = null;
-    for (const record of records) {
-      const derived = crypto.pbkdf2Sync(otp.trim(), record.salt, 1000, 32, 'sha256').toString('hex');
-      if (derived === record.codeHash) {
-        matchedRecord = record;
-        break;
-      }
+    if (!emailMatches || !secretMatches) {
+      recordFailedAdminLogin(ip);
+      throw new AuthorizationError('Invalid admin email or secret key');
     }
 
-    if (!matchedRecord) {
-      throw new ValidationError('Invalid or expired verification code');
-    }
+    clearAdminLoginRateLimit(ip);
+    const token = sessionService.createAdminSessionToken(expectedEmail);
 
-    await prisma.user.updateMany({
-      where: { email: normalizedEmail },
-      data: { emailVerifiedAt: new Date() },
-    });
-
-    await prisma.emailOtp.update({
-      where: { id: matchedRecord.id },
-      data: { used: true },
-    });
-
-    return { success: true, message: 'Email verified successfully' };
+    return { token, email: expectedEmail };
   }
 }
 

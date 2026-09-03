@@ -7,6 +7,10 @@ import { prisma } from '../prisma';
 import { safeDb } from '../transactions';
 
 export class PaymentRepository {
+  async findById(id: string): Promise<Payment | null> {
+    return safeDb(() => prisma.payment.findUnique({ where: { id } }));
+  }
+
   async findByProviderPaymentId(providerPaymentId: string): Promise<Payment | null> {
     return safeDb(() =>
       prisma.payment.findUnique({

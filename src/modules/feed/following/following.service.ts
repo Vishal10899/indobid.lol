@@ -5,7 +5,7 @@
 
 import { prisma } from '../../../infrastructure/database/prisma';
 import { safeDb } from '../../../infrastructure/database/transactions';
-import { FeedItem } from '../for-you/for-you.service';
+import { FeedItem } from '../feed.types';
 
 export class FollowingFeedService {
   async getFollowingFeed(params: {

@@ -2,18 +2,7 @@
  * INDOBID — AUTHENTICATION TYPES
  */
 
-export interface UserSession {
-  userId: string;
-  email: string;
-  username: string;
-  displayName: string;
-  avatarUrl: string | null;
-  role: 'user' | 'admin' | 'founder';
-  isVerified: boolean;
-  isEmailVerified: boolean;
-  isSuspended: boolean;
-  createdAt: Date;
-}
+export type { UserSession } from './session.service';
 
 export interface SignupDTO {
   email: string;

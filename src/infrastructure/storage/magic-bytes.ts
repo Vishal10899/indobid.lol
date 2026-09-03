@@ -51,3 +51,5 @@ export function validateImageMagicBytes(buffer: Buffer): boolean {
 
   return false;
 }
+
+export const isValidImageMagicBytes = validateImageMagicBytes;

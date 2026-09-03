@@ -6,29 +6,7 @@
 import { prisma } from '../../../infrastructure/database/prisma';
 import { safeDb } from '../../../infrastructure/database/transactions';
 import { calculateRankingScore } from '../ranking/ranking.service';
-
-export interface FeedItem {
-  id: string;
-  title: string;
-  content: string;
-  authorId: string;
-  authorUsername: string;
-  authorDisplayName: string;
-  authorAvatarUrl: string | null;
-  authorIsVerified: boolean;
-  authorRole: string;
-  categoryId: string;
-  categoryName: string;
-  categorySlug: string;
-  totalVerifiedContribution: number;
-  contributionCount: number;
-  lastContributionAmount: number | null;
-  likesCount: number;
-  bookmarksCount: number;
-  trendingScore: number;
-  createdAt: Date;
-  lastContributionAt: Date | null;
-}
+import { FeedItem } from '../feed.types';
 
 export class ForYouService {
   async getForYouFeed(params: {

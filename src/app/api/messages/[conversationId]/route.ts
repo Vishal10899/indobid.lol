@@ -1,6 +1,13 @@
+/**
+ * INDOBID — DIRECT MESSAGE THREAD CONTROLLER
+ * Thin controller delegating to messageService.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { getCurrentUser } from '@/lib/user-auth';
+import { messageService } from '@/modules/social/messages/message.service';
+import { getCurrentUser } from '@/modules/auth/session.service';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   req: NextRequest,
@@ -14,52 +21,17 @@ export async function GET(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-          take: 100,
-        },
-      },
-    });
-
-    if (!conversation) {
-      return NextResponse.json({ success: false, error: 'Conversation not found' }, { status: 404 });
-    }
-
-    // Authorization check: User must be a participant in this conversation
-    if (
-      conversation.participant1Id !== session.userId &&
-      conversation.participant2Id !== session.userId
-    ) {
-      return NextResponse.json({ success: false, error: 'Access denied to this private conversation' }, { status: 403 });
-    }
-
-    const otherId = conversation.participant1Id === session.userId ? conversation.participant2Id : conversation.participant1Id;
-    const otherUser = await prisma.user.findUnique({
-      where: { id: otherId },
-      select: { id: true, username: true, displayName: true, avatarUrl: true },
-    });
-
-    // Mark messages sent to this user as read
-    await prisma.directMessage.updateMany({
-      where: {
-        conversationId,
-        recipientId: session.userId,
-        isRead: false,
-      },
-      data: { isRead: true },
-    });
-
-    return NextResponse.json({
-      success: true,
-      otherUser: otherUser || { id: otherId, username: 'user', displayName: 'Debater' },
-      messages: conversation.messages,
-    });
-  } catch (error) {
+    const data = await messageService.getConversationMessages(conversationId, session.userId);
+    return NextResponse.json({ success: true, ...data });
+  } catch (error: any) {
     console.error('Fetch conversation error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to load conversation' }, { status: 500 });
+    const status =
+      error.message === 'Conversation not found'
+        ? 404
+        : error.name === 'AuthorizationError'
+        ? 403
+        : 500;
+    return NextResponse.json({ success: false, error: error.message || 'Failed to load conversation' }, { status });
   }
 }
 
@@ -75,61 +47,27 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-    });
-
-    if (!conversation) {
-      return NextResponse.json({ success: false, error: 'Conversation not found' }, { status: 404 });
-    }
-
-    if (
-      conversation.participant1Id !== session.userId &&
-      conversation.participant2Id !== session.userId
-    ) {
-      return NextResponse.json({ success: false, error: 'Access denied' }, { status: 403 });
-    }
-
     const body = await req.json();
     const { content } = body;
 
-    if (!content?.trim()) {
-      return NextResponse.json({ success: false, error: 'Message content is required' }, { status: 400 });
-    }
-
-    const recipientId =
-      conversation.participant1Id === session.userId
-        ? conversation.participant2Id
-        : conversation.participant1Id;
-
-    const message = await prisma.directMessage.create({
-      data: {
-        conversationId,
-        senderId: session.userId,
-        recipientId,
-        content: content.trim(),
-      },
-    });
-
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { lastMessageAt: new Date() },
-    });
-
-    // Notification to recipient
-    await prisma.notification.create({
-      data: {
-        userId: recipientId,
-        type: 'message',
-        title: 'New Message',
-        message: `@${session.username}: "${content.trim().substring(0, 40)}..."`,
-        linkUrl: `/messages/${conversationId}`,
-      },
-    }).catch(() => {});
+    const message = await messageService.sendThreadMessage(
+      conversationId,
+      session.userId,
+      session.username,
+      content
+    );
 
     return NextResponse.json({ success: true, message });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Send message in thread error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to send message' }, { status: 500 });
+    const status =
+      error.message === 'Conversation not found'
+        ? 404
+        : error.name === 'AuthorizationError'
+        ? 403
+        : error.name === 'ValidationError'
+        ? 400
+        : 500;
+    return NextResponse.json({ success: false, error: error.message || 'Failed to send message' }, { status });
   }
 }
