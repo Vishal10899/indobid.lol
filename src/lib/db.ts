@@ -1,17 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+/**
+ * INDOBID — DATABASE SINGLETON (BACKWARD COMPATIBILITY GATEWAY)
+ * Delegates to centralized infrastructure layer: src/infrastructure/database/prisma.ts
+ */
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+import { prisma } from '../infrastructure/database/prisma';
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
-  });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
-
+export { prisma };
 export default prisma;
