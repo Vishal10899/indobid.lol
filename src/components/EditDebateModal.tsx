@@ -54,8 +54,23 @@ export function EditDebateModal({
       setErrorMsg(null);
       setSuccessMsg(false);
       setActiveTab('write');
+
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && !loading) {
+          onClose();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
+      };
     }
-  }, [isOpen, initialContent, initialHashtags]);
+  }, [isOpen, initialContent, initialHashtags, loading, onClose]);
 
   if (!isOpen) return null;
 
@@ -137,13 +152,13 @@ export function EditDebateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm w-full h-[100dvh] overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
       <div
-        className="w-full max-w-xl bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] min-w-0"
+        className="w-full max-w-xl bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[85vh] min-w-0"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

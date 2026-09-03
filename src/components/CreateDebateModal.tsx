@@ -66,6 +66,26 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
     }
   }, [user]);
 
+  // Lock body scroll and handle Escape key while modal is open
+  useEffect(() => {
+    if (isOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && !loading && !verifying) {
+          onClose();
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    }
+  }, [isOpen, loading, verifying, onClose]);
+
   // Restore draft when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -312,16 +332,27 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto w-full">
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-lg w-full rounded-t-3xl sm:rounded-3xl shadow-2xl relative overflow-hidden transition-all flex flex-col max-h-[92vh] my-0 sm:my-auto min-w-0">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm w-full h-[100dvh] overflow-hidden"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading && !verifying) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-lg w-full rounded-t-3xl sm:rounded-3xl shadow-2xl relative overflow-hidden transition-all flex flex-col max-h-[90dvh] sm:max-h-[85vh] h-auto my-0 sm:my-auto min-w-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
           <h2 className="text-base font-bold text-[var(--text-primary)] tracking-tight">
             Share Opinion
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-full hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
+            disabled={loading || verifying}
+            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-full hover:bg-[var(--bg-page-deep)] transition cursor-pointer disabled:opacity-50"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -329,7 +360,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto min-w-0 space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain min-w-0 flex-1 min-h-0 space-y-4">
           {errorMsg && (
             <div className="p-3 bg-red-500/15 border border-red-500/30 text-red-400 text-xs rounded-2xl flex items-center space-x-2 animate-in fade-in duration-200">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -387,23 +418,23 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
               <div className="min-w-0">
                 <textarea
                   required
-                  rows={4}
+                  rows={3}
                   value={postText}
                   onChange={(e) => setPostText(e.target.value)}
                   placeholder="What’s your perspective? State your opinion..."
                   maxLength={3000}
-                  className="w-full bg-transparent border-0 focus:ring-0 p-0 text-sm sm:text-base text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition resize-none leading-relaxed min-h-[90px]"
+                  className="w-full bg-transparent border-0 focus:ring-0 p-0 text-sm sm:text-base text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition resize-none leading-relaxed min-h-[75px] max-h-[140px] overflow-y-auto"
                   autoFocus
                 />
               </div>
 
               {/* Image Preview if selected */}
               {imagePreview && (
-                <div className="relative rounded-2xl overflow-hidden border border-[var(--border-subtle)] max-h-48 group">
+                <div className="relative rounded-2xl overflow-hidden border border-[var(--border-subtle)] max-h-40 group">
                   <img
                     src={imagePreview}
                     alt="Attachment preview"
-                    className="w-full h-48 object-cover"
+                    className="w-full h-40 object-cover"
                   />
                   <button
                     type="button"

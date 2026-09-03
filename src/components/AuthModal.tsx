@@ -50,16 +50,27 @@ export function AuthModal() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Lock body scroll while modal is open
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isAuthModalOpen]);
+
   // Handle ESC key to close modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isAuthModalOpen) {
+      if (e.key === 'Escape' && isAuthModalOpen && !loading) {
         closeAuthModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAuthModalOpen, closeAuthModal]);
+  }, [isAuthModalOpen, loading, closeAuthModal]);
 
   // Resend Countdown Timer Effect
   useEffect(() => {
@@ -373,11 +384,22 @@ export function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto w-full">
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-md w-full rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl relative my-0 sm:my-auto max-h-[92vh] overflow-y-auto min-w-0">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm w-full h-[100dvh] overflow-hidden"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) {
+          closeAuthModal();
+        }
+      }}
+    >
+      <div
+        className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-md w-full rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl relative my-0 sm:my-auto max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto overscroll-contain min-w-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={closeAuthModal}
-          className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-page-deep)] rounded-xl transition cursor-pointer"
+          disabled={loading}
+          className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-page-deep)] rounded-xl transition cursor-pointer disabled:opacity-50"
           aria-label="Close dialog"
         >
           <X className="w-4 h-4" />

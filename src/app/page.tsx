@@ -91,12 +91,13 @@ export default function HomePage() {
           <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] w-full min-w-0">
             {/* Feed Tabs: For You, Highest Value, Trending, New, Following */}
             <div className="flex border-b border-[var(--border-subtle)] w-full overflow-x-auto scrollbar-none">
+              {/* For You */}
               <button
                 onClick={() => {
                   setActiveTab('for_you');
                   setActiveCategory('all');
                 }}
-                className={`flex-1 min-w-[70px] py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
                   activeTab === 'for_you'
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -108,11 +109,12 @@ export default function HomePage() {
                 )}
               </button>
 
+              {/* Highest Value (Desktop only) */}
               <button
                 onClick={() => {
                   setActiveTab('highest_value');
                 }}
-                className={`flex-1 min-w-[95px] py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
+                className={`hidden sm:flex flex-1 min-w-[95px] py-3 text-xs sm:text-sm font-bold items-center justify-center transition cursor-pointer relative shrink-0 ${
                   activeTab === 'highest_value'
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -124,11 +126,12 @@ export default function HomePage() {
                 )}
               </button>
 
+              {/* Trending */}
               <button
                 onClick={() => {
                   setActiveTab('trending');
                 }}
-                className={`flex-1 min-w-[80px] py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
                   activeTab === 'trending'
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -143,11 +146,12 @@ export default function HomePage() {
                 )}
               </button>
 
+              {/* New (Desktop only) */}
               <button
                 onClick={() => {
                   setActiveTab('new');
                 }}
-                className={`flex-1 min-w-[60px] py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
+                className={`hidden sm:flex flex-1 min-w-[60px] py-3 text-xs sm:text-sm font-bold items-center justify-center transition cursor-pointer relative shrink-0 ${
                   activeTab === 'new'
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -159,6 +163,7 @@ export default function HomePage() {
                 )}
               </button>
 
+              {/* Following */}
               <button
                 onClick={() => {
                   if (!user) {
@@ -167,7 +172,7 @@ export default function HomePage() {
                     setActiveTab('following');
                   }
                 }}
-                className={`flex-1 min-w-[80px] py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
                   activeTab === 'following'
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -180,8 +185,8 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Horizontal Category Chips */}
-            <div className="w-full min-w-0 flex items-center space-x-1.5 px-3 sm:px-4 py-2 overflow-x-auto scrollbar-none">
+            {/* Horizontal Category Chips (Desktop only - Mobile has clean tabs-to-feed layout) */}
+            <div className="hidden sm:flex w-full min-w-0 items-center space-x-1.5 px-3 sm:px-4 py-2 overflow-x-auto scrollbar-none">
               {categories.map((cat) => (
                 <button
                   key={cat.slug}
@@ -198,8 +203,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Quick Post Composer */}
-          <div className="p-3 sm:p-4 border-b border-[var(--border-subtle)] w-full min-w-0 box-border">
+          {/* Quick Post Composer (Desktop only - Mobile uses bottom '+' navigation action) */}
+          <div className="hidden sm:block p-3 sm:p-4 border-b border-[var(--border-subtle)] w-full min-w-0 box-border">
             <div
               onClick={() => setIsCreateModalOpen(true)}
               className="flex items-center space-x-2.5 sm:space-x-3 p-2.5 sm:p-3 rounded-2xl bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] hover:border-[var(--border-color)] cursor-pointer transition w-full min-w-0 group shadow-xs"
@@ -230,20 +235,20 @@ export default function HomePage() {
             ) : debates.length > 0 ? (
               debates.map((debate) => <DebateCard key={debate.id} {...debate} />)
             ) : (
-              <div className="py-24 text-center space-y-4 p-8">
-                <div className="w-12 h-12 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center mx-auto text-[var(--text-muted)]">
-                  <MessageSquare className="w-6 h-6 opacity-60" />
+              <div className="py-12 sm:py-24 text-center space-y-3 sm:space-y-4 p-6 sm:p-8">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center mx-auto text-[var(--text-muted)]">
+                  <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 opacity-60" />
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-sm font-bold text-[var(--text-primary)]">
                     {activeTab === 'following'
                       ? 'No opinions from people you follow'
-                      : 'No conversations in this topic yet'}
+                      : 'No conversations yet'}
                   </h3>
                   <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
                     {activeTab === 'following'
                       ? 'Follow active debaters or explore the latest opinions on IndoBid.'
-                      : 'Be the first to publish a high-conviction opinion in this category.'}
+                      : 'Be the first to publish an opinion with conviction.'}
                   </p>
                 </div>
                 <button
