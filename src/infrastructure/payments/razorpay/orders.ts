@@ -6,6 +6,8 @@ import { CreateOrderParams, PaymentOrder } from '../payment.provider.interface';
 import { getRazorpayConfig } from './client';
 import { PaymentError } from '../../../lib/errors';
 
+import { buildSafeRazorpayNotes } from '../payment-metadata';
+
 export async function createRazorpayOrder(params: CreateOrderParams): Promise<PaymentOrder> {
   const { keyId, keySecret } = getRazorpayConfig();
 
@@ -21,6 +23,7 @@ export async function createRazorpayOrder(params: CreateOrderParams): Promise<Pa
   }
 
   const authHeader = `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString('base64')}`;
+  const safeNotes = buildSafeRazorpayNotes(params.notes || {});
 
   const response = await fetch('https://api.razorpay.com/v1/orders', {
     method: 'POST',
@@ -32,7 +35,7 @@ export async function createRazorpayOrder(params: CreateOrderParams): Promise<Pa
       amount: params.amountPaise,
       currency: params.currency || 'INR',
       receipt: params.receipt,
-      notes: params.notes,
+      notes: safeNotes,
     }),
   });
 

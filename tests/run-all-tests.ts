@@ -33,6 +33,13 @@ import {
 import { paymentService } from '../src/modules/payments/payment.service';
 import { GET as getHealthRoute } from '../src/app/api/health/route';
 import { GET as getHealthDbRoute } from '../src/app/api/health/db/route';
+import { NextRequest } from 'next/server';
+import {
+  sanitizePaymentNote,
+  sanitizeUserTextForNote,
+  sanitizePaymentNoteKey,
+  buildSafeRazorpayNotes,
+} from '../src/infrastructure/payments/payment-metadata';
 
 let passed = 0;
 let failed = 0;
@@ -3794,6 +3801,188 @@ async function runTestSuite() {
       presetsUsd[0].targetMinorUnits > 0,
     'Test 215: Base INR presets convert accurately into localized display amounts'
   );
+
+  // -------------------------------------------------------------------------------------------------
+  // PART 15: RAZORPAY UTF-8 METADATA PROTECTION & UNICODE PRESERVATION (Tests 216 - 227)
+  // -------------------------------------------------------------------------------------------------
+  console.log('\n--- PART 15: RAZORPAY UTF-8 METADATA PROTECTION & UNICODE PRESERVATION (Tests 216 - 227) ---');
+
+  // Test 216: Normal English text sanitization
+  const normalText = sanitizePaymentNote('Standard Order #12345');
+  assert(
+    normalText === 'Standard Order #12345',
+    'Test 216: Normal English text is preserved unchanged and valid'
+  );
+
+  // Test 217: Single emoji metadata sanitization & removal from external notes
+  const singleEmojiText = sanitizePaymentNote('🚀 Welcome to IndoBid');
+  const userTextStripped = sanitizeUserTextForNote('🚀 Welcome to IndoBid');
+  assert(
+    singleEmojiText.length > 0 &&
+      userTextStripped === 'Welcome to IndoBid' &&
+      Buffer.from(singleEmojiText, 'utf-8').toString('utf-8') === singleEmojiText,
+    'Test 217: Emoji "🚀 Welcome to IndoBid" produces valid UTF-8 and safely strips from external notes'
+  );
+
+  // Test 218: Multiple emojis in metadata
+  const multiEmojiClean = sanitizeUserTextForNote('🚀🔥💡 Multi Emojis in Content');
+  assert(
+    multiEmojiClean === 'Multi Emojis in Content',
+    'Test 218: Multiple emojis are safely stripped from external note values'
+  );
+
+  // Test 219: Hindi / Devanagari Unicode preservation in metadata
+  const hindiText = sanitizePaymentNote('यह एक परीक्षण है');
+  assert(
+    hindiText === 'यह एक परीक्षण है',
+    'Test 219: Hindi Devanagari text "यह एक परीक्षण है" is cleanly preserved with NFC normalization'
+  );
+
+  // Test 220: Mixed Unicode with emojis and Hindi
+  const mixedUnicodeClean = sanitizeUserTextForNote('🚀 यह IndoBid है');
+  assert(
+    mixedUnicodeClean === 'यह IndoBid है',
+    'Test 220: Mixed Unicode "🚀 यह IndoBid है" safely cleans emojis while preserving Hindi'
+  );
+
+  // Test 221: Malformed / unpaired UTF-16 surrogate characters are eliminated
+  const malformedSurrogate = 'Corrupt\uD83DString\uDE80Test';
+  const cleanSurrogate = sanitizePaymentNote(malformedSurrogate);
+  assert(
+    cleanSurrogate === 'CorruptStringTest' &&
+      !/[\uD800-\uDFFF]/.test(cleanSurrogate),
+    'Test 221: Malformed and unpaired UTF-16 surrogate characters are safely eliminated'
+  );
+
+  // Test 222: Very long metadata is truncated cleanly without splitting surrogate pairs
+  const longInput = 'A'.repeat(1000) + '🚀' + 'B'.repeat(500);
+  const truncatedNote = sanitizePaymentNote(longInput, 256);
+  assert(
+    Array.from(truncatedNote).length <= 256 &&
+      Buffer.from(truncatedNote, 'utf-8').toString('utf-8') === truncatedNote,
+    'Test 222: Very long metadata is safely truncated without surrogate splitting or UTF-8 corruption'
+  );
+
+  // Test 223: Defensive null, undefined, and empty string handling
+  assert(
+    sanitizePaymentNote(null) === '' &&
+      sanitizePaymentNote(undefined) === '' &&
+      sanitizePaymentNote('') === '',
+    'Test 223: Defensive handling safely returns empty strings for null/undefined'
+  );
+
+  // Test 224: buildSafeRazorpayNotes strictly strips user-generated rich text keys
+  const unsafeNotes = {
+    title: '🚀 Welcome to IndoBid. Let’s put value behind opinions.',
+    content: 'Full rich opinion text with 🚀 and Hindi',
+    bio: 'User bio with emojis 🔥',
+    description: 'Arbitrary description',
+    debateId: 'deb_safe_123',
+    contributionId: 'contrib_safe_456',
+    currency: 'INR',
+    amount: '1000',
+    countryCode: 'IN',
+  };
+  const filteredNotes = buildSafeRazorpayNotes(unsafeNotes);
+  assert(
+    filteredNotes.title === undefined &&
+      filteredNotes.content === undefined &&
+      filteredNotes.bio === undefined &&
+      filteredNotes.description === undefined &&
+      filteredNotes.debateId === 'deb_safe_123' &&
+      filteredNotes.contributionId === 'contrib_safe_456' &&
+      filteredNotes.currency === 'INR' &&
+      filteredNotes.amount === '1000' &&
+      filteredNotes.countryCode === 'IN',
+    'Test 224: buildSafeRazorpayNotes strictly strips rich text keys and retains only safe identifiers'
+  );
+
+  // Test 225: Regression Test — Post containing emoji & Unicode creates Razorpay order session successfully
+  const unicodeAuthor = await prisma.user.create({
+    data: {
+      username: `unicode_author_${Date.now()}`,
+      email: `unicode_author_${Date.now()}@example.com`,
+      displayName: 'Unicode Author 🚀',
+      role: 'user',
+      countryCode: 'IN',
+      currencyCode: 'INR',
+    },
+  });
+
+  const exactUnicodeTitle = '🚀 Welcome to IndoBid.\nLet’s put value behind opinions.';
+  const exactUnicodeContent = 'Putting real conviction behind human opinions with emojis 🚀 and Hindi यह IndoBid है.';
+
+  const unicodePostReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({
+        userId: unicodeAuthor.id,
+        username: unicodeAuthor.username!,
+        email: unicodeAuthor.email,
+        displayName: unicodeAuthor.displayName!,
+        role: 'user',
+      })}`,
+    },
+    body: JSON.stringify({
+      title: exactUnicodeTitle,
+      content: exactUnicodeContent,
+      categoryId: testCategory.id,
+      isFree: false,
+      amountPaise: 1000, // ₹10 canonical base minimum
+    }),
+  });
+
+  const unicodePostRes = await createDebateRoute(unicodePostReq);
+  const unicodePostData = await unicodePostRes.json();
+  assert(
+    unicodePostRes.status === 200 &&
+      unicodePostData.success === true &&
+      unicodePostData.published === false &&
+      unicodePostData.orderId !== undefined &&
+      unicodePostData.orderId.length > 0,
+    'Test 225: Post with "🚀 Welcome to IndoBid.\\nLet’s put value behind opinions." creates Razorpay order successfully'
+  );
+
+  // Test 226: Verify database post contains 100% original untouched emojis, newlines, and Hindi
+  const unicodeDebateInDb = await prisma.debate.findUnique({
+    where: { id: unicodePostData.debateId },
+    include: { contributions: true },
+  });
+  assert(
+    unicodeDebateInDb !== null &&
+      unicodeDebateInDb.title === exactUnicodeTitle &&
+      unicodeDebateInDb.title.includes('🚀') &&
+      unicodeDebateInDb.title.includes('\n') &&
+      unicodeDebateInDb.contributions[0].content === exactUnicodeContent &&
+      unicodeDebateInDb.contributions[0].content.includes('यह IndoBid है'),
+    'Test 226: Database post and contribution strictly retain original emoji, newlines, and Hindi untouched'
+  );
+
+  // Test 227: Verify fulfillment preserves Unicode and satisfies 50/50 economics
+  const unicodeFulfillment = await processSuccessfulPayment({
+    providerPaymentId: `test_pay_unicode_${Date.now()}`,
+    debateId: unicodeDebateInDb!.id,
+    contributionId: unicodeDebateInDb!.contributions[0].id,
+    amountPaise: 1000,
+    currency: 'INR',
+  });
+
+  const updatedUnicodeDebate = await prisma.debate.findUnique({
+    where: { id: unicodeDebateInDb!.id },
+  });
+  assert(
+    unicodeFulfillment.success === true &&
+      updatedUnicodeDebate?.status === 'active' &&
+      updatedUnicodeDebate?.title === exactUnicodeTitle,
+    'Test 227: Payment fulfillment succeeds, activates debate, and preserves complete original Unicode title'
+  );
+
+  // Cleanup Part 15 test data
+  await prisma.payment.deleteMany({ where: { debateId: unicodeDebateInDb!.id } });
+  await prisma.contribution.deleteMany({ where: { debateId: unicodeDebateInDb!.id } });
+  await prisma.debate.deleteMany({ where: { id: unicodeDebateInDb!.id } });
+  await prisma.user.deleteMany({ where: { id: unicodeAuthor.id } });
 
   // Cleanup Part 14 test users
   await prisma.payment.deleteMany({ where: { id: testPaymentRecord.id } });

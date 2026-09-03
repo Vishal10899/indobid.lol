@@ -5,6 +5,7 @@
  */
 
 import { razorpayAdapter, CheckoutSessionOptions, CheckoutSessionResult } from '../../infrastructure/payments/razorpay.adapter';
+import { buildSafeRazorpayNotes } from '../../infrastructure/payments/payment-metadata';
 import { processSuccessfulPayment, FulfillmentParams, FulfillmentResult } from '../../lib/payments/fulfillment';
 import { userRepository } from '../../infrastructure/database/repositories/user.repository';
 import { CreateCheckoutDTO } from './payment.types';
@@ -68,14 +69,21 @@ export class PaymentService {
       amountPaise: dto.amountPaise,
       currency: currencyCode,
       receipt: `rcpt_${Date.now()}`,
-      notes: {
+      notes: buildSafeRazorpayNotes({
+        user_id: userId || '',
         userId: userId || '',
+        country_code: countryCode,
         countryCode,
+        currency: currencyCode,
         currencyCode,
+        amount: String(dto.amountPaise),
+        base_amount: String(baseAmountPaise),
         baseAmountPaise: String(baseAmountPaise),
+        debate_id: dto.debateId || '',
         debateId: dto.debateId || '',
+        is_new_debate: String(dto.isNewDebate || false),
         isNewDebate: String(dto.isNewDebate || false),
-      },
+      }),
     });
 
     return {

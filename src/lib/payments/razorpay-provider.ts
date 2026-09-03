@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { PaymentProvider, CreateCheckoutParams, CheckoutSessionResult, WebhookEventPayload } from './payment-provider';
+import { buildSafeRazorpayNotes } from './payment-metadata';
 
 export class RazorpayProvider implements PaymentProvider {
   private keyId: string;
@@ -37,14 +38,18 @@ export class RazorpayProvider implements PaymentProvider {
         amount: amountPaise, // amount in smallest currency unit (INR paise: e.g. 1000 for ₹10)
         currency: orderCurrency,
         receipt: receiptId,
-        notes: {
+        notes: buildSafeRazorpayNotes({
+          debate_id: params.debateId || '',
           debateId: params.debateId || '',
+          contribution_id: params.contributionId || '',
           contributionId: params.contributionId || '',
+          listing_id: params.listingId || '',
           listingId: params.listingId || '',
+          bid_id: params.bidId || '',
           bidId: params.bidId || '',
-          authorUsername: params.authorUsername || 'anonymous',
-          title: (params.title || '').substring(0, 100),
-        },
+          currency: orderCurrency,
+          amount: String(amountPaise),
+        }),
       };
 
       const response = await fetch('https://api.razorpay.com/v1/orders', {

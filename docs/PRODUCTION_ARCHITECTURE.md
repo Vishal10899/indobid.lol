@@ -70,8 +70,10 @@ This document serves as the authoritative operational and architectural referenc
 
 ## 7. Where Razorpay Integration Lives
 * **Adapter File:** [`src/infrastructure/payments/razorpay.adapter.ts`](file:///D:/indobid.lol/src/infrastructure/payments/razorpay.adapter.ts)
+* **Metadata Sanitizer:** [`src/infrastructure/payments/payment-metadata.ts`](file:///D:/indobid.lol/src/infrastructure/payments/payment-metadata.ts)
 * **Contract:** Implements [`IPaymentProvider`](file:///D:/indobid.lol/src/infrastructure/payments/payment.provider.interface.ts).
 * **Isolation:** Isolates order generation, checkout session initialization, payment signature verification, and webhook HMAC validation.
+* **UTF-8 & Notes Protection:** All order payloads pass through `buildSafeRazorpayNotes()`. Arbitrary user-generated text, post titles, bio, and content are strictly excluded from Razorpay notes. Only sanitized identifiers (`debate_id`, `contribution_id`, `country_code`, `currency`, `amount`) are sent to Razorpay. Unpaired UTF-16 surrogates and control characters are stripped from external payloads, completely preventing Razorpay UTF-8 encoding failures while keeping the original emojis, Hindi, and Unicode 100% intact in the PostgreSQL database.
 
 ## 8. Where Creator Economics Lives
 * **Module Directory:** [`src/modules/creator-earnings/`](file:///D:/indobid.lol/src/modules/creator-earnings/)

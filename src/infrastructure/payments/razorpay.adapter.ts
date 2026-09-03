@@ -13,6 +13,8 @@ import {
 } from './payment.provider.interface';
 import { env } from '../../config/env';
 
+import { buildSafeRazorpayNotes } from './payment-metadata';
+
 export interface CheckoutSessionOptions {
   debateId?: string;
   contributionId?: string;
@@ -53,6 +55,7 @@ export class RazorpayAdapter implements IPaymentProvider {
   async createOrder(params: CreateOrderParams): Promise<PaymentOrder> {
     const currency = (params.currency || 'INR').toUpperCase();
     const receipt = (params.receipt || `rcpt_${Date.now()}`).substring(0, 40);
+    const safeNotes = buildSafeRazorpayNotes(params.notes || {});
 
     if (!this.keyId || !this.keySecret) {
       const dummyId = `order_${receipt.substring(0, 14)}`;
@@ -70,7 +73,7 @@ export class RazorpayAdapter implements IPaymentProvider {
       amount: params.amountPaise,
       currency,
       receipt,
-      notes: params.notes || {},
+      notes: safeNotes,
     };
 
     const res = await fetch('https://api.razorpay.com/v1/orders', {
@@ -104,15 +107,19 @@ export class RazorpayAdapter implements IPaymentProvider {
       amountPaise: options.amountPaise,
       currency,
       receipt: receiptId,
-      notes: {
+      notes: buildSafeRazorpayNotes({
+        debate_id: options.debateId || '',
         debateId: options.debateId || '',
+        contribution_id: options.contributionId || '',
         contributionId: options.contributionId || '',
-        authorUsername: options.authorUsername || 'anonymous',
-        title: (options.title || '').substring(0, 100),
+        country_code: options.countryCode || 'IN',
         countryCode: options.countryCode || 'IN',
+        currency: currency,
         currencyCode: currency,
+        amount: String(options.amountPaise),
+        base_amount: String(options.baseAmountPaise || options.amountPaise),
         baseAmountPaise: String(options.baseAmountPaise || options.amountPaise),
-      },
+      }),
     });
 
     return {
