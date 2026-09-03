@@ -10,7 +10,18 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { displayName, bio, avatarUrl, interests } = body;
+    const { displayName, bio, avatarUrl, interests, countryCode } = body;
+
+    let updateCountry: string | undefined;
+    let updateCurrency: string | undefined;
+    if (countryCode !== undefined) {
+      const { isValidCountryCode, getCurrencyForCountry } = await import('@/lib/money');
+      const cleanCountry = String(countryCode).trim().toUpperCase();
+      if (isValidCountryCode(cleanCountry)) {
+        updateCountry = cleanCountry;
+        updateCurrency = getCurrencyForCountry(cleanCountry);
+      }
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id: session.userId },
@@ -19,6 +30,8 @@ export async function PATCH(req: NextRequest) {
         bio: bio !== undefined ? bio.trim().substring(0, 300) : undefined,
         avatarUrl: avatarUrl !== undefined ? avatarUrl.trim() : undefined,
         interests: interests !== undefined ? interests.trim().substring(0, 200) : undefined,
+        countryCode: updateCountry,
+        currencyCode: updateCurrency,
       },
       select: {
         id: true,
@@ -27,6 +40,8 @@ export async function PATCH(req: NextRequest) {
         bio: true,
         avatarUrl: true,
         interests: true,
+        countryCode: true,
+        currencyCode: true,
       },
     });
 

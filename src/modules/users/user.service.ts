@@ -33,6 +33,8 @@ export class UserService {
       bio: user.bio,
       role: user.role,
       isVerified: user.isVerified,
+      countryCode: user.countryCode || 'IN',
+      currencyCode: user.currencyCode || 'INR',
       createdAt: user.createdAt,
       stats: {
         debatesCount,
@@ -44,9 +46,17 @@ export class UserService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDTO) {
-    const data: { displayName?: string; bio?: string } = {};
+    const data: { displayName?: string; bio?: string; countryCode?: string; currencyCode?: string } = {};
     if (dto.displayName !== undefined) data.displayName = dto.displayName.trim();
     if (dto.bio !== undefined) data.bio = dto.bio.trim();
+    if (dto.countryCode !== undefined) {
+      const { isValidCountryCode, getCurrencyForCountry } = await import('../../lib/money');
+      const cleanCountry = dto.countryCode.trim().toUpperCase();
+      if (isValidCountryCode(cleanCountry)) {
+        data.countryCode = cleanCountry;
+        data.currencyCode = getCurrencyForCountry(cleanCountry);
+      }
+    }
 
     return userRepository.update(userId, data);
   }

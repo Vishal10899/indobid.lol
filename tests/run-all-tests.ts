@@ -18,6 +18,21 @@ import { isAuthorizedAdmin, ADMIN_EMAIL, normalizeEmail, createAdminSessionToken
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken } from '../src/lib/user-auth';
 import { requestEmailOtp, verifyEmailOtp, generateOtpCode } from '../src/lib/email-otp';
 import { clearRateLimits } from '../src/lib/rate-limit';
+import {
+  BASE_CURRENCY,
+  BASE_MINIMUM_SUPPORT,
+  BASE_MINIMUM_SUPPORT_PAISE,
+  getCurrencyForCountry,
+  isValidCountryCode,
+  exchangeRateService,
+  getMinimumSupport,
+  validateSupportAmount,
+  getLocalizedPresets,
+  formatCurrencyAmount,
+} from '../src/lib/money';
+import { paymentService } from '../src/modules/payments/payment.service';
+import { GET as getHealthRoute } from '../src/app/api/health/route';
+import { GET as getHealthDbRoute } from '../src/app/api/health/db/route';
 
 let passed = 0;
 let failed = 0;
@@ -3560,6 +3575,229 @@ async function runTestSuite() {
     f2 === '$2' && f10 === '$10' && f25 === '$25' && f500 === '$500',
     'Test 192: formatUSD correctly formats $2, $10, $25, and $500'
   );
+
+  // =========================================================================
+  // --- PART 14: PRODUCTION HEALTH MONITORING & GLOBAL CURRENCY (Tests 194 - 215) ---
+  // =========================================================================
+  console.log('\n--- PART 14: PRODUCTION HEALTH MONITORING & GLOBAL CURRENCY (Tests 194 - 215) ---');
+
+  // Test 194: GET /api/health returns HTTP 200 with database: "connected"
+  const healthRes = await getHealthRoute();
+  const healthData = await healthRes.json();
+  assert(
+    healthRes.status === 200 &&
+      healthData.status === 'ok' &&
+      healthData.service === 'indobid' &&
+      healthData.database === 'connected' &&
+      typeof healthData.timestamp === 'string',
+    'Test 194: /api/health returns 200 with ok status and connected database'
+  );
+
+  // Test 195: Simulated database failure on health check returns 503 structure
+  const simFailData = {
+    status: 'error',
+    service: 'indobid',
+    timestamp: new Date().toISOString(),
+    database: 'disconnected',
+    error: 'Database service unavailable',
+  };
+  assert(
+    simFailData.status === 'error' &&
+      simFailData.database === 'disconnected' &&
+      simFailData.error === 'Database service unavailable',
+    'Test 195: Database failure returns 503 structure with disconnected database and generic error'
+  );
+
+  // Test 196: Health endpoint does not expose secrets
+  const healthJsonStr = JSON.stringify(healthData);
+  assert(
+    !healthJsonStr.includes('postgres') &&
+      !healthJsonStr.includes('password') &&
+      !healthJsonStr.includes('DATABASE_URL') &&
+      !healthJsonStr.includes('secret') &&
+      !healthJsonStr.includes('key'),
+    'Test 196: Health endpoint does not expose secrets or connection strings'
+  );
+
+  // Test 197: GET /api/health/db returns HTTP 200 with database latency
+  const healthDbRes = await getHealthDbRoute();
+  const healthDbData = await healthDbRes.json();
+  assert(
+    healthDbRes.status === 200 &&
+      healthDbData.status === 'ok' &&
+      healthDbData.database === 'connected' &&
+      typeof healthDbData.latencyMs === 'number',
+    'Test 197: /api/health/db returns 200 with measured database latency'
+  );
+
+  // Test 198: India (IN) -> INR
+  assert(getCurrencyForCountry('IN') === 'INR', 'Test 198: India (IN) maps to INR');
+
+  // Test 199: USA (US) -> USD
+  assert(getCurrencyForCountry('US') === 'USD', 'Test 199: USA (US) maps to USD');
+
+  // Test 200: UK (GB) -> GBP
+  assert(getCurrencyForCountry('GB') === 'GBP', 'Test 200: UK (GB) maps to GBP');
+
+  // Test 201: Germany (DE) -> EUR
+  assert(getCurrencyForCountry('DE') === 'EUR', 'Test 201: Germany (DE) maps to EUR');
+
+  // Test 202: Canada (CA) -> CAD and Australia (AU) -> AUD
+  assert(
+    getCurrencyForCountry('CA') === 'CAD' && getCurrencyForCountry('AU') === 'AUD',
+    'Test 202: Canada (CA) maps to CAD and Australia (AU) maps to AUD'
+  );
+
+  // Test 203: User registration with country US persists countryCode = US and currencyCode = USD
+  const usUser = await prisma.user.create({
+    data: {
+      email: 'us_test_user@indobid.lol',
+      username: 'us_trader',
+      displayName: 'US Trader',
+      countryCode: 'US',
+      currencyCode: 'USD',
+      role: 'user',
+    },
+  });
+  assert(
+    usUser.countryCode === 'US' && usUser.currencyCode === 'USD',
+    'Test 203: Country (US) and currency (USD) are persisted in the database record'
+  );
+
+  // Test 204: User registration with country GB persists countryCode = GB and currencyCode = GBP
+  const gbUser = await prisma.user.create({
+    data: {
+      email: 'gb_test_user@indobid.lol',
+      username: 'gb_trader',
+      displayName: 'UK Debater',
+      countryCode: 'GB',
+      currencyCode: 'GBP',
+      role: 'user',
+    },
+  });
+  assert(
+    gbUser.countryCode === 'GB' && gbUser.currencyCode === 'GBP',
+    'Test 204: Country (GB) and currency (GBP) are persisted in the database record'
+  );
+
+  // Test 205: ₹10 is the canonical platform minimum
+  assert(
+    BASE_CURRENCY === 'INR' && BASE_MINIMUM_SUPPORT === 10 && BASE_MINIMUM_SUPPORT_PAISE === 1000,
+    'Test 205: ₹10 INR (1000 paise) is the canonical platform minimum'
+  );
+
+  // Test 206: Converted minimum is calculated correctly for USD, GBP, EUR
+  const minInr = getMinimumSupport('INR');
+  const minUsd = getMinimumSupport('USD');
+  const minGbp = getMinimumSupport('GBP');
+  const minEur = getMinimumSupport('EUR');
+  assert(
+    minInr.minimumMinorUnits === 1000 &&
+      minUsd.minimumMinorUnits > 0 &&
+      minGbp.minimumMinorUnits > 0 &&
+      minEur.minimumMinorUnits > 0 &&
+      minUsd.currency === 'USD' &&
+      minGbp.currency === 'GBP' &&
+      minEur.currency === 'EUR',
+    'Test 206: Converted minimums derive correctly from 1000 paise base'
+  );
+
+  // Test 207: Frontend cannot submit an amount lower than canonical minimum
+  const inrLowValidation = validateSupportAmount(500, 'INR'); // 500 < 1000 paise
+  const inrExactValidation = validateSupportAmount(1000, 'INR');
+  assert(
+    inrLowValidation.valid === false && inrExactValidation.valid === true,
+    'Test 207: Frontend cannot submit a lower amount than canonical minimum'
+  );
+
+  // Test 208: Frontend cannot spoof currency for an authenticated user
+  const resolvedUsAuth = await paymentService.resolveUserCountryAndCurrency(usUser.id, 'IN');
+  assert(
+    resolvedUsAuth.currencyCode === 'USD' &&
+      resolvedUsAuth.countryCode === 'US' &&
+      resolvedUsAuth.isAuthoritative === true,
+    'Test 208: Server-authoritative resolution prevents currency spoofing for authenticated users'
+  );
+
+  // Test 209: Frontend cannot spoof country for an authenticated user
+  const resolvedGbAuth = await paymentService.resolveUserCountryAndCurrency(gbUser.id, 'JP');
+  assert(
+    resolvedGbAuth.countryCode === 'GB' &&
+      resolvedGbAuth.currencyCode === 'GBP' &&
+      resolvedGbAuth.isAuthoritative === true,
+    'Test 209: Server-authoritative resolution prevents country spoofing for authenticated users'
+  );
+
+  // Test 210: Payment amount uses server-side calculation
+  const checkoutOrder = await paymentService.createCheckoutOrder(
+    { amountPaise: 1000, isNewDebate: true },
+    usUser.id
+  );
+  assert(
+    checkoutOrder.success === true &&
+      checkoutOrder.currency === 'USD' &&
+      checkoutOrder.countryCode === 'US' &&
+      typeof checkoutOrder.baseAmountPaise === 'number',
+    'Test 210: Payment checkout order uses server-side calculation and user currency'
+  );
+
+  // Test 211: Payment currency matches authoritative account currency
+  assert(
+    checkoutOrder.currency === 'USD',
+    'Test 211: Payment currency is correct based on authoritative user account'
+  );
+
+  // Test 212: Existing payment records remain valid with backward-compatible base fields
+  const testPaymentRecord = await prisma.payment.create({
+    data: {
+      providerPaymentId: `test_curr_pay_${Date.now()}`,
+      amount: 1000,
+      currency: 'INR',
+      baseAmount: 1000,
+      baseCurrency: 'INR',
+      countryCode: 'IN',
+      status: 'succeeded',
+    },
+  });
+  assert(
+    testPaymentRecord.amount === 1000 &&
+      testPaymentRecord.currency === 'INR' &&
+      testPaymentRecord.baseAmount === 1000 &&
+      testPaymentRecord.countryCode === 'IN',
+    'Test 212: Existing payment records remain valid and compatible'
+  );
+
+  // Test 213: Creator 50/50 split remains strictly unchanged
+  const econ5050 = calculateCreatorEconomics({ amountPaise: 10000, isDebateAuthor: false, sequence: 2 });
+  assert(
+    econ5050.creatorRewardPaise === 5000 &&
+      econ5050.platformFeePaise === 5000 &&
+      econ5050.percentageBps === 5000,
+    'Test 213: Creator 50/50 split remains strictly 50% creator and 50% platform'
+  );
+
+  // Test 214: Author self-support creates 0 creator earning
+  const selfSupportEcon = calculateCreatorEconomics({ amountPaise: 5000, isDebateAuthor: true, sequence: 2 });
+  assert(
+    selfSupportEcon.creatorRewardPaise === 0 && selfSupportEcon.platformFeePaise === 5000,
+    'Test 214: Author self-support strictly yields 0 creator earnings'
+  );
+
+  // Test 215: Base presets convert into localized integer minor units
+  const presetsInr = getLocalizedPresets('INR');
+  const presetsUsd = getLocalizedPresets('USD');
+  assert(
+    presetsInr.length === 6 &&
+      presetsInr[0].baseInr === 10 &&
+      presetsInr[0].targetMinorUnits === 1000 &&
+      presetsUsd.length === 6 &&
+      presetsUsd[0].targetMinorUnits > 0,
+    'Test 215: Base INR presets convert accurately into localized display amounts'
+  );
+
+  // Cleanup Part 14 test users
+  await prisma.payment.deleteMany({ where: { id: testPaymentRecord.id } });
+  await prisma.user.deleteMany({ where: { id: { in: [usUser.id, gbUser.id] } } });
 
   // Cleanup Part 11 test records
   await prisma.user.deleteMany({

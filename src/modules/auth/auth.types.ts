@@ -9,6 +9,7 @@ export interface SignupDTO {
   username: string;
   displayName?: string;
   password: string;
+  countryCode?: string;
 }
 
 export interface LoginDTO {

@@ -657,11 +657,19 @@ export class DebateService {
     );
 
     const { paymentService } = await import('../payments/payment.service');
+    const userMeta = session?.userId
+      ? await safeDb(() => prisma.user.findUnique({ where: { id: session.userId }, select: { countryCode: true, currencyCode: true } }))
+      : null;
+    const userCountry = userMeta?.countryCode || 'IN';
+    const userCurrency = userMeta?.currencyCode || 'INR';
+
     const checkoutSession = await paymentService.createCheckoutSession({
       debateId: debate.id,
       contributionId: contribution.id,
       title: debate.title,
       amountPaise: backingPaise,
+      currency: userCurrency,
+      countryCode: userCountry,
       authorUsername: isAnonymous ? 'anonymous' : authorUsername,
       customerEmail: data.email || session?.email || undefined,
     });
@@ -676,7 +684,8 @@ export class DebateService {
       keyId: checkoutSession.keyId,
       amount: backingPaise,
       amountRupees: backingPaise / 100,
-      currency: 'INR',
+      currency: userCurrency,
+      countryCode: userCountry,
       debateId: debate.id,
       contributionId: contribution.id,
       debateTitle: debate.title,

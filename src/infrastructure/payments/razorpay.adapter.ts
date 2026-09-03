@@ -18,6 +18,9 @@ export interface CheckoutSessionOptions {
   contributionId?: string;
   title?: string;
   amountPaise: number;
+  currency?: string;
+  countryCode?: string;
+  baseAmountPaise?: number;
   authorUsername?: string;
   customerEmail?: string;
   successUrl?: string;
@@ -96,15 +99,19 @@ export class RazorpayAdapter implements IPaymentProvider {
 
   async createCheckoutSession(options: CheckoutSessionOptions): Promise<CheckoutSessionResult> {
     const receiptId = (options.contributionId || options.debateId || `rcpt_${Date.now()}`).substring(0, 40);
+    const currency = (options.currency || 'INR').toUpperCase();
     const order = await this.createOrder({
       amountPaise: options.amountPaise,
-      currency: 'INR',
+      currency,
       receipt: receiptId,
       notes: {
         debateId: options.debateId || '',
         contributionId: options.contributionId || '',
         authorUsername: options.authorUsername || 'anonymous',
         title: (options.title || '').substring(0, 100),
+        countryCode: options.countryCode || 'IN',
+        currencyCode: currency,
+        baseAmountPaise: String(options.baseAmountPaise || options.amountPaise),
       },
     });
 

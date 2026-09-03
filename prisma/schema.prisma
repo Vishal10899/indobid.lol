@@ -21,6 +21,8 @@ model User {
   interests        String?
   rank             Int             @default(0)
   role             String          @default("user") // admin, user
+  countryCode      String?         @default("IN") @map("country_code")
+  currencyCode     String?         @default("INR") @map("currency_code")
   createdAt        DateTime        @default(now()) @map("created_at")
   
   debates          Debate[]
@@ -239,8 +241,11 @@ model Payment {
   bid               Bid?           @relation(fields: [bidId], references: [id], onDelete: SetNull)
   provider          String         @default("razorpay")
   providerPaymentId String         @unique @map("provider_payment_id") // Order or Payment ID
-  amount            Int            // Amount in paise
+  amount            Int            // Amount in minor units
   currency          String         @default("INR")
+  baseAmount        Int?           @map("base_amount") // Amount in base currency (INR paise)
+  baseCurrency      String?        @default("INR") @map("base_currency")
+  countryCode       String?        @map("country_code")
   status            String         // succeeded, failed, canceled, pending, refunded
   customerEmail     String?        @map("customer_email")
   metadata          String?        // JSON string

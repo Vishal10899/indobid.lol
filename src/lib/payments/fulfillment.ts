@@ -12,6 +12,9 @@ export interface FulfillmentParams {
   bidId?: string; // legacy support
   amountPaise: number;
   currency?: string;
+  baseAmount?: number;
+  baseCurrency?: string;
+  countryCode?: string;
   customerEmail?: string;
   metadata?: Record<string, string>;
   provider?: string;
@@ -205,6 +208,9 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
               providerPaymentId,
               amount: amountPaise,
               currency,
+              baseAmount: params.baseAmount || amountPaise,
+              baseCurrency: params.baseCurrency || 'INR',
+              countryCode: params.countryCode || 'IN',
               status: 'succeeded',
               customerEmail,
               metadata: JSON.stringify(metadata),
@@ -212,6 +218,9 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
             update: {
               status: 'succeeded',
               amount: amountPaise,
+              baseAmount: params.baseAmount || amountPaise,
+              baseCurrency: params.baseCurrency || 'INR',
+              countryCode: params.countryCode || 'IN',
               metadata: JSON.stringify(metadata),
             },
           });
@@ -332,6 +341,9 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
               providerPaymentId,
               amount: amountPaise,
               currency,
+              baseAmount: params.baseAmount || amountPaise,
+              baseCurrency: params.baseCurrency || 'INR',
+              countryCode: params.countryCode || 'IN',
               status: 'succeeded',
               customerEmail,
               metadata: JSON.stringify(metadata),
@@ -339,6 +351,9 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
             update: {
               status: 'succeeded',
               amount: amountPaise,
+              baseAmount: params.baseAmount || amountPaise,
+              baseCurrency: params.baseCurrency || 'INR',
+              countryCode: params.countryCode || 'IN',
               metadata: JSON.stringify(metadata),
             },
           });

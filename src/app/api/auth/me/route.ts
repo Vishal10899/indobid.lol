@@ -22,6 +22,8 @@ export async function GET() {
         isVerified: true,
         rank: true,
         role: true,
+        countryCode: true,
+        currencyCode: true,
         createdAt: true,
         _count: {
           select: {

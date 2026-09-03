@@ -4,6 +4,8 @@
 
 export interface CreateCheckoutDTO {
   amountPaise: number;
+  currency?: string;
+  countryCode?: string;
   debateId?: string;
   isNewDebate?: boolean;
 }

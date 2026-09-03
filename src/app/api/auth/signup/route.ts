@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/user-auth';
 import { requestEmailOtp } from '@/lib/email-otp';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { normalizeEmail, ADMIN_EMAIL } from '@/lib/auth';
+import { isValidCountryCode, getCurrencyForCountry } from '@/lib/money';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const USERNAME_REGEX = /^[a-z0-9_]{3,25}$/;
@@ -24,6 +25,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     // Intentionally discard and ignore any client-controlled role, isFounder, isAdmin fields
     const { username, email, password, displayName, avatarUrl } = body || {};
+
+    const rawCountry = typeof body?.countryCode === 'string' ? body.countryCode.trim().toUpperCase() : undefined;
+    const countryCode = rawCountry && isValidCountryCode(rawCountry) ? rawCountry : 'IN';
+    const currencyCode = getCurrencyForCountry(countryCode);
 
     // 1. Mandatory Username Validation & Deterministic Normalization
     if (!username || typeof username !== 'string' || !username.trim()) {
@@ -139,6 +144,8 @@ export async function POST(req: NextRequest) {
             role: serverRole,
             isVerified: isFounderEmail,
             emailVerifiedAt: isFounderEmail ? new Date() : null,
+            countryCode,
+            currencyCode,
           },
         });
       }
@@ -176,6 +183,8 @@ export async function POST(req: NextRequest) {
       requiresVerification: true,
       email: cleanEmail,
       username: cleanUsername,
+      countryCode,
+      currencyCode,
       message: 'We sent a 6-digit code to your email.',
     });
   } catch (error) {

@@ -1,0 +1,8 @@
+-- AlterTable
+ALTER TABLE "payments" ADD COLUMN IF NOT EXISTS "base_amount" INTEGER,
+ADD COLUMN IF NOT EXISTS "base_currency" TEXT DEFAULT 'INR',
+ADD COLUMN IF NOT EXISTS "country_code" TEXT;
+
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "country_code" TEXT DEFAULT 'IN',
+ADD COLUMN IF NOT EXISTS "currency_code" TEXT DEFAULT 'INR';

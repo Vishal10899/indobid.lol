@@ -23,6 +23,7 @@ import {
   RateLimitError,
   ValidationError,
 } from '../../lib/errors';
+import { getCurrencyForCountry, isValidCountryCode, DEFAULT_COUNTRY } from '../../lib/money';
 import { SignupDTO, LoginDTO, AdminLoginDTO } from './auth.types';
 import { env } from '../../config/env';
 
@@ -44,6 +45,10 @@ export class AuthService {
     const passwordHash = passwordService.hashPassword(dto.password);
     const isFounderAccount = normalizedEmail === env.ADMIN_EMAIL;
 
+    const rawCountry = dto.countryCode?.trim().toUpperCase();
+    const countryCode = rawCountry && isValidCountryCode(rawCountry) ? rawCountry : DEFAULT_COUNTRY;
+    const currencyCode = getCurrencyForCountry(countryCode);
+
     const user = await authRepository.createUser({
       email: normalizedEmail,
       username: normalizedUsername,
@@ -52,6 +57,8 @@ export class AuthService {
       role: isFounderAccount ? 'founder' : 'user',
       isVerified: isFounderAccount,
       emailVerifiedAt: isFounderAccount ? new Date() : null,
+      countryCode,
+      currencyCode,
     });
 
     if (!isFounderAccount) {
@@ -63,6 +70,8 @@ export class AuthService {
       userId: user.id,
       email: user.email || normalizedEmail,
       username: user.username || normalizedUsername,
+      countryCode: user.countryCode || countryCode,
+      currencyCode: user.currencyCode || currencyCode,
       requiresEmailVerification: !isFounderAccount,
     };
   }

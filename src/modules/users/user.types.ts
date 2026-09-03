@@ -10,6 +10,8 @@ export interface UserProfileDTO {
   bio: string | null;
   role: string;
   isVerified: boolean;
+  countryCode: string | null;
+  currencyCode: string | null;
   createdAt: Date;
   stats: {
     debatesCount: number;
@@ -22,4 +24,5 @@ export interface UserProfileDTO {
 export interface UpdateProfileDTO {
   displayName?: string;
   bio?: string;
+  countryCode?: string;
 }
