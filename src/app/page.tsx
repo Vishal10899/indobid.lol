@@ -215,7 +215,7 @@ export default function HomePage() {
               </div>
               <button className="px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-xs transition shrink-0 flex items-center space-x-1 cursor-pointer active:scale-[0.98]">
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                <span>Post · ₹10</span>
+                <span>Post Opinion</span>
               </button>
             </div>
           </div>
@@ -251,7 +251,7 @@ export default function HomePage() {
                   className="px-4 py-2 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-xs transition cursor-pointer inline-flex items-center space-x-1.5 active:scale-[0.98]"
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                  <span>Start Conversation · ₹10</span>
+                  <span>Start Conversation</span>
                 </button>
               </div>
             )}

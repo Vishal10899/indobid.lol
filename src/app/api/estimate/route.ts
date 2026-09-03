@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
         where: { id: listingId },
       });
     } else if (rawUrl) {
-      const { isValid, formattedUrl } = validateAndFormatUrl(rawUrl);
-      if (isValid) {
-        const canonical = normalizeCanonicalUrl(formattedUrl);
+      const urlValidation = validateAndFormatUrl(rawUrl);
+      if (urlValidation.isValid && urlValidation.formattedUrl) {
+        const canonical = normalizeCanonicalUrl(urlValidation.formattedUrl);
         existingListing = await prisma.listing.findUnique({
           where: { canonicalUrl: canonical },
         });
@@ -51,34 +51,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const currentVerifiedBidCents = existingListing ? existingListing.verifiedBid : 0;
+    const currentVerifiedBidCents = existingListing ? (existingListing.verifiedBid || 0) : 0;
     
     // If target bid is less than current verified bid on existing listing, adjust target to at least current + $1
-    let effectiveTargetBidCents = targetBidCents;
+    let effectiveTargetBidCents: number = targetBidCents;
     if (existingListing && effectiveTargetBidCents <= currentVerifiedBidCents) {
       effectiveTargetBidCents = currentVerifiedBidCents + 100; // minimum $1 boost
     }
 
     const chargeAmountCents = Math.max(0, effectiveTargetBidCents - currentVerifiedBidCents);
-
-    const categoryId = parsed.data.categoryId || existingListing?.categoryId;
+    const categoryId = parsed.data.categoryId || existingListing?.categoryId || undefined;
 
     const rankEstimation = await estimateRank({
-      bidAmountCents: effectiveTargetBidCents,
+      targetBidCents: effectiveTargetBidCents,
       categoryId,
-      excludeListingId: listingId,
+      listingId,
     });
 
     return NextResponse.json({
       targetBidCents: effectiveTargetBidCents,
       currentVerifiedBidCents,
       chargeAmountCents,
+      targetBidFormatted: `$${(effectiveTargetBidCents / 100).toFixed(2)}`,
+      currentVerifiedBidFormatted: `$${(currentVerifiedBidCents / 100).toFixed(2)}`,
+      chargeAmountFormatted: `$${(chargeAmountCents / 100).toFixed(2)}`,
+      estimatedRank: rankEstimation.estimatedRank,
       isExistingListing: !!existingListing,
-      listingId: existingListing?.id || null,
-      ...rankEstimation,
     });
   } catch (error) {
-    console.error('Error estimating rank:', error);
-    return NextResponse.json({ error: 'Failed to estimate rank' }, { status: 500 });
+    console.error('Error in estimate rank API:', error);
+    return NextResponse.json({ error: 'Failed to calculate rank estimation' }, { status: 500 });
   }
 }

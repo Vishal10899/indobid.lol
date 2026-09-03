@@ -79,15 +79,15 @@ export function RightSidebar() {
           </div>
           <div className="flex items-start justify-between">
             <span className="font-bold text-[var(--text-primary)]">POST OPINION</span>
-            <span className="font-mono font-bold text-[var(--color-amber)]">₹10 start</span>
+            <span className="font-bold text-emerald-500 font-mono text-[11px]">100% Free</span>
           </div>
           <div className="flex items-start justify-between">
-            <span className="font-bold text-[var(--text-primary)]">BACK OPINION</span>
-            <span className="font-mono font-bold text-[var(--color-amber)]">₹11+ continuation</span>
+            <span className="font-bold text-[var(--text-primary)]">BACK CONVICTION</span>
+            <span className="font-mono font-bold text-[var(--color-amber)] text-[11px]">Optional ($10+)</span>
           </div>
           <div className="flex items-start justify-between pt-1 border-t border-[var(--border-subtle)] text-[11px]">
-            <span className="font-semibold text-[var(--text-secondary)]">CLIMB</span>
-            <span className="text-[var(--text-muted)] text-right">Higher conviction → more weight</span>
+            <span className="font-semibold text-[var(--text-secondary)]">CONVICTION</span>
+            <span className="text-[var(--text-muted)] text-right">Adds weight · Doesn't buy reach</span>
           </div>
         </div>
       </div>

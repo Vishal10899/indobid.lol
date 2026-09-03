@@ -419,7 +419,7 @@ function UserProfileContent() {
                     {profile.isVerified && (
                       <ShieldCheck className="w-4 h-4 text-[var(--color-lime)] shrink-0" />
                     )}
-                    {(profile.role === 'founder' || profile.role === 'admin' || profile.username === 'vishalchaudhary' || profile.username === 'vishalkumar') && (
+                    {(profile.role === 'founder' || profile.role === 'admin') && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
                         Founder · IndoBid
                       </span>

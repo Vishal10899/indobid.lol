@@ -15,7 +15,7 @@ import {
   MoreHorizontal,
   EyeOff,
 } from 'lucide-react';
-import { formatINR } from '@/lib/money';
+import { formatINR, formatUSD } from '@/lib/money';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar } from '@/components/Avatar';
 import { FormattedText } from '@/components/FormattedText';
@@ -251,7 +251,7 @@ export function DebateCard(props: DebateCardProps) {
             {!isAnonymous && authorIsVerified && (
               <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)] shrink-0" />
             )}
-            {!isAnonymous && (authorRole === 'founder' || authorRole === 'admin' || authorUsername === 'vishalchaudhary' || authorUsername === 'vishalkumar') && (
+            {!isAnonymous && (authorRole === 'founder' || authorRole === 'admin') && (
               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
                 Founder
               </span>
@@ -378,10 +378,16 @@ export function DebateCard(props: DebateCardProps) {
             <span className="font-medium text-[11px]">{likes}</span>
           </button>
 
-          {/* ₹ Backed (Prominent Amber Gold Conviction) */}
-          <div className="flex items-center space-x-1 font-mono text-[11px] font-bold text-[var(--color-amber)] shrink-0" title="Total verified backed conviction">
-            <span>{formatINR(totalVerifiedContribution)} backed</span>
-          </div>
+          {/* Conviction / Backing Indicator */}
+          {totalVerifiedContribution > 0 ? (
+            <div className="flex items-center space-x-1 font-mono text-[11px] font-bold text-[var(--color-amber)] shrink-0" title="Total verified support">
+              <span>{formatUSD(totalVerifiedContribution)} supported</span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-1 text-[11px] font-medium text-[var(--text-secondary)] shrink-0" title="Open community opinion">
+              <span className="px-1.5 py-0.2 rounded-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[10px]">Open</span>
+            </div>
+          )}
 
           {/* Responses */}
           <Link
@@ -426,7 +432,7 @@ export function DebateCard(props: DebateCardProps) {
         </div>
       </div>
 
-      {/* Back Opinion Action Strip */}
+      {/* Support Action Strip */}
       <div className="pt-1.5 flex items-center justify-between gap-2 text-xs border-t border-[var(--border-subtle)]/60 w-full min-w-0">
         <span className="text-[10px] sm:text-[11px] text-[var(--text-muted)] shrink-0">
           {contributionCount} {contributionCount === 1 ? 'opinion' : 'opinions'}
@@ -436,7 +442,7 @@ export function DebateCard(props: DebateCardProps) {
           href={`/debate/${id}`}
           className="inline-flex items-center space-x-1 text-[11px] sm:text-xs font-bold text-[var(--color-coral)] hover:text-[var(--color-coral-bright)] hover:underline transition py-1 truncate min-w-0"
         >
-          <span className="truncate">Back this opinion · {formatINR(minimumNextContribution)} min</span>
+          <span className="truncate">Support this opinion · {formatUSD(minimumNextContribution)} min</span>
           <ArrowRight className="w-3 h-3 shrink-0" />
         </Link>
       </div>

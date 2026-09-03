@@ -5,9 +5,32 @@
  * Floating-point money calculations are strictly prohibited.
  */
 
-export const MINIMUM_DEBATE_PAISE = 1000; // ₹10
-export const MINIMUM_INCREMENT_PAISE = 100; // ₹1
+export const MINIMUM_DEBATE_PAISE = 1000; // ₹10 / $10 base minimum
+export const MINIMUM_DEBATE_USD = 10; // $10 USD minimum
+export const MINIMUM_INCREMENT_PAISE = 100; // ₹1 / $1 step-up
 export const CURRENCY = 'INR';
+export const DISPLAY_CURRENCY = 'USD';
+export const USD_TO_INR_RATE = 85; // Standard 1 USD = 85 INR exchange rate
+
+/**
+ * Formats integer paise / cents into a clean USD representation (e.g. $10, $25, $500)
+ */
+export function formatUSD(paiseOrCents: number): string {
+  if (typeof paiseOrCents !== 'number' || isNaN(paiseOrCents) || paiseOrCents <= 0) return '$0';
+  
+  // If value is stored in base units (e.g. 1000 for $10 or 85000 for $10 USD equivalent)
+  let dollars = paiseOrCents >= 1000 ? Math.floor(paiseOrCents / 100) : paiseOrCents;
+  
+  // Format with thousands separator
+  return `$${dollars.toLocaleString('en-US')}`;
+}
+
+/**
+ * Formats monetary amounts for clean social UI (defaults to USD display)
+ */
+export function formatMoney(amount: number): string {
+  return formatUSD(amount);
+}
 
 /**
  * Formats integer paise into a clean Indian Rupee representation (e.g. ₹10, ₹1,284)

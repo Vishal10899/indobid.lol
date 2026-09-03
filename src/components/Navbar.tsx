@@ -107,7 +107,7 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
               className="px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center space-x-1 cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span className="hidden sm:inline">Post · ₹10</span>
+              <span className="hidden sm:inline">Post Opinion</span>
               <span className="sm:hidden font-bold">Post</span>
             </button>
           ) : (
@@ -116,7 +116,7 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
               className="px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center space-x-1 shrink-0"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span className="hidden sm:inline">Post · ₹10</span>
+              <span className="hidden sm:inline">Post Opinion</span>
               <span className="sm:hidden font-bold">Post</span>
             </Link>
           )}

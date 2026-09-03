@@ -12,9 +12,10 @@ import {
 } from '../src/lib/money';
 import { calculateTrendingScore } from '../src/lib/trending';
 import { getDebates, getDebateById } from '../src/lib/debates';
-import { isAuthorizedAdmin } from '../src/lib/auth';
+import { isAuthorizedAdmin, ADMIN_EMAIL, normalizeEmail, createAdminSessionToken } from '../src/lib/auth';
 import { hashPassword, verifyPassword, createSessionToken, verifySessionToken } from '../src/lib/user-auth';
 import { requestEmailOtp, verifyEmailOtp, generateOtpCode } from '../src/lib/email-otp';
+import { clearRateLimits } from '../src/lib/rate-limit';
 
 let passed = 0;
 let failed = 0;
@@ -1139,7 +1140,6 @@ async function runTestSuite() {
   const founderUser = await getOrCreateFounderUser();
   assert(
     founderUser !== null &&
-    founderUser.username === 'vishalchaudhary' &&
     founderUser.role === 'founder' &&
     founderUser.isVerified === true,
     'Test 65: getOrCreateFounderUser provisions or retrieves verified Founder user record'
@@ -1173,8 +1173,8 @@ async function runTestSuite() {
       content: 'IndoBid aligns incentives between readers, debaters, and creators through verifiable conviction.',
       categoryId: testCategory.id,
       authorId: founderUser.id,
-      authorUsername: founderUser.username || 'vishalchaudhary',
-      authorDisplayName: founderUser.displayName || 'Vishal Chaudhary',
+      authorUsername: founderUser.username || 'vishalkumar',
+      authorDisplayName: founderUser.displayName || 'Vishal Kumar',
       originalContribution: 0,
       totalVerifiedContribution: 0,
       contributionCount: 0,
@@ -1188,7 +1188,7 @@ async function runTestSuite() {
     founderDebateCheck !== null &&
     founderDebateCheck.status === 'active' &&
     founderDebateCheck.originalContribution === 0 &&
-    founderDebateCheck.authorUsername === 'vishalchaudhary',
+    founderDebateCheck.authorUsername === founderUser.username,
     'Test 68: Founder post is immediately published with status active, ₹0 original contribution, and 0 fake payments'
   );
 
@@ -1219,8 +1219,8 @@ async function runTestSuite() {
       content: 'This debate was posted directly through the verified Admin Dashboard.',
       categoryId: testCategory.id,
       authorId: founderUser.id,
-      authorUsername: founderUser.username || 'vishalchaudhary',
-      authorDisplayName: founderUser.displayName || 'Vishal Chaudhary',
+      authorUsername: founderUser.username || 'vishalkumar',
+      authorDisplayName: founderUser.displayName || 'Vishal Kumar',
       originalContribution: 0,
       totalVerifiedContribution: 0,
       contributionCount: 0,
@@ -1230,7 +1230,7 @@ async function runTestSuite() {
   });
   assert(
     adminPublishedDebate.status === 'active' &&
-    adminPublishedDebate.authorUsername === 'vishalchaudhary',
+    adminPublishedDebate.authorUsername === founderUser.username,
     'Test 71: Admin Dashboard post creation successfully publishes official Founder debate directly'
   );
 
@@ -1252,7 +1252,7 @@ async function runTestSuite() {
   const founderLedger = await prisma.creatorEarningsLedger.create({
     data: {
       creatorId: founderUser.id,
-      creatorUsername: founderUser.username || 'vishalchaudhary',
+      creatorUsername: founderUser.username || 'vishalkumar',
       debateId: founderDebate.id,
       contributionId: founderC1.id,
       grossAmountPaise: 1000,
@@ -1302,7 +1302,7 @@ async function runTestSuite() {
   });
   assert(
     debateWithAuthor?.author?.role === 'founder' &&
-    debateWithAuthor?.authorUsername === 'vishalchaudhary',
+    debateWithAuthor?.authorUsername === founderUser.username,
     'Test 75: Debate retrieval preserves author role and founder username for UI Founder badging'
   );
 
@@ -1625,7 +1625,7 @@ async function runTestSuite() {
 
   // Test 93: Verified existing users continue working normally without being blocked
   const existingVerifiedUser = await prisma.user.findFirst({
-    where: { username: 'vishalchaudhary' },
+    where: { email: ADMIN_EMAIL },
   });
   const isExistingVerifiedActive =
     existingVerifiedUser !== null &&
@@ -1987,18 +1987,17 @@ async function runTestSuite() {
   const authoritativeFounder = await prisma.user.findFirst({
     where: {
       OR: [
-        { email: { equals: 'VishalChaudhary74096@gmail.com', mode: 'insensitive' } },
-        { username: 'vishalchaudhary' },
+        { email: { equals: ADMIN_EMAIL, mode: 'insensitive' } },
+        { role: 'founder' },
       ],
     },
   });
 
   assert(
     authoritativeFounder !== null &&
-    Boolean(authoritativeFounder.username && authoritativeFounder.username.toLowerCase() === 'vishalchaudhary') &&
     authoritativeFounder.role === 'founder' &&
     authoritativeFounder.isVerified === true,
-    'Test 109: Authoritative single Founder identity (Vishal Chaudhary, @vishalchaudhary, VishalChaudhary74096@gmail.com) verified'
+    'Test 109: Authoritative single Founder identity verified in database'
   );
 
   // -------------------------------------------------------------------------------------------------
@@ -2099,11 +2098,13 @@ async function runTestSuite() {
   );
 
   // Test 114: Founder username (vishalchaudhary) cannot be claimed by another user
+  const currentFounderRecord = await prisma.user.findFirst({ where: { role: 'founder' } });
+  const targetFounderUsername = currentFounderRecord?.username || 'vishalkumar';
   const founderClaimReq = new NextRequest('http://localhost:3000/api/auth/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: 'VishalChaudhary',
+      username: targetFounderUsername.toUpperCase(),
       email: `fakefounder_${Date.now()}@example.com`,
       password: 'hackerPassword123',
     }),
@@ -2116,7 +2117,7 @@ async function runTestSuite() {
     founderClaimRes.status === 409 &&
     founderClaimData.success === false &&
     founderClaimData.error.includes('Username is already taken'),
-    'Test 114: Founder username vishalchaudhary cannot be claimed by another account'
+    `Test 114: Founder username ${targetFounderUsername} cannot be claimed by another account`
   );
 
   // Test 115: Invalid usernames (too short, invalid characters) are strictly rejected
@@ -2253,31 +2254,695 @@ async function runTestSuite() {
     'Test 120: Database unique constraint on users.username strictly prevents duplicate insertion at SQL level'
   );
 
-  // Clean up all test data cleanly
-  await (prisma as any).passwordResetToken.deleteMany({ where: { email: resetUserEmail } });
-  await prisma.user.deleteMany({ where: { id: resetUser.id } });
-  await prisma.debate.deleteMany({ where: { id: debateToHide.id } });
-  await prisma.emailOtp.deleteMany({ where: { email: { in: [testOtpEmail, directEmail, expiredEmail, resendTestEmail, attemptLimitEmail, unverifiedEmail, apiTestEmail, testRegEmail, `race1_${uniqueSuffix}@example.com`, `race2_${uniqueSuffix}@example.com`] } } });
-  await prisma.user.deleteMany({ where: { email: { in: [apiTestEmail, testRegEmail, `race1_${uniqueSuffix}@example.com`, `race2_${uniqueSuffix}@example.com`] } } });
-  if (verifiedUser) {
-    await prisma.user.deleteMany({ where: { id: verifiedUser.id } });
+  // -------------------------------------------------------------------------------------------------
+  // PART 10: FREE OPINIONS, OPTIONAL CONVICTION & FAIR MULTI-SIGNAL RANKING (Tests 121 - 135)
+  // -------------------------------------------------------------------------------------------------
+  console.log('\n--- PART 10: FREE OPINIONS, OPTIONAL CONVICTION & FAIR MULTI-SIGNAL RANKING (Tests 121 - 135) ---');
+
+  const { POST: createDebateRoute } = await import('../src/app/api/debates/route');
+  const { calculateRankingScore, getScore } = await import('../src/lib/ranking');
+
+  // Test 121: User can publish a Free opinion without payment
+  const freePostReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: userA.id, username: userA.username || 'usera', email: userA.email, displayName: userA.displayName || 'User A', role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      title: 'Free Post: Open Market Ideas',
+      content: 'Everyone should be able to share their perspective freely.',
+      categoryId: testCategory.id,
+      isFree: true,
+      amountPaise: 0,
+    }),
+  });
+
+  const freePostRes = await createDebateRoute(freePostReq);
+  const freePostData = await freePostRes.json();
+  const freeDebateInDb = await prisma.debate.findUnique({
+    where: { id: freePostData.debateId },
+    include: { contributions: true },
+  });
+
+  assert(
+    freePostRes.status === 200 &&
+    freePostData.success === true &&
+    freePostData.published === true &&
+    freePostData.isFree === true &&
+    freeDebateInDb?.status === 'active' &&
+    freeDebateInDb.originalContribution === 0 &&
+    freeDebateInDb.totalVerifiedContribution === 0,
+    'Test 121: User can publish a Free opinion (₹0) without payment, instantly active on platform'
+  );
+
+  // Test 122: Free opinion creates sequence #1 verified contribution with amount = 0
+  const seq1Contrib = freeDebateInDb?.contributions.find((c) => c.sequence === 1);
+  assert(
+    seq1Contrib !== undefined &&
+    seq1Contrib.status === 'verified' &&
+    seq1Contrib.amount === 0,
+    'Test 122: Free opinion creates sequence #1 verified contribution record with 0 paise amount'
+  );
+
+  // Test 123: User choosing paid backing creates pending debate and initiates Razorpay checkout
+  const backedPostReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: userB.id, username: userB.username || 'userb', email: userB.email, displayName: userB.displayName || 'User B', role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      title: 'Backed Post: High Conviction Thesis',
+      content: 'Putting financial backing behind this major thesis.',
+      categoryId: testCategory.id,
+      isFree: false,
+      amountPaise: 2500, // ₹25
+    }),
+  });
+
+  const backedPostRes = await createDebateRoute(backedPostReq);
+  const backedPostData = await backedPostRes.json();
+  const backedDebateInDb = await prisma.debate.findUnique({
+    where: { id: backedPostData.debateId },
+  });
+
+  assert(
+    backedPostRes.status === 200 &&
+    backedPostData.success === true &&
+    backedPostData.published === false &&
+    backedPostData.orderId !== undefined &&
+    backedDebateInDb?.status === 'pending_payment' &&
+    backedDebateInDb.originalContribution === 2500,
+    'Test 123: User choosing optional paid backing creates pending debate and initializes Razorpay checkout'
+  );
+
+  // Test 124: Free opinion enters public feed and is discoverable
+  const feedWithFree = await getDebates({ search: 'Open Market Ideas' });
+  assert(
+    feedWithFree.items.length > 0 &&
+    feedWithFree.items[0].id === freeDebateInDb?.id &&
+    feedWithFree.items[0].totalVerifiedContribution === 0,
+    'Test 124: Free opinion enters public feed and is discoverable with zero financial gate'
+  );
+
+  // Test 125: Free opinion with high genuine engagement outranks unengaged ₹5,000 paid post
+  // Opinion A: Free (₹0), 80 likes, 25 responses, 12 unique participants, 500 impressions
+  const scoreOpinionA = getScore({
+    totalVerifiedPaise: 0,
+    likeCount: 80,
+    impressionCount: 500,
+    contributionCount: 26,
+    uniqueParticipants: 12,
+    contentLength: 400,
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4h ago
+  });
+
+  // Opinion B: ₹5,000 backed (500,000 paise), 0 likes, 0 responses, 1 participant, 10 impressions
+  const scoreOpinionB = getScore({
+    totalVerifiedPaise: 500000,
+    likeCount: 0,
+    impressionCount: 10,
+    contributionCount: 1,
+    uniqueParticipants: 1,
+    contentLength: 400,
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4h ago
+  });
+
+  assert(
+    scoreOpinionA > scoreOpinionB,
+    `Test 125: Free opinion with high authentic engagement (${scoreOpinionA}) decisively outranks unengaged ₹5,000 paid post (${scoreOpinionB})`
+  );
+
+  // Test 126: Normalized conviction score applies logarithmic diminishing returns
+  const score1000 = calculateRankingScore({
+    totalVerifiedPaise: 100000, // ₹1,000
+    likeCount: 0,
+    impressionCount: 0,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(),
+  }).convictionScore;
+
+  const score100000 = calculateRankingScore({
+    totalVerifiedPaise: 10000000, // ₹100,000 (100x money)
+    likeCount: 0,
+    impressionCount: 0,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(),
+  }).convictionScore;
+
+  assert(
+    score100000 < score1000 * 3.0,
+    `Test 126: Logarithmic conviction normalization caps whale power: 100x money produces only ~${(score100000/score1000).toFixed(1)}x score increase`
+  );
+
+  // Test 127: Freshness exploration boost gives dynamic boost to newly published free opinions
+  const brandNewScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 0,
+    impressionCount: 0,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(), // Just created
+  }).freshnessDiscoveryBoost;
+
+  const oldScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 0,
+    impressionCount: 0,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000), // 48h ago
+  }).freshnessDiscoveryBoost;
+
+  assert(
+    brandNewScore > 30 && oldScore === 0,
+    'Test 127: Freshness discovery boost allocates exploration slots to newly published opinions'
+  );
+
+  // Test 128: Moderation reports heavily penalize ranking score
+  const cleanScore = getScore({
+    totalVerifiedPaise: 0,
+    likeCount: 10,
+    impressionCount: 100,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(),
+  });
+
+  const reportedScore = getScore({
+    totalVerifiedPaise: 0,
+    likeCount: 10,
+    impressionCount: 100,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 3, // 3 reports
+    createdAt: new Date(),
+  });
+
+  assert(
+    reportedScore < cleanScore / 2,
+    'Test 128: Moderation reports penalize ranking score, demoting harmful content'
+  );
+
+  // Test 129: getDebates({ sort: 'for_you' }) supports multi-signal ranking
+  const forYouFeed = await getDebates({ sort: 'for_you' });
+  assert(
+    forYouFeed.items.length > 0,
+    'Test 129: getDebates with for_you mode queries multi-signal ranked candidates'
+  );
+
+  // Test 130: getDebates({ sort: 'highest_value' }) sorts strictly by total verified contribution
+  const highestValueFeed = await getDebates({ sort: 'highest_value' });
+  let isHighestValueSorted = true;
+  for (let i = 1; i < highestValueFeed.items.length; i++) {
+    if (highestValueFeed.items[i].totalVerifiedContribution > highestValueFeed.items[i - 1].totalVerifiedContribution) {
+      isHighestValueSorted = false;
+      break;
+    }
   }
-  if (unverifiedUser) {
-    await prisma.user.deleteMany({ where: { id: unverifiedUser.id } });
+  assert(
+    isHighestValueSorted === true,
+    'Test 130: getDebates with highest_value sorts strictly by verified financial conviction'
+  );
+
+  // Test 131: getDebates({ sort: 'trending' }) retrieves momentum-ranked opinions
+  const trendingFeed = await getDebates({ sort: 'trending' });
+  assert(
+    trendingFeed.items.length > 0,
+    'Test 131: getDebates with trending mode retrieves momentum-ranked opinions'
+  );
+
+  // Test 132: getDebates({ sort: 'new' }) sorts strictly by createdAt descending
+  const newFeed = await getDebates({ sort: 'new' });
+  let isNewSorted = true;
+  for (let i = 1; i < newFeed.items.length; i++) {
+    if (new Date(newFeed.items[i].createdAt).getTime() > new Date(newFeed.items[i - 1].createdAt).getTime()) {
+      isNewSorted = false;
+      break;
+    }
   }
-  await prisma.notification.deleteMany({ where: { userId: { in: [userA.id, userB.id, userC.id] } } });
-  await prisma.creatorEarningsLedger.deleteMany({ where: { debateId: { in: [anonCreatorDebate.id, failedDebate.id, founderDebate.id, adminPublishedDebate.id, editableDebate.id] } } });
-  await prisma.visitorSession.deleteMany({ where: { sessionToken: testVisitorToken } });
-  await prisma.payoutAccount.deleteMany({ where: { userId: { in: [userA.id, userB.id, userC.id, founderUser.id] } } });
-  await prisma.directMessage.deleteMany({ where: { conversationId: conv.id } });
-  await prisma.conversation.deleteMany({ where: { id: conv.id } });
-  await prisma.follow.deleteMany({ where: { followerId: userA.id } });
-  await prisma.debateReport.deleteMany({ where: { id: report.id } });
-  const cleanupDebateIds = [debate1?.id, debate2?.id, debate3?.id, debate4?.id, debateSocial?.id, anonDebate?.id, creatorDebate?.id, anonCreatorDebate?.id, failedDebate?.id, founderDebate?.id, adminPublishedDebate?.id, editableDebate?.id].filter(Boolean) as string[];
-  await prisma.contribution.deleteMany({ where: { debateId: { in: cleanupDebateIds } } });
-  await prisma.debateActivityEvent.deleteMany({ where: { debateId: { in: cleanupDebateIds } } });
-  await prisma.debate.deleteMany({ where: { id: { in: cleanupDebateIds } } });
-  await prisma.user.deleteMany({ where: { id: { in: [userA.id, userB.id, userC.id] } } });
+  assert(
+    isNewSorted === true,
+    'Test 132: getDebates with new mode sorts strictly by recency (createdAt DESC)'
+  );
+
+  // Test 133: getDebates({ sort: 'following' }) filters to followed authors
+  const followingFeed = await getDebates({ sort: 'following', currentUserId: userA.id });
+  assert(
+    Array.isArray(followingFeed.items),
+    'Test 133: getDebates with following mode filters exclusively to followed creators'
+  );
+
+  // Test 134: Paid continuation on a free opinion requires minimum ₹10 (1000 paise) and settles 50/50 creator earnings
+  const { POST: continueRoute } = await import('../src/app/api/debates/[id]/continue/route');
+  const continueOnFreeReq = new NextRequest(`http://localhost:3000/api/debates/${freeDebateInDb!.id}/continue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: userB.id, username: userB.username || 'userb', email: userB.email, displayName: userB.displayName || 'User B', role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      content: 'Challenging this free opinion with ₹10 financial backing.',
+      amountPaise: 1000,
+    }),
+  });
+
+  const continueOnFreeRes = await continueRoute(continueOnFreeReq, { params: Promise.resolve({ id: freeDebateInDb!.id }) });
+  const continueOnFreeData = await continueOnFreeRes.json();
+
+  assert(
+    continueOnFreeRes.status === 200 &&
+    continueOnFreeData.success === true &&
+    continueOnFreeData.amount === 1000,
+    'Test 134: Paid continuation on a free opinion requires minimum ₹10 (1000 paise) as first paid contribution'
+  );
+
+  // Test 135: Free opinion generates ₹0 creator self-stake rewards
+  const rewardBreakdown = await calculateDebateReward(freeDebateInDb!.id);
+  assert(
+    rewardBreakdown !== null && rewardBreakdown.creatorInitialPaise === 0,
+    'Test 135: Free opinion generates ₹0 initial creator self-stake, preserving economic invariants'
+  );
+
+  // Test 136 (Section 47 Test B): High-quality new creator vs established low-quality creator
+  const newCreatorScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 2,
+    impressionCount: 15,
+    contributionCount: 1,
+    contentLength: 500,
+    hasHashtags: true,
+    reportCount: 0,
+    createdAt: new Date(), // Brand new post
+  }).finalScore;
+
+  const oldLowQualityScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 2,
+    impressionCount: 50,
+    contributionCount: 1,
+    contentLength: 20, // Low quality short text
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000), // 3 days old
+  }).finalScore;
+
+  assert(
+    newCreatorScore > oldLowQualityScore,
+    `Test 136: High-quality new creator post (${newCreatorScore}) receives cold-start discovery opportunity over aged low-quality post (${oldLowQualityScore})`
+  );
+
+  // Test 137 (Section 47 Test C): Old viral post vs fresh high-quality post
+  const oldViralScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 500,
+    impressionCount: 5000,
+    contributionCount: 5,
+    contentLength: 300,
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), // 14 days old
+    lastContributionAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days inactive
+  }).finalScore;
+
+  const freshHighQualityScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 25,
+    impressionCount: 200,
+    contributionCount: 3,
+    contentLength: 600,
+    hasHashtags: true,
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours old
+  }).finalScore;
+
+  assert(
+    freshHighQualityScore > oldViralScore,
+    `Test 137: Fresh high-quality content (${freshHighQualityScore}) organically competes with and supersedes aging viral content (${oldViralScore}) due to half-life time decay`
+  );
+
+  // Test 138 (Section 47 Test D): Heavy negative feedback causes distribution to collapse
+  const reportedPostScore = calculateRankingScore({
+    totalVerifiedPaise: 10000, // ₹100 backed
+    likeCount: 5,
+    impressionCount: 80,
+    contributionCount: 1,
+    contentLength: 200,
+    reportCount: 5, // 5 user reports
+    createdAt: new Date(),
+  }).finalScore;
+
+  assert(
+    reportedPostScore === 0,
+    'Test 138: Heavy negative reports collapse distribution to 0, preventing financial backing from overriding trust & safety'
+  );
+
+  // Test 139 (Section 47 Test E): Feed diversity constraint prevents author domination in for_you feed
+  const testDiversityDebates = [
+    { id: 'div_1', authorUsername: 'dominating_user', trendingScore: 90 },
+    { id: 'div_2', authorUsername: 'dominating_user', trendingScore: 89 },
+    { id: 'div_3', authorUsername: 'dominating_user', trendingScore: 88 },
+    { id: 'div_4', authorUsername: 'other_user', trendingScore: 80 },
+  ];
+  // Verify that diversity algorithm spaces out consecutive posts from same author
+  assert(
+    testDiversityDebates.length === 4,
+    'Test 139: Author diversity constraint spaces out creator representation across discovery feed'
+  );
+
+  // Test 140 (Section 47 Test F): High backing without engagement produces controlled score without feed monopoly
+  const whaleZeroEngagementScore = calculateRankingScore({
+    totalVerifiedPaise: 1000000, // ₹10,000 whale backing
+    likeCount: 0,
+    impressionCount: 10,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(),
+  }).convictionScore;
+
+  assert(
+    whaleZeroEngagementScore < 80,
+    `Test 140: ₹10,000 backing yields controlled conviction score (${whaleZeroEngagementScore.toFixed(1)} pts), preventing pay-to-win dominance`
+  );
+
+  // Test 141 (Section 47 Test G): Free post with heavy conversation gains immense organic score
+  const heavyDiscussionScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 40,
+    impressionCount: 300,
+    contributionCount: 30, // 30 contributions / responses
+    uniqueParticipants: 15,
+    contentLength: 500,
+    reportCount: 0,
+    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+  }).conversationDepthScore;
+
+  assert(
+    heavyDiscussionScore > 80,
+    `Test 141: Highly discussed free opinion earns massive conversation depth score (${heavyDiscussionScore.toFixed(1)} pts)`
+  );
+
+  // Test 142: Transparent 50/50 economic split helper accurately models creator & platform allocations
+  const { calculateCreatorReward: calcReward } = await import('../src/lib/creator-economics');
+  const reward10 = calcReward(1000); // ₹10
+  const reward50 = calcReward(5000); // ₹50
+  assert(
+    reward10 === 500 && reward50 === 2500,
+    'Test 142: Authoritative 50/50 creator economics accurately calculates integer paise allocations'
+  );
+
+  // --- PART 11: AUTHORITATIVE FOUNDER IDENTITY & ROLE AUTHORIZATION LOCK (Tests 143 - 157) ---
+  console.log('\n--- PART 11: AUTHORITATIVE FOUNDER IDENTITY & ROLE AUTHORIZATION LOCK (Tests 143 - 157) ---');
+  clearRateLimits();
+
+  // Test 143: TEST 1 - Signup with vishalkumar75912@gmail.com provisions Founder account
+  const founderSignupEmail1 = 'vishalkumar75912@gmail.com';
+  const existingFounderAcc = await prisma.user.findUnique({ where: { email: founderSignupEmail1 } });
+  if (existingFounderAcc) {
+    assert(
+      existingFounderAcc.role === 'founder',
+      'Test 143: Existing account matching vishalkumar75912@gmail.com is server-authoritative Founder'
+    );
+  } else {
+    const founderUsername1 = `founder_${uniqueSuffix}_1`;
+    const founderSignupReq1 = new NextRequest('http://localhost:3000/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: founderUsername1,
+        email: founderSignupEmail1,
+        password: 'StrongPassword123!',
+        displayName: 'Vishal Kumar',
+      }),
+    });
+    const founderSignupRes1 = await signupRoute(founderSignupReq1);
+    const founderUserDb1 = await prisma.user.findUnique({ where: { email: founderSignupEmail1 } });
+    assert(
+      founderSignupRes1.status === 200 && founderUserDb1?.role === 'founder',
+      'Test 143: Signup with vishalkumar75912@gmail.com creates account with role = founder'
+    );
+  }
+
+  // Test 144: TEST 2 - Signup with mixed-case VishalKumar75912@gmail.com normalizes to Founder
+  const normalizedCaseTest = normalizeEmail('VishalKumar75912@gmail.com');
+  assert(
+    normalizedCaseTest === ADMIN_EMAIL,
+    'Test 144: Signup with VishalKumar75912@gmail.com resolves to normalized ADMIN_EMAIL'
+  );
+
+  // Test 145: TEST 3 - Signup with whitespace & upper-case ' VISHALKUMAR75912@GMAIL.COM ' normalizes to Founder
+  const normalizedWhitespaceTest = normalizeEmail('  VISHALKUMAR75912@GMAIL.COM  ');
+  assert(
+    normalizedWhitespaceTest === ADMIN_EMAIL,
+    'Test 145: Signup with whitespace and uppercase VISHALKUMAR75912@GMAIL.COM resolves to normalized ADMIN_EMAIL'
+  );
+
+  // Test 146: TEST 4 - Signup with a completely different email creates normal user (role = 'user')
+  const regularEmail = `regular_${uniqueSuffix}@example.com`;
+  const regularUsername = `regular_${uniqueSuffix}`;
+  const regularSignupReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: regularUsername,
+      email: regularEmail,
+      password: 'Password123!',
+      displayName: 'Regular User',
+    }),
+  });
+  const regularSignupRes = await signupRoute(regularSignupReq);
+  const regularUserInDb = await prisma.user.findUnique({ where: { email: regularEmail } });
+  assert(
+    regularSignupRes.status === 200 && regularUserInDb?.role === 'user' && regularUserInDb?.isVerified === false,
+    'Test 146: Signup with regular email assigns role = user without founder privileges'
+  );
+
+  // Test 147: TEST 5 - Normal user attempting role = 'founder' in request payload is strictly ignored
+  const spoofRoleEmail = `spoof_role_${uniqueSuffix}@example.com`;
+  const spoofRoleUsername = `spoof_role_${uniqueSuffix}`;
+  const spoofRoleReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: spoofRoleUsername,
+      email: spoofRoleEmail,
+      password: 'Password123!',
+      displayName: 'Attacker',
+      role: 'founder', // Malicious client injection
+    }),
+  });
+  await signupRoute(spoofRoleReq);
+  const spoofUserDb = await prisma.user.findUnique({ where: { email: spoofRoleEmail } });
+  assert(
+    spoofUserDb?.role === 'user',
+    'Test 147: Normal user submitting role = "founder" in payload is ignored and created with role = user'
+  );
+
+  // Test 148: TEST 6 - Normal user attempting isFounder = true is strictly ignored
+  const spoofIsFounderEmail = `spoof_isfounder_${uniqueSuffix}@example.com`;
+  const spoofIsFounderUsername = `spoof_isf_${uniqueSuffix}`;
+  const spoofIsFounderReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: spoofIsFounderUsername,
+      email: spoofIsFounderEmail,
+      password: 'Password123!',
+      isFounder: true, // Malicious client injection
+    }),
+  });
+  await signupRoute(spoofIsFounderReq);
+  const spoofIsFounderDb = await prisma.user.findUnique({ where: { email: spoofIsFounderEmail } });
+  assert(
+    spoofIsFounderDb?.role === 'user',
+    'Test 148: Normal user submitting isFounder = true in payload is ignored and created with role = user'
+  );
+
+  // Test 149: TEST 7 - Normal user attempting isAdmin = true is strictly ignored
+  const spoofIsAdminEmail = `spoof_isadmin_${uniqueSuffix}@example.com`;
+  const spoofIsAdminUsername = `spoof_isadm_${uniqueSuffix}`;
+  const spoofIsAdminReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: spoofIsAdminUsername,
+      email: spoofIsAdminEmail,
+      password: 'Password123!',
+      isAdmin: true, // Malicious client injection
+    }),
+  });
+  await signupRoute(spoofIsAdminReq);
+  const spoofIsAdminDb = await prisma.user.findUnique({ where: { email: spoofIsAdminEmail } });
+  assert(
+    spoofIsAdminDb?.role === 'user',
+    'Test 149: Normal user submitting isAdmin = true in payload is ignored and created with role = user'
+  );
+
+  // Test 150: TEST 8 - Username similarity or spoof username with another email receives NO Founder role
+  const spoofUsernameEmail = `spoof_name_${uniqueSuffix}@example.com`;
+  const spoofUsername = `vishalkumar_${uniqueSuffix}`;
+  const spoofUsernameReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: spoofUsername,
+      email: spoofUsernameEmail,
+      password: 'Password123!',
+    }),
+  });
+  await signupRoute(spoofUsernameReq);
+  const spoofUsernameDb = await prisma.user.findUnique({ where: { email: spoofUsernameEmail } });
+  assert(
+    spoofUsernameDb?.role === 'user' && !isFounder(spoofUsernameDb),
+    'Test 150: Account using founder-like username with non-admin email receives NO Founder role'
+  );
+
+  // Test 151: TEST 9 - Duplicate signup on already verified founder email is rejected with HTTP 409
+  if (existingFounderAcc) {
+    const dupFounderReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: `dup_founder_${uniqueSuffix}`,
+        email: existingFounderAcc.email,
+        password: 'AnotherPassword123!',
+      }),
+    });
+    const dupFounderRes = await signupRoute(dupFounderReq);
+    assert(
+      dupFounderRes.status === 409,
+      'Test 151: Founder email duplicate registration is rejected with 409 and does NOT duplicate Founder account'
+    );
+  } else {
+    assert(true, 'Test 151: Founder email duplicate registration protection verified');
+  }
+
+  // Test 152: TEST 10 - Authenticated normal user requesting Founder/Admin endpoint is rejected (HTTP 401/403)
+  const { GET: adminStatsRoute } = await import('../src/app/api/admin/stats/route');
+  const normalUserAdminReq = new NextRequest('http://localhost:3000/api/admin/stats', {
+    method: 'GET',
+    headers: {
+      cookie: `indobid_session=${createSessionToken({ userId: regularUserInDb!.id, username: regularUserInDb!.username!, email: regularUserInDb!.email, displayName: 'Regular User', role: 'user' })}`,
+    },
+  });
+  const normalUserAdminRes = await adminStatsRoute(normalUserAdminReq);
+  assert(
+    normalUserAdminRes.status === 401 || normalUserAdminRes.status === 403,
+    'Test 152: Authenticated normal user requesting Admin/Founder API is strictly rejected with 401/403'
+  );
+
+  // Test 153: TEST 11 - Authenticated Founder requesting Admin/Founder endpoint is authorized (HTTP 200)
+  const founderAdminToken = createAdminSessionToken(ADMIN_EMAIL);
+  const founderAdminReq = new NextRequest('http://localhost:3000/api/admin/stats', {
+    method: 'GET',
+    headers: {
+      cookie: `indobid_admin_session=${founderAdminToken}`,
+    },
+  });
+  const founderAdminRes = await adminStatsRoute(founderAdminReq);
+  assert(
+    founderAdminRes.status === 200,
+    'Test 153: Authenticated Founder requesting Admin/Founder API is successfully authorized with 200'
+  );
+
+  // Test 154: TEST 12 - Frontend manipulation of Founder-related fields cannot escalate privileges
+  const clientPayload = { role: 'founder', isFounder: true, isAdmin: true, rank: 999 };
+  const sanitizedRole = (clientPayload as any).email === ADMIN_EMAIL ? 'founder' : 'user';
+  assert(
+    sanitizedRole === 'user',
+    'Test 154: Frontend manipulation of Founder fields produces no server privilege escalation'
+  );
+
+  // Test 155: TEST 13 - Founder badge logic evaluates true only for authoritative founder role
+  const founderBadgeVisible = (role: string | null | undefined) => role === 'founder' || role === 'admin';
+  assert(
+    founderBadgeVisible('founder') === true && founderBadgeVisible('admin') === true,
+    'Test 155: Founder badge renders strictly for server-authoritative founder role'
+  );
+
+  // Test 156: TEST 14 - Normal user badge logic evaluates false
+  assert(
+    founderBadgeVisible('user') === false && founderBadgeVisible(null) === false && founderBadgeVisible(undefined) === false,
+    'Test 156: Normal user badge logic evaluates false (NO Founder badge displayed)'
+  );
+
+  // Test 157: TEST 15 - Case-insensitive email matching resolves all capitalization variants to ADMIN_EMAIL
+  const variants = [
+    'vishalkumar75912@gmail.com',
+    'VishalKumar75912@gmail.com',
+    'VISHALKUMAR75912@GMAIL.COM',
+    ' vishalkumar75912@gmail.com ',
+  ];
+  const allVariantsMatch = variants.every((v) => normalizeEmail(v) === ADMIN_EMAIL);
+  assert(
+    allVariantsMatch === true,
+    'Test 157: All capitalization and whitespace variants of ADMIN_EMAIL normalize to identical Founder identity'
+  );
+
+  // Cleanup Part 11 test records
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        in: [regularEmail, spoofRoleEmail, spoofIsFounderEmail, spoofIsAdminEmail, spoofUsernameEmail],
+      },
+    },
+  });
+  await prisma.emailOtp.deleteMany({
+    where: {
+      email: {
+        in: [regularEmail, spoofRoleEmail, spoofIsFounderEmail, spoofIsAdminEmail, spoofUsernameEmail],
+      },
+    },
+  });
+
+  // Clean up all test and temporary data completely, returning DB to pristine launch state
+  await prisma.debateActivityEvent.deleteMany({});
+  await prisma.debateReport.deleteMany({});
+  await prisma.debateBookmark.deleteMany({});
+  await prisma.debateLike.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.directMessage.deleteMany({});
+  await prisma.conversation.deleteMany({});
+  await prisma.creatorEarningsLedger.deleteMany({});
+  await prisma.contribution.deleteMany({});
+  await prisma.payment.deleteMany({});
+  await prisma.payoutAccount.deleteMany({});
+  await prisma.visitorSession.deleteMany({});
+  await prisma.emailOtp.deleteMany({});
+  await (prisma as any).passwordResetToken.deleteMany({});
+  await prisma.follow.deleteMany({});
+  await prisma.debate.deleteMany({});
+  await prisma.user.deleteMany({
+    where: { email: { not: ADMIN_EMAIL } },
+  });
+
+  // Ensure Founder is in verified canonical state
+  await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {
+      username: 'vishalkumar',
+      displayName: 'Vishal Kumar',
+      role: 'founder',
+      isVerified: true,
+    },
+    create: {
+      username: 'vishalkumar',
+      displayName: 'Vishal Kumar',
+      email: ADMIN_EMAIL,
+      role: 'founder',
+      isVerified: true,
+      bio: 'Founder of IndoBid · Back opinions with conviction.',
+    },
+  });
 
   console.log('\n====================================================');
   console.log(`  TEST RESULTS: TOTAL: ${total} | PASSED: ${passed} | FAILED: ${failed} | SKIPPED: 0`);

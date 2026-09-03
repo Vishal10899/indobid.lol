@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { hashPassword } from '@/lib/user-auth';
 import { requestEmailOtp } from '@/lib/email-otp';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { normalizeEmail, ADMIN_EMAIL } from '@/lib/auth';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const USERNAME_REGEX = /^[a-z0-9_]{3,25}$/;
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+    // Intentionally discard and ignore any client-controlled role, isFounder, isAdmin fields
     const { username, email, password, displayName, avatarUrl } = body || {};
 
     // 1. Mandatory Username Validation & Deterministic Normalization
@@ -58,13 +60,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = normalizeEmail(email);
     if (!EMAIL_REGEX.test(cleanEmail)) {
       return NextResponse.json(
         { success: false, error: 'Please enter a valid email address' },
         { status: 400 }
       );
     }
+
+    // Server-side authoritative Founder role determination: exclusively ADMIN_EMAIL
+    const isFounderEmail = cleanEmail === ADMIN_EMAIL;
+    const serverRole = isFounderEmail ? 'founder' : 'user';
 
     // 4. Pre-check Database for Existing Username (Deterministic & Case-Insensitive)
     const userByUsername = await prisma.user.findUnique({
@@ -119,6 +125,7 @@ export async function POST(req: NextRequest) {
             displayName: displayName?.trim() || cleanUsername,
             passwordHash,
             avatarUrl: validAvatarUrl || userByEmail.avatarUrl,
+            role: isFounderEmail ? 'founder' : userByEmail.role,
           },
         });
       } else {
@@ -129,7 +136,9 @@ export async function POST(req: NextRequest) {
             email: cleanEmail,
             passwordHash,
             avatarUrl: validAvatarUrl,
-            emailVerifiedAt: null, // Requires OTP verification
+            role: serverRole,
+            isVerified: isFounderEmail,
+            emailVerifiedAt: isFounderEmail ? new Date() : null,
           },
         });
       }

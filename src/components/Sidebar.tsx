@@ -89,14 +89,14 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
           })}
         </nav>
 
-        {/* Primary Action Button: + Start Conversation · ₹10 */}
+        {/* Primary Action Button: + Start Conversation */}
         <div className="px-1 pt-2">
           <button
             onClick={onOpenCreate}
             className="w-full py-3.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs sm:text-sm rounded-2xl shadow-md transition flex items-center justify-center space-x-2 cursor-pointer active:scale-[0.98]"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Start Conversation · ₹10</span>
+            <span>Start Conversation</span>
           </button>
         </div>
       </div>

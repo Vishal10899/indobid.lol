@@ -27,7 +27,7 @@ import {
   MoreHorizontal,
   EyeOff,
 } from 'lucide-react';
-import { formatINR } from '@/lib/money';
+import { formatINR, formatUSD } from '@/lib/money';
 import { useAuth } from '@/context/AuthContext';
 import { FormattedText } from '@/components/FormattedText';
 import { EditDebateModal } from '@/components/EditDebateModal';
@@ -454,7 +454,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                       {!debate.isAnonymous && debate.authorIsVerified && (
                         <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)] shrink-0" />
                       )}
-                      {!debate.isAnonymous && (debate.authorRole === 'founder' || debate.authorRole === 'admin' || debate.authorUsername === 'vishalchaudhary' || debate.authorUsername === 'vishalkumar') && (
+                      {!debate.isAnonymous && (debate.authorRole === 'founder' || debate.authorRole === 'admin') && (
                         <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
                           Founder
                         </span>
@@ -609,8 +609,8 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                     <span className="font-bold">{likes}</span>
                   </button>
 
-                  <div className="flex items-center space-x-1 font-mono font-bold text-[var(--color-amber)]" title="Total backed conviction">
-                    <span>{formatINR(debate.totalVerifiedContribution)} backed</span>
+                  <div className="flex items-center space-x-1 font-mono font-bold text-[var(--color-amber)]" title="Total verified support">
+                    <span>{formatUSD(debate.totalVerifiedContribution)} supported</span>
                   </div>
 
                   <div className="flex items-center space-x-1 text-[var(--text-muted)]" title="Responses in chain">
@@ -677,7 +677,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                           />
 
                           <span className="font-mono text-[11px] font-bold text-[var(--color-amber)] shrink-0">
-                            #{c.sequence} · {formatINR(c.amount)} backed
+                            #{c.sequence} · {formatUSD(c.amount)} supported
                           </span>
                           <span className="text-[var(--text-muted)]">·</span>
                           {c.isAnonymous ? (
@@ -714,15 +714,15 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
             <section className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 sm:p-6 space-y-4 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-[var(--text-primary)]">Back & Continue Debate</h3>
+                  <h3 className="text-base font-bold text-[var(--text-primary)]">Support & Continue Debate</h3>
                   <p className="text-xs text-[var(--text-secondary)]">
                     Put skin in the game to challenge or defend this opinion.
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] text-[var(--text-muted)] block">Minimum Next Backing</span>
+                  <span className="text-[10px] text-[var(--text-muted)] block">Minimum Next Support</span>
                   <span className="text-xs font-mono font-bold text-[var(--color-amber)]">
-                    {formatINR(debate.minimumNextContribution)}
+                    {formatUSD(debate.minimumNextContribution)}
                   </span>
                 </div>
               </div>
@@ -779,10 +779,10 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                   <div className="bg-[var(--bg-page-deep)] p-3 rounded-xl border border-[var(--border-subtle)] space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className="font-bold text-[var(--text-primary)] text-[11px] uppercase tracking-wider">
-                        Your Backing Amount (Conviction)
+                        Your Support Amount (USD)
                       </span>
                       <span className="font-mono font-bold text-[var(--color-amber)]">
-                        Minimum ₹{minRupees}
+                        Minimum ${minRupees}
                       </span>
                     </div>
 
@@ -799,7 +799,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                               : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
                           }`}
                         >
-                          {p.label}
+                          ${p.value}
                         </button>
                       ))}
                     </div>
@@ -815,7 +815,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                         -
                       </button>
                       <div className="flex-1 relative">
-                        <span className="absolute left-3 top-1.5 text-xs font-bold text-[var(--color-coral)]">₹</span>
+                        <span className="absolute left-3 top-1.5 text-xs font-bold text-[var(--color-coral)]">$</span>
                         <input
                           type="number"
                           min={minRupees}
@@ -846,7 +846,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                       </>
                     ) : (
                       <>
-                        <span>Post Response · ₹{amountRupees}</span>
+                        <span>Support Opinion · ${amountRupees}</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}

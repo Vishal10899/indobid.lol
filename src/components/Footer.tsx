@@ -15,11 +15,11 @@ export function Footer() {
           <div className="space-y-3 sm:col-span-2 lg:col-span-1">
             <Logo size="md" />
             <p className="text-xs text-[var(--text-secondary)] leading-relaxed max-w-xs">
-              A premium social marketplace where human opinions compete through financial conviction. Put money behind your ideas.
+              Opinions worth backing. A premium social network where human perspectives compete through financial conviction.
             </p>
             <div className="inline-flex items-center space-x-1.5 text-[11px] text-[var(--color-coral)] font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>What’s your opinion worth?</span>
+              <span>Read Free · Post Free · Back Conviction</span>
             </div>
           </div>
 
@@ -31,22 +31,22 @@ export function Footer() {
             <ul className="space-y-2 text-xs">
               <li>
                 <Link href="/explore" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] transition">
-                  Explore Conversations
+                  Explore
                 </Link>
               </li>
               <li>
                 <Link href="/trending" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] transition">
-                  Trending Momentum
+                  Trending
                 </Link>
               </li>
               <li>
                 <Link href="/activity" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] transition">
-                  Live Platform Activity
+                  Activity
                 </Link>
               </li>
               <li>
                 <Link href="/explore?sort=top" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] transition">
-                  Highest Value Debates
+                  Highest Value
                 </Link>
               </li>
             </ul>
@@ -59,16 +59,16 @@ export function Footer() {
             </h4>
             <ul className="space-y-2 text-xs">
               <li className="text-[var(--text-secondary)]">
-                ₹10 Opinion Publishing Floor
+                Free Publishing (₹0)
               </li>
               <li className="text-[var(--text-secondary)]">
-                +₹1 Escalation Step-Up
+                Optional Backing (From ₹10)
               </li>
               <li className="text-[var(--text-secondary)]">
-                50 / 50 Creator Revenue Split
+                50/50 Creator Revenue
               </li>
               <li className="text-[var(--text-secondary)]">
-                100% Free Reading Always
+                Fair Multi-Signal Ranking
               </li>
             </ul>
           </div>
@@ -76,21 +76,21 @@ export function Footer() {
           {/* Column 4: Trust, Safety & Legal */}
           <div className="space-y-3">
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
-              Trust & Safety
+              Guidelines & Legal
             </h4>
             <ul className="space-y-2 text-xs">
               <li className="flex items-center space-x-1.5 text-[var(--text-secondary)]">
                 <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)] shrink-0" />
-                <span>Cryptographic Verification</span>
+                <span>Verified Integrity</span>
               </li>
               <li className="text-[var(--text-secondary)]">
-                Anti-Manipulation Engine
+                Community Guidelines
               </li>
               <li className="text-[var(--text-secondary)]">
-                Masked Anonymous Posting
+                Privacy & Data Security
               </li>
               <li className="text-[var(--text-secondary)]">
-                PBKDF2 Hashed Auth Security
+                Terms of Service
               </li>
             </ul>
           </div>

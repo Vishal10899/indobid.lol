@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyPassword, createSessionToken, AUTH_COOKIE_NAME } from '@/lib/user-auth';
 import { requestEmailOtp } from '@/lib/email-otp';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { isFounder } from '@/lib/founder';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,11 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Require email verification for unverified accounts (excluding founder/admin)
-    const isFounderOrAdmin =
-      user.role === 'founder' ||
-      user.role === 'admin' ||
-      user.username === 'vishalchaudhary' ||
-      user.email === 'vishalchaudhary74096@gmail.com';
+    const isFounderOrAdmin = isFounder(user);
 
     if (user.emailVerifiedAt === null && !user.isVerified && !isFounderOrAdmin) {
       if (user.email) {

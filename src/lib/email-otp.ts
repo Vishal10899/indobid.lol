@@ -256,9 +256,7 @@ export async function verifyEmailOtp(
     where: { email: { equals: cleanEmail, mode: 'insensitive' } },
   });
 
-  const isFounderAccount =
-    cleanEmail === ADMIN_EMAIL ||
-    cleanEmail === 'vishalchaudhary74096@gmail.com';
+  const isFounderAccount = cleanEmail === ADMIN_EMAIL;
 
   if (user) {
     if (user.isSuspended) {

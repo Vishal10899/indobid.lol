@@ -1,11 +1,12 @@
 import { prisma } from './db';
-import { ADMIN_EMAIL } from './auth';
+import { ADMIN_EMAIL, normalizeEmail } from './auth';
 
-export const FOUNDER_USERNAMES = ['vishalchaudhary'];
 export const FOUNDER_ROLES = ['founder', 'FOUNDER', 'admin', 'ADMIN'];
 
 /**
- * Checks if a given user object or session belongs to the official Founder/Admin
+ * Checks if a given user object or session belongs to the official Founder/Admin.
+ * Must be determined strictly server-side by checking against ADMIN_EMAIL or server-authenticated 'founder'/'admin' role.
+ * Never trusts client-supplied spoofing.
  */
 export function isFounder(user: {
   id?: string;
@@ -16,17 +17,12 @@ export function isFounder(user: {
   if (!user) return false;
 
   const role = user.role?.toLowerCase()?.trim();
-  if (role && (role === 'founder' || role === 'admin')) {
+  if (role === 'founder' || role === 'admin') {
     return true;
   }
 
-  const username = user.username?.toLowerCase()?.trim();
-  if (username && FOUNDER_USERNAMES.includes(username)) {
-    return true;
-  }
-
-  const email = user.email?.toLowerCase()?.trim();
-  if (email && email === ADMIN_EMAIL.toLowerCase()) {
+  const cleanEmail = normalizeEmail(user.email);
+  if (cleanEmail && cleanEmail === ADMIN_EMAIL) {
     return true;
   }
 
@@ -34,15 +30,14 @@ export function isFounder(user: {
 }
 
 /**
- * Authoritatively retrieves or provisions the official Founder User account
+ * Authoritatively retrieves or provisions the official Founder User account based on ADMIN_EMAIL
  */
 export async function getOrCreateFounderUser() {
   const existing = await prisma.user.findFirst({
     where: {
       OR: [
+        { email: { equals: ADMIN_EMAIL, mode: 'insensitive' } },
         { role: 'founder' },
-        { username: 'vishalchaudhary' },
-        { email: ADMIN_EMAIL },
       ],
     },
   });
@@ -60,8 +55,8 @@ export async function getOrCreateFounderUser() {
         data: {
           role: 'founder',
           isVerified: true,
-          username: existing.username || 'vishalchaudhary',
-          displayName: existing.displayName || 'Vishal Chaudhary',
+          username: existing.username || 'vishalkumar',
+          displayName: existing.displayName || 'Vishal Kumar',
         },
       });
     }
@@ -70,12 +65,12 @@ export async function getOrCreateFounderUser() {
 
   return await prisma.user.create({
     data: {
-      username: 'vishalchaudhary',
-      displayName: 'Vishal Chaudhary',
+      username: 'vishalkumar',
+      displayName: 'Vishal Kumar',
       email: ADMIN_EMAIL,
       role: 'founder',
       isVerified: true,
-      bio: 'Founder of IndoBid.lol · Back opinions with conviction.',
+      bio: 'Founder of IndoBid · Back opinions with conviction.',
     },
   });
 }

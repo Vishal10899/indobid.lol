@@ -1,7 +1,17 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'vishalchaudhary74096@gmail.com').toLowerCase().trim();
+/**
+ * Authoritative Email Normalization
+ * Standardizes email addresses by trimming leading/trailing whitespace and converting to lowercase.
+ */
+export function normalizeEmail(email: string | null | undefined): string {
+  if (!email || typeof email !== 'string') return '';
+  return email.trim().toLowerCase();
+}
+
+export const ADMIN_EMAIL = normalizeEmail(process.env.ADMIN_EMAIL || 'vishalkumar75912@gmail.com');
+export const ADMIN_EMAILS = [ADMIN_EMAIL];
 export const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY?.trim() || '';
 
 export const ADMIN_SESSION_COOKIE = 'indobid_admin_session';
@@ -110,7 +120,7 @@ export function verifyAdminSessionToken(token: string): { valid: boolean; email?
       return { valid: false }; // Expired
     }
 
-    if (payload.email !== ADMIN_EMAIL) {
+    if (!ADMIN_EMAILS.includes((payload.email || '').toLowerCase().trim())) {
       return { valid: false }; // Email mismatch
     }
 

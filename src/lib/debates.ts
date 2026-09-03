@@ -1,6 +1,7 @@
 import { prisma } from './db';
 import { calculateNextMinimumPaise, MINIMUM_DEBATE_PAISE } from './money';
 import { calculateTrendingScore } from './trending';
+import { calculateRankingScore } from './ranking';
 
 export interface DebateListItem {
   id: string;
@@ -141,7 +142,7 @@ export async function getDebates(options: GetDebatesOptions = {}) {
     }),
   ]));
 
-  const items: DebateListItem[] = debates.map((d) => ({
+  let items: DebateListItem[] = debates.map((d) => ({
     id: d.id,
     title: d.title,
     content: d.content,
@@ -166,6 +167,62 @@ export async function getDebates(options: GetDebatesOptions = {}) {
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   }));
+
+  // Multi-Signal Personalization and Feed Diversity for 'for_you' feed
+  if (sort === 'for_you' && items.length > 1) {
+    let followedIds = new Set<string>();
+    if (currentUserId) {
+      const follows = await safeDb(() => prisma.follow.findMany({
+        where: { followerId: currentUserId },
+        select: { followingId: true },
+      }));
+      followedIds = new Set(follows.map((f) => f.followingId));
+    }
+
+    const scoredItems = items.map((item) => {
+      const score = calculateRankingScore({
+        totalVerifiedPaise: item.totalVerifiedContribution,
+        likeCount: item.likeCount,
+        impressionCount: item.impressionCount,
+        contributionCount: item.contributionCount,
+        contentLength: item.content.length,
+        hasHashtags: Boolean(item.hashtags),
+        reportCount: 0,
+        createdAt: item.createdAt,
+        isFollowedAuthor: item.authorId ? followedIds.has(item.authorId) : false,
+      }).finalScore;
+      return { item, score };
+    });
+
+    scoredItems.sort((a, b) => b.score - a.score);
+
+    // Apply author diversity: prevent one author from occupying more than 2 consecutive slots
+    const diversified: DebateListItem[] = [];
+    const pool = [...scoredItems];
+    let lastAuthor: string | null = null;
+    let consecutiveAuthorCount = 0;
+
+    while (pool.length > 0) {
+      let pickIndex = 0;
+      if (lastAuthor && consecutiveAuthorCount >= 2) {
+        const altIndex = pool.findIndex((p) => p.item.authorUsername !== lastAuthor);
+        if (altIndex !== -1) {
+          pickIndex = altIndex;
+        }
+      }
+
+      const picked = pool.splice(pickIndex, 1)[0];
+      if (picked.item.authorUsername === lastAuthor) {
+        consecutiveAuthorCount++;
+      } else {
+        lastAuthor = picked.item.authorUsername;
+        consecutiveAuthorCount = 1;
+      }
+      diversified.push(picked.item);
+    }
+
+    items = diversified;
+  }
 
   return {
     items,
