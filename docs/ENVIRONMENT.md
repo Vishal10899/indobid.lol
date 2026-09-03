@@ -1,24 +1,39 @@
-# INDOBID — ENVIRONMENT CONFIGURATION SPECIFICATION
+# INDOBID — ENVIRONMENT CONFIGURATION & SECRETS ARCHITECTURE
+
+**Document Version:** 2.0.0  
+**Status:** Authoritative Environment Reference  
+**Implementation:** `src/config/env.ts`  
 
 ---
 
-## 1. Centralized Variable Map (`src/config/env.ts`)
+## 1. Centralized Zod Validation Layer
 
-| Variable Name | Required? | Scope | Purpose | Example / Masked |
+IndoBid enforces centralized environment variable validation at application initialization. Server code does not read `process.env.*` directly throughout domain modules; instead, code imports the validated `env` singleton from `src/config/env.ts`.
+
+If any mandatory production secret is absent or malformed, the application immediately throws a `ZodError` during bootstrap and halts execution, preventing partial initialization or silent security degradations.
+
+---
+
+## 2. Environment Variables Specification
+
+| Variable Name | Required | Scope | Validation Rule | Purpose |
 | :--- | :---: | :--- | :--- | :--- |
-| `DATABASE_URL` | **Yes** | Server | PostgreSQL TLS Connection String | `postgresql://user:********@host:5432/indobid?sslmode=require` |
-| `AUTH_SECRET` | **Yes** | Server | HMAC-SHA256 Session Signing Key | `********` |
-| `ADMIN_EMAIL` | **Yes** | Server | Server-Authoritative Founder Email | `vishalkumar75912@gmail.com` |
-| `ADMIN_SECRET_KEY` | **Yes** | Server | `/admin` Login Secret Key | `********` |
-| `RAZORPAY_KEY_ID` | **Yes** | Public/Server | Razorpay Public Key ID | `rzp_live_********` |
-| `RAZORPAY_KEY_SECRET`| **Yes** | Server | Razorpay Secret Key | `********` |
-| `RAZORPAY_WEBHOOK_SECRET`| **Yes** | Server | Razorpay Webhook Signing Secret | `********` |
-| `RESEND_API_KEY` | **Yes** | Server | Resend Email API Key | `re_********` |
-| `EMAIL_FROM` | **Yes** | Server | Transactional Email Sender | `IndoBid <noreply@indobid.lol>` |
-| `NEXT_PUBLIC_APP_URL`| **Yes** | Public/Server | Base Application URL | `https://indobid.lol` |
+| `DATABASE_URL` | YES | Server-only | Valid PostgreSQL URI | Primary PostgreSQL connection with SSL |
+| `SESSION_SECRET` / `AUTH_SECRET` | YES | Server-only | Min 32 chars | HMAC-SHA256 session token signing key |
+| `ADMIN_EMAIL` | YES | Server-only | Valid email | Canonical Founder email (`vishalkumar75912@gmail.com`) |
+| `ADMIN_SECRET_KEY` | YES | Server-only | Min 16 chars | Cryptographic secret for `/admin` endpoints |
+| `RAZORPAY_KEY_ID` | YES | Public/Server | Non-empty string | Razorpay API public key identifier |
+| `RAZORPAY_KEY_SECRET` | YES | Server-only | Non-empty string | Razorpay API private secret |
+| `RAZORPAY_WEBHOOK_SECRET` | YES | Server-only | Non-empty string | Secret for verifying webhook HMAC signatures |
+| `RESEND_API_KEY` | YES | Server-only | Non-empty string | Transactional email dispatch key |
+| `EMAIL_FROM` | NO | Server-only | String / Default | Sender address (Default: `IndoBid <noreply@indobid.lol>`) |
+| `NEXT_PUBLIC_APP_URL` | YES | Public/Client | Valid HTTP(S) URL | Canonical application domain (`https://indobid.lol`) |
+| `NODE_ENV` | NO | System | `development`, `production`, `test` | Runtime mode selector |
 
 ---
 
-## 2. Security Containment
-* Never prefix server-only secrets with `NEXT_PUBLIC_`.
-* Production secrets live exclusively within the hosting provider's encrypted dashboard.
+## 3. Secret Isolation & Bundling Rules
+
+1. **Client Isolation:** Never prefix server secrets (`ADMIN_SECRET_KEY`, `RAZORPAY_KEY_SECRET`, `SESSION_SECRET`, `RESEND_API_KEY`) with `NEXT_PUBLIC_`. Turbopack will strictly bundle only variables explicitly marked `NEXT_PUBLIC_` into client chunks.
+2. **Timing-Safe Evaluation:** Secrets such as `ADMIN_SECRET_KEY` and session signatures are evaluated using `crypto.timingSafeEqual()` across equal-length buffers to eliminate side-channel timing attacks.
+3. **Redaction in Logging:** The centralized logger (`src/infrastructure/logging/logger.ts`) sanitizes log outputs, redacting values matching authorization headers, tokens, passwords, and secrets.
