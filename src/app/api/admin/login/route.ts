@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import {
   ADMIN_EMAIL,
   ADMIN_SECRET_KEY,
@@ -12,7 +13,7 @@ import { getClientIp } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
+  email: z.string().trim().email('Invalid email address'),
   secretKey: z.string().min(1, 'Secret key is required'),
 });
 
@@ -41,9 +42,37 @@ export async function POST(request: NextRequest) {
     const { email, secretKey } = parsed.data;
     const normalizedEmail = email.toLowerCase().trim();
 
-    // 3. Verify allowed email & secret key server-side
-    const isEmailValid = normalizedEmail === ADMIN_EMAIL;
-    const isSecretValid = ADMIN_SECRET_KEY && secretKey.trim() === ADMIN_SECRET_KEY;
+    const configuredAdminEmail = (process.env.ADMIN_EMAIL || ADMIN_EMAIL || '').toLowerCase().trim();
+    const configuredAdminSecret = (process.env.ADMIN_SECRET_KEY || ADMIN_SECRET_KEY || '').trim();
+
+    if (!configuredAdminEmail || !configuredAdminSecret) {
+      recordFailedAdminLogin(ip);
+      return NextResponse.json(
+        { error: 'Invalid admin credentials. Access denied.' },
+        { status: 403 }
+      );
+    }
+
+    // 3. Verify allowed email & secret key server-side (constant-time comparison)
+    const isEmailValid = normalizedEmail === configuredAdminEmail;
+    let isSecretValid = false;
+    if (configuredAdminSecret && secretKey.trim().length === configuredAdminSecret.length) {
+      isSecretValid = crypto.timingSafeEqual(
+        Buffer.from(secretKey.trim()),
+        Buffer.from(configuredAdminSecret)
+      );
+    }
+
+    if (!isSecretValid && isEmailValid) {
+      const { prisma } = await import('@/lib/db');
+      const { verifyPassword } = await import('@/lib/user-auth');
+      const founderUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      });
+      if (founderUser?.passwordHash) {
+        isSecretValid = verifyPassword(secretKey.trim(), founderUser.passwordHash);
+      }
+    }
 
     if (!isEmailValid || !isSecretValid) {
       recordFailedAdminLogin(ip);

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
+import { verifySessionToken } from './user-auth';
 
 /**
  * Authoritative Email Normalization
@@ -65,7 +66,8 @@ export function clearAdminLoginRateLimit(ip: string): void {
  * Generates an HMAC-SHA256 signed session token for verified admin
  */
 export function createAdminSessionToken(email: string): string {
-  if (!ADMIN_SECRET_KEY) {
+  const secret = (process.env.ADMIN_SECRET_KEY || ADMIN_SECRET_KEY || '').trim();
+  if (!secret) {
     throw new Error('ADMIN_SECRET_KEY is not configured on server');
   }
 
@@ -77,7 +79,7 @@ export function createAdminSessionToken(email: string): string {
 
   const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = crypto
-    .createHmac('sha256', ADMIN_SECRET_KEY)
+    .createHmac('sha256', secret)
     .update(payloadBase64)
     .digest('base64url');
 
@@ -88,13 +90,15 @@ export function createAdminSessionToken(email: string): string {
  * Validates an admin session token or secret key header
  */
 export function verifyAdminSessionToken(token: string): { valid: boolean; email?: string } {
-  if (!token || !ADMIN_SECRET_KEY) {
+  const secret = (process.env.ADMIN_SECRET_KEY || ADMIN_SECRET_KEY || '').trim();
+  const currentAdminEmail = normalizeEmail(process.env.ADMIN_EMAIL || ADMIN_EMAIL);
+  if (!token || !secret) {
     return { valid: false };
   }
 
   // Direct secret key check (for automated tests / API scripts)
-  if (token === ADMIN_SECRET_KEY) {
-    return { valid: true, email: ADMIN_EMAIL };
+  if (token.length === secret.length && crypto.timingSafeEqual(Buffer.from(token), Buffer.from(secret))) {
+    return { valid: true, email: currentAdminEmail };
   }
 
   const parts = token.split('.');
@@ -104,11 +108,14 @@ export function verifyAdminSessionToken(token: string): { valid: boolean; email?
 
   const [payloadBase64, signature] = parts;
   const expectedSignature = crypto
-    .createHmac('sha256', ADMIN_SECRET_KEY)
+    .createHmac('sha256', secret)
     .update(payloadBase64)
     .digest('base64url');
 
-  if (signature !== expectedSignature) {
+  if (
+    signature.length !== expectedSignature.length ||
+    !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))
+  ) {
     return { valid: false };
   }
 
@@ -120,7 +127,8 @@ export function verifyAdminSessionToken(token: string): { valid: boolean; email?
       return { valid: false }; // Expired
     }
 
-    if (!ADMIN_EMAILS.includes((payload.email || '').toLowerCase().trim())) {
+    const validEmails = [currentAdminEmail, ...ADMIN_EMAILS].map((e) => e.toLowerCase().trim());
+    if (!validEmails.includes((payload.email || '').toLowerCase().trim())) {
       return { valid: false }; // Email mismatch
     }
 
@@ -136,11 +144,23 @@ export function verifyAdminSessionToken(token: string): { valid: boolean; email?
 export function isAuthorizedAdmin(request?: Request | NextRequest | null): boolean {
   if (!request) return false;
 
-  // 1. Check HttpOnly cookie
+  // 1. Check HttpOnly admin cookie
   if ('cookies' in request && request.cookies && typeof request.cookies.get === 'function') {
     const cookieToken = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
     if (cookieToken && verifyAdminSessionToken(cookieToken).valid) {
       return true;
+    }
+    const userSessionToken = request.cookies.get('indobid_session')?.value;
+    if (userSessionToken) {
+      const userSession = verifySessionToken(userSessionToken);
+      if (
+        userSession &&
+        (userSession.role === 'founder' ||
+          userSession.role === 'admin' ||
+          (userSession.email && normalizeEmail(userSession.email) === ADMIN_EMAIL))
+      ) {
+        return true;
+      }
     }
   }
 
@@ -152,6 +172,18 @@ export function isAuthorizedAdmin(request?: Request | NextRequest | null): boole
       if (match && verifyAdminSessionToken(match[1]).valid) {
         return true;
       }
+      const userMatch = cookieHeader.match(/indobid_session=([^;]+)/);
+      if (userMatch) {
+        const userSession = verifySessionToken(userMatch[1]);
+        if (
+          userSession &&
+          (userSession.role === 'founder' ||
+            userSession.role === 'admin' ||
+            (userSession.email && normalizeEmail(userSession.email) === ADMIN_EMAIL))
+        ) {
+          return true;
+        }
+      }
     }
 
     // 3. Check Authorization Bearer header
@@ -159,6 +191,15 @@ export function isAuthorizedAdmin(request?: Request | NextRequest | null): boole
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7).trim();
       if (verifyAdminSessionToken(token).valid) return true;
+      const userSession = verifySessionToken(token);
+      if (
+        userSession &&
+        (userSession.role === 'founder' ||
+          userSession.role === 'admin' ||
+          (userSession.email && normalizeEmail(userSession.email) === ADMIN_EMAIL))
+      ) {
+        return true;
+      }
     }
 
     // 4. Check x-admin-key header

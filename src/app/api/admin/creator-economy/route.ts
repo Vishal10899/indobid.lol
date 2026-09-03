@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/user-auth';
+import { isAuthorizedAdmin } from '@/lib/auth';
 import { CREATOR_SHARE_BPS } from '@/lib/creator-economics';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getCurrentUser();
-    if (!session || session.role !== 'admin') {
+    const isAuth = isAuthorizedAdmin(request);
+    let isRoleAdmin = false;
+    if (!isAuth) {
+      const session = await getCurrentUser();
+      isRoleAdmin = session?.role === 'admin' || session?.role === 'founder';
+    }
+    if (!isAuth && !isRoleAdmin) {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 });
     }
 

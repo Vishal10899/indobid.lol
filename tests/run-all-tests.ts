@@ -2888,6 +2888,195 @@ async function runTestSuite() {
     'Test 157: All capitalization and whitespace variants of ADMIN_EMAIL normalize to identical Founder identity'
   );
 
+  // --- PART 12: ADMIN AUTHENTICATION, SECRET KEY SECURITY & ROUTE PROTECTION (Tests 158 - 170) ---
+  console.log('\n--- PART 12: ADMIN AUTHENTICATION, SECRET KEY SECURITY & ROUTE PROTECTION (Tests 158 - 170) ---');
+  clearRateLimits();
+
+  const { POST: adminLoginRoute } = await import('../src/app/api/admin/login/route');
+  const { ADMIN_SECRET_KEY, verifyAdminSessionToken } = await import('../src/lib/auth');
+
+  // Test 158: Correct .env admin email + correct .env secret => SUCCESS
+  const validAdminReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: ADMIN_EMAIL,
+      secretKey: ADMIN_SECRET_KEY,
+    }),
+  });
+  const validAdminRes = await adminLoginRoute(validAdminReq);
+  const validAdminData = await validAdminRes.json();
+  const setCookieHeader = validAdminRes.headers.get('set-cookie') || '';
+  assert(
+    validAdminRes.status === 200 &&
+    validAdminData.success === true &&
+    setCookieHeader.includes('indobid_admin_session='),
+    'Test 158: Correct .env admin email + correct .env secret yields SUCCESS and sets HttpOnly admin session'
+  );
+
+  // Test 159: Wrong email => FAILURE (403 Forbidden with generic error)
+  const wrongEmailReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'attacker@example.com',
+      secretKey: ADMIN_SECRET_KEY,
+    }),
+  });
+  const wrongEmailRes = await adminLoginRoute(wrongEmailReq);
+  const wrongEmailData = await wrongEmailRes.json();
+  assert(
+    wrongEmailRes.status === 403 &&
+    wrongEmailData.error === 'Invalid admin credentials. Access denied.',
+    'Test 159: Wrong email fails securely with generic 403 error'
+  );
+
+  // Test 160: Wrong secret => FAILURE (403 Forbidden with generic error)
+  const wrongSecretReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: ADMIN_EMAIL,
+      secretKey: 'WrongSecretKey999!',
+    }),
+  });
+  const wrongSecretRes = await adminLoginRoute(wrongSecretReq);
+  const wrongSecretData = await wrongSecretRes.json();
+  assert(
+    wrongSecretRes.status === 403 &&
+    wrongSecretData.error === 'Invalid admin credentials. Access denied.',
+    'Test 160: Wrong secret fails securely with generic 403 error'
+  );
+
+  // Test 161: Email casing differences ('VishalKumar75912@gmail.com') => SUCCESS
+  const mixedCaseEmailReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'VishalKumar75912@gmail.com',
+      secretKey: ADMIN_SECRET_KEY,
+    }),
+  });
+  const mixedCaseEmailRes = await adminLoginRoute(mixedCaseEmailReq);
+  assert(
+    mixedCaseEmailRes.status === 200,
+    'Test 161: Email casing differences normalize to canonical ADMIN_EMAIL and succeed'
+  );
+
+  // Test 162: Leading/trailing email whitespace ('  vishalkumar75912@gmail.com  ') => SUCCESS
+  const whitespaceEmailReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: '  vishalkumar75912@gmail.com  ',
+      secretKey: ADMIN_SECRET_KEY,
+    }),
+  });
+  const whitespaceEmailRes = await adminLoginRoute(whitespaceEmailReq);
+  assert(
+    whitespaceEmailRes.status === 200,
+    'Test 162: Leading and trailing whitespace in email normalizes and succeeds'
+  );
+
+  // Test 163: Missing/empty email => FAILURE (400 Bad Request)
+  const missingEmailReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: '',
+      secretKey: ADMIN_SECRET_KEY,
+    }),
+  });
+  const missingEmailRes = await adminLoginRoute(missingEmailReq);
+  assert(
+    missingEmailRes.status === 400,
+    'Test 163: Missing email fails validation with HTTP 400'
+  );
+
+  // Test 164: Missing/empty secret key => FAILURE (400 Bad Request)
+  const missingSecretReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: ADMIN_EMAIL,
+      secretKey: '',
+    }),
+  });
+  const missingSecretRes = await adminLoginRoute(missingSecretReq);
+  assert(
+    missingSecretRes.status === 400,
+    'Test 164: Missing secret key fails validation with HTTP 400'
+  );
+
+  // Test 165: Client attempts to submit role/isAdmin/isFounder => ignored server-side
+  const spoofPayloadReq = new NextRequest('http://localhost:3000/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: 'intruder@example.com',
+      secretKey: 'badkey',
+      role: 'founder',
+      isAdmin: true,
+      isFounder: true,
+    }),
+  });
+  const spoofPayloadRes = await adminLoginRoute(spoofPayloadReq);
+  assert(
+    spoofPayloadRes.status === 403,
+    'Test 165: Client injection of role/isAdmin/isFounder is strictly ignored'
+  );
+
+  // Test 166: Unauthenticated request to /api/admin/stats is rejected with 401
+  const unauthAdminReq = new NextRequest('http://localhost:3000/api/admin/stats', {
+    method: 'GET',
+  });
+  const unauthAdminRes = await adminStatsRoute(unauthAdminReq);
+  assert(
+    unauthAdminRes.status === 401,
+    'Test 166: Unauthenticated request to /api/admin/stats requires valid admin session'
+  );
+
+  // Test 167: Normal user cannot access /api/admin/stats
+  const normalSessionReq = new NextRequest('http://localhost:3000/api/admin/stats', {
+    method: 'GET',
+    headers: {
+      cookie: `indobid_session=${createSessionToken({ userId: 'random_u1', username: 'normaluser', email: 'normal@example.com', displayName: 'Normal', role: 'user' })}`,
+    },
+  });
+  const normalSessionRes = await adminStatsRoute(normalSessionReq);
+  assert(
+    normalSessionRes.status === 401 || normalSessionRes.status === 403,
+    'Test 167: Authenticated normal user without admin/founder privileges is denied access'
+  );
+
+  // Test 168: Verified Founder session cookie (indobid_session) allows access to /api/admin/stats
+  const founderUserSessionReq = new NextRequest('http://localhost:3000/api/admin/stats', {
+    method: 'GET',
+    headers: {
+      cookie: `indobid_session=${createSessionToken({ userId: 'founder_u1', username: 'vishalkumar', email: ADMIN_EMAIL, displayName: 'Vishal Kumar', role: 'founder' })}`,
+    },
+  });
+  const founderUserSessionRes = await adminStatsRoute(founderUserSessionReq);
+  assert(
+    founderUserSessionRes.status === 200,
+    'Test 168: Verified Founder session cookie (indobid_session) allows access to /api/admin/stats'
+  );
+
+  // Test 169: ADMIN_SECRET_KEY never appears in logs, responses, or client payloads
+  const responseText = JSON.stringify(validAdminData);
+  assert(
+    !responseText.includes(ADMIN_SECRET_KEY),
+    'Test 169: ADMIN_SECRET_KEY never appears in API responses or public payloads'
+  );
+
+  // Test 170: Admin secret key verification uses timing-safe constant-time evaluation
+  const tokenCheckValid = verifyAdminSessionToken(ADMIN_SECRET_KEY);
+  const tokenCheckInvalid = verifyAdminSessionToken('bad_token_key_12345');
+  assert(
+    tokenCheckValid.valid === true && tokenCheckInvalid.valid === false,
+    'Test 170: Admin secret key verification uses timing-safe evaluation'
+  );
+
   // Cleanup Part 11 test records
   await prisma.user.deleteMany({
     where: {

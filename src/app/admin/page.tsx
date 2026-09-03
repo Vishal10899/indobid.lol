@@ -127,7 +127,7 @@ interface AdminUser {
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('vishalchaudhary74096@gmail.com');
+  const [adminEmail, setAdminEmail] = useState('');
   const [adminKey, setAdminKey] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -416,7 +416,7 @@ export default function AdminPage() {
                   required
                   value={adminKey}
                   onChange={(e) => setAdminKey(e.target.value)}
-                  placeholder="Enter ADMIN_SECRET_KEY..."
+                  placeholder="Enter administrator secret key..."
                   className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none"
                 />
                 <Key className="w-4 h-4 text-[var(--text-muted)] absolute left-3 top-3" />
