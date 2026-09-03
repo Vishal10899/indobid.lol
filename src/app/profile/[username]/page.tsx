@@ -39,7 +39,7 @@ import {
   Moon,
   Laptop,
 } from 'lucide-react';
-import { formatINR } from '@/lib/money';
+import { formatINR, formatUSD } from '@/lib/money';
 
 interface PayoutAccountData {
   id?: string;
@@ -765,7 +765,7 @@ function UserProfileContent() {
 
                       {profile.debates.length > 0 ? (
                         profile.debates.map((d) => {
-                          const externalBacking = Math.max(0, d.totalVerifiedContribution - (d.originalContribution || 1000));
+                          const externalBacking = Math.max(0, d.totalVerifiedContribution - (d.originalContribution ?? 0));
                           const estReward = d.creatorEarnedPaise > 0 ? d.creatorEarnedPaise : Math.floor(externalBacking * 0.50);
                           return (
                             <Link
@@ -778,15 +778,15 @@ function UserProfileContent() {
                                   {d.title}
                                 </h5>
                                 <span className="text-[10px] font-mono font-bold text-[var(--color-amber)] shrink-0">
-                                  {formatINR(d.totalVerifiedContribution)} backed
+                                  {formatUSD(d.totalVerifiedContribution)} supported
                                 </span>
                               </div>
 
                               <div className="flex flex-wrap items-center justify-between text-[11px] text-[var(--text-secondary)] pt-1 border-t border-[var(--border-subtle)]/60">
                                 <span>{d.contributionCount} responses</span>
-                                <span>Starting Stake: {formatINR(d.originalContribution || 1000)}</span>
+                                <span>Starting Stake: {d.originalContribution > 0 ? formatUSD(d.originalContribution) : 'Free ($0)'}</span>
                                 <span className="font-bold text-[var(--color-coral)]">
-                                  Creator Share (50%): {formatINR(estReward)}
+                                  Creator Share (50%): {formatUSD(estReward)}
                                 </span>
                               </div>
                             </Link>

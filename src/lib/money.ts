@@ -1,25 +1,24 @@
 /**
- * IndoBid Money & Currency System (Strict Integer Paise & INR)
- * ₹10 = 1000 paise
- * ₹1 = 100 paise
+ * IndoBid Money & Currency System (Strict Integer Paise & USD/INR)
+ * $2 USD = 200 paise / base units
+ * $1 USD = 100 paise / base units
  * Floating-point money calculations are strictly prohibited.
  */
 
-export const MINIMUM_DEBATE_PAISE = 1000; // ₹10 / $10 base minimum
-export const MINIMUM_DEBATE_USD = 10; // $10 USD minimum
-export const MINIMUM_INCREMENT_PAISE = 100; // ₹1 / $1 step-up
+export const MINIMUM_DEBATE_PAISE = 200; // $2 USD base minimum (200 paise)
+export const MINIMUM_DEBATE_USD = 2; // $2 USD minimum
+export const MINIMUM_INCREMENT_PAISE = 100; // $1 USD step-up (100 paise)
 export const CURRENCY = 'INR';
 export const DISPLAY_CURRENCY = 'USD';
 export const USD_TO_INR_RATE = 85; // Standard 1 USD = 85 INR exchange rate
 
 /**
- * Formats integer paise / cents into a clean USD representation (e.g. $10, $25, $500)
+ * Formats integer paise / cents into a clean USD representation (e.g. $2, $10, $25, $500)
  */
 export function formatUSD(paiseOrCents: number): string {
   if (typeof paiseOrCents !== 'number' || isNaN(paiseOrCents) || paiseOrCents <= 0) return '$0';
   
-  // If value is stored in base units (e.g. 1000 for $10 or 85000 for $10 USD equivalent)
-  let dollars = paiseOrCents >= 1000 ? Math.floor(paiseOrCents / 100) : paiseOrCents;
+  let dollars = paiseOrCents >= 100 ? Math.floor(paiseOrCents / 100) : paiseOrCents;
   
   // Format with thousands separator
   return `$${dollars.toLocaleString('en-US')}`;

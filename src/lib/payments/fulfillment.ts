@@ -110,7 +110,7 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
         const isNewDebate = debate.status === 'pending_payment' && debate.contributionCount === 0;
 
         if (isNewDebate) {
-          // Minimum ₹10 (1000 paise) for new debate
+          // Minimum $2 USD (200 paise) for new debate
           if (amountPaise < MINIMUM_DEBATE_PAISE) {
             throw new Error(`New debate requires at least ${formatINR(MINIMUM_DEBATE_PAISE)}. Received ${formatINR(amountPaise)}.`);
           }

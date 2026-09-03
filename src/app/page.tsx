@@ -25,7 +25,7 @@ interface CategoryItem {
 
 export default function HomePage() {
   const { user, openAuthModal } = useAuth();
-  const [activeTab, setActiveTab] = useState<'for_you' | 'highest_value' | 'trending' | 'new' | 'following'>('for_you');
+  const [activeTab, setActiveTab] = useState<'for_you' | 'trending' | 'following'>('for_you');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [categories, setCategories] = useState<CategoryItem[]>([
     { id: 'all', name: 'All', slug: 'all' },
@@ -47,9 +47,7 @@ export default function HomePage() {
     setLoading(true);
     try {
       let sortParam = 'for_you';
-      if (activeTab === 'highest_value') sortParam = 'highest_value';
-      else if (activeTab === 'trending') sortParam = 'trending';
-      else if (activeTab === 'new') sortParam = 'new';
+      if (activeTab === 'trending') sortParam = 'trending';
       else if (activeTab === 'following') sortParam = 'following';
 
       const url = new URL('/api/debates', window.location.origin);
@@ -85,11 +83,11 @@ export default function HomePage() {
         {/* Left Column: Fixed Navigation Sidebar (Desktop) */}
         <Sidebar onOpenCreate={() => setIsCreateModalOpen(true)} />
 
-        {/* Center Column: Scrollable Main Content & Feed */}
+        {/* Center Column: Primary Feed Stream */}
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Top Sticky Header with Feed Tabs & Category Chips */}
           <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] w-full min-w-0">
-            {/* Feed Tabs: For You, Highest Value, Trending, New, Following */}
+            {/* Primary Feed Tabs: For You, Trending, Following */}
             <div className="flex border-b border-[var(--border-subtle)] w-full overflow-x-auto scrollbar-none">
               {/* For You */}
               <button
@@ -105,23 +103,6 @@ export default function HomePage() {
               >
                 <span>For You</span>
                 {activeTab === 'for_you' && (
-                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
-                )}
-              </button>
-
-              {/* Highest Value (Desktop only) */}
-              <button
-                onClick={() => {
-                  setActiveTab('highest_value');
-                }}
-                className={`hidden sm:flex flex-1 min-w-[95px] py-3 text-xs sm:text-sm font-bold items-center justify-center transition cursor-pointer relative shrink-0 ${
-                  activeTab === 'highest_value'
-                    ? 'text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                <span>Highest Value</span>
-                {activeTab === 'highest_value' && (
                   <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
                 )}
               </button>
@@ -142,23 +123,6 @@ export default function HomePage() {
                   <span>Trending</span>
                 </span>
                 {activeTab === 'trending' && (
-                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
-                )}
-              </button>
-
-              {/* New (Desktop only) */}
-              <button
-                onClick={() => {
-                  setActiveTab('new');
-                }}
-                className={`hidden sm:flex flex-1 min-w-[60px] py-3 text-xs sm:text-sm font-bold items-center justify-center transition cursor-pointer relative shrink-0 ${
-                  activeTab === 'new'
-                    ? 'text-[var(--text-primary)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
-              >
-                <span>New</span>
-                {activeTab === 'new' && (
                   <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
                 )}
               </button>

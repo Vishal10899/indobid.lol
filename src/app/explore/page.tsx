@@ -19,7 +19,7 @@ function ExploreContent() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(initialSearch);
   const [category, setCategory] = useState(initialCategory);
-  const [sort, setSort] = useState<'trending' | 'rising' | 'newest' | 'top'>('trending');
+  const [sort, setSort] = useState<'trending' | 'for_you'>('trending');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const categories = [
@@ -88,9 +88,7 @@ function ExploreContent() {
             <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none pt-0.5">
               {[
                 { id: 'trending', label: 'Trending' },
-                { id: 'rising', label: 'Rising' },
-                { id: 'newest', label: 'Newest' },
-                { id: 'top', label: 'Top Backed' },
+                { id: 'for_you', label: 'For You' },
               ].map((tab) => (
                 <button
                   key={tab.id}

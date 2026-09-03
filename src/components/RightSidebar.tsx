@@ -83,7 +83,7 @@ export function RightSidebar() {
           </div>
           <div className="flex items-start justify-between">
             <span className="font-bold text-[var(--text-primary)]">BACK CONVICTION</span>
-            <span className="font-mono font-bold text-[var(--color-amber)] text-[11px]">Optional ($10+)</span>
+            <span className="font-mono font-bold text-[var(--color-amber)] text-[11px]">Optional ($2+)</span>
           </div>
           <div className="flex items-start justify-between pt-1 border-t border-[var(--border-subtle)] text-[11px]">
             <span className="font-semibold text-[var(--text-secondary)]">CONVICTION</span>

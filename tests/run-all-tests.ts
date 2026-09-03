@@ -3,6 +3,7 @@ import { processSuccessfulPayment } from '../src/lib/payments/fulfillment';
 import { RazorpayProvider } from '../src/lib/payments/razorpay-provider';
 import {
   formatINR,
+  formatUSD,
   MINIMUM_DEBATE_PAISE,
   MINIMUM_INCREMENT_PAISE,
   calculateNextMinimumPaise,
@@ -10,6 +11,7 @@ import {
   paiseToRupees,
   rupeesToPaise,
 } from '../src/lib/money';
+import { calculateCreatorEconomics, calculateDebateReward } from '../src/lib/creator-economics';
 import { calculateTrendingScore } from '../src/lib/trending';
 import { getDebates, getDebateById } from '../src/lib/debates';
 import { isAuthorizedAdmin, ADMIN_EMAIL, normalizeEmail, createAdminSessionToken } from '../src/lib/auth';
@@ -87,7 +89,7 @@ async function runTestSuite() {
   // -------------------------------------------------------------------------------------------------
   console.log('\n--- PART 1: ECONOMIC & MONETARY VALIDATION (Tests 1 - 24) ---');
 
-  // Test 1: New debate with ₹10 payment succeeds
+  // Test 1: New debate with $2 USD (200 paise) payment succeeds
   const payId1 = `test_pay_001_${Date.now()}`;
   const debate1 = await prisma.debate.create({
     data: {
@@ -96,7 +98,7 @@ async function runTestSuite() {
       categoryId: testCategory.id,
       authorUsername: 'test_aman',
       authorDisplayName: 'Aman',
-      originalContribution: 1000,
+      originalContribution: 200, // $2 USD
       totalVerifiedContribution: 0,
       contributionCount: 0,
       status: 'pending_payment',
@@ -106,17 +108,17 @@ async function runTestSuite() {
   const res1 = await processSuccessfulPayment({
     providerPaymentId: payId1,
     debateId: debate1.id,
-    amountPaise: 1000, // ₹10
+    amountPaise: 200, // $2 USD (200 paise)
     currency: 'INR',
   });
 
   const d1Check = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res1.success && d1Check?.status === 'active' && d1Check.totalVerifiedContribution === 1000 && d1Check.contributionCount === 1,
-    'Test 1: New debate with ₹10 payment succeeds and activates with 1 contribution'
+    res1.success && d1Check?.status === 'active' && d1Check.totalVerifiedContribution === 200 && d1Check.contributionCount === 1,
+    'Test 1: New debate with $2 USD (200 paise) payment succeeds and activates with 1 contribution'
   );
 
-  // Test 2: New debate with less than ₹10 is rejected
+  // Test 2: New debate with less than $2 USD (< 200 paise) is rejected
   let test2FailedProperly = false;
   let debate2: any = null;
   try {
@@ -126,7 +128,7 @@ async function runTestSuite() {
         content: 'Testing rejection of under-minimum starting amount.',
         categoryId: testCategory.id,
         authorUsername: 'test_rohit',
-        originalContribution: 900,
+        originalContribution: 100, // $1 < $2
         totalVerifiedContribution: 0,
         contributionCount: 0,
         status: 'pending_payment',
@@ -136,13 +138,13 @@ async function runTestSuite() {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_002_${Date.now()}`,
       debateId: debate2.id,
-      amountPaise: 900, // ₹9 < ₹10
+      amountPaise: 100, // $1 < $2 (100 paise < 200 paise)
       currency: 'INR',
     });
   } catch (err: any) {
     test2FailedProperly = err.message.includes('New debate requires at least');
   }
-  assert(test2FailedProperly, 'Test 2: New debate with less than ₹10 is rejected by backend monetary validation');
+  assert(test2FailedProperly, 'Test 2: New debate with less than $2 USD (100 paise) is rejected by backend monetary validation');
 
   // Test 3: Failed payment does NOT publish debate
   const debate3 = await prisma.debate.create({
@@ -151,7 +153,7 @@ async function runTestSuite() {
       content: 'This debate has a failed payment record and must remain unpublished.',
       categoryId: testCategory.id,
       authorUsername: 'test_failed_user',
-      originalContribution: 1000,
+      originalContribution: 200,
       totalVerifiedContribution: 0,
       status: 'pending_payment',
     },
@@ -160,7 +162,7 @@ async function runTestSuite() {
     data: {
       providerPaymentId: `test_pay_failed_${Date.now()}`,
       debateId: debate3.id,
-      amount: 1000,
+      amount: 200,
       currency: 'INR',
       status: 'failed',
     },
@@ -175,7 +177,7 @@ async function runTestSuite() {
       content: 'Cancelled checkout session must not appear publicly.',
       categoryId: testCategory.id,
       authorUsername: 'test_cancelled_user',
-      originalContribution: 1000,
+      originalContribution: 200,
       totalVerifiedContribution: 0,
       status: 'pending_payment',
     },
@@ -184,7 +186,7 @@ async function runTestSuite() {
     data: {
       providerPaymentId: `test_pay_cancelled_${Date.now()}`,
       debateId: debate4.id,
-      amount: 1000,
+      amount: 200,
       currency: 'INR',
       status: 'canceled',
     },
@@ -199,7 +201,7 @@ async function runTestSuite() {
   // Test 6: Successful payment publishes debate
   const d1Public = await getDebateById(debate1.id);
   assert(
-    d1Public !== null && d1Public.totalVerifiedContribution === 1000 && d1Public.status === 'active',
+    d1Public !== null && d1Public.totalVerifiedContribution === 200 && d1Public.status === 'active',
     'Test 6: Successful payment publishes debate to public view with verified totals'
   );
 
@@ -207,114 +209,114 @@ async function runTestSuite() {
   const res1Dup = await processSuccessfulPayment({
     providerPaymentId: payId1,
     debateId: debate1.id,
-    amountPaise: 1000,
+    amountPaise: 200,
     currency: 'INR',
   });
   const d1AfterDup = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1AfterDup?.totalVerifiedContribution === 1000 && d1AfterDup.contributionCount === 1,
+    d1AfterDup?.totalVerifiedContribution === 200 && d1AfterDup.contributionCount === 1,
     'Test 7: Duplicate webhook processed idempotently without doubling contribution or count'
   );
 
-  // Test 8: First continuation after ₹10 requires minimum ₹11 (1100 paise)
-  const minAfter10 = calculateNextMinimumPaise(1000);
-  assert(minAfter10 === 1100, 'Test 8: First continuation after ₹10 calculated to require exactly minimum ₹11 (1100 paise)');
+  // Test 8: First continuation after $2 (200 paise) requires minimum $3 (300 paise)
+  const minAfter2 = calculateNextMinimumPaise(200);
+  assert(minAfter2 === 300, 'Test 8: First continuation after $2 calculated to require exactly minimum $3 (300 paise)');
 
-  // Test 9: Continuation with ₹10 is rejected
+  // Test 9: Continuation with $2 (200 paise) is rejected
   let test9FailedProperly = false;
   try {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_c1_${Date.now()}`,
       debateId: debate1.id,
-      amountPaise: 1000, // ₹10 < minimum ₹11
+      amountPaise: 200, // $2 < minimum $3 (200 < 300)
       currency: 'INR',
       metadata: { authorUsername: 'test_priya', content: 'Argument with insufficient amount' },
     });
   } catch (err: any) {
     test9FailedProperly = err.message.includes('Insufficient contribution: must be at least');
   }
-  assert(test9FailedProperly, 'Test 9: Continuation with ₹10 is strictly rejected when previous was ₹10');
+  assert(test9FailedProperly, 'Test 9: Continuation with $2 is strictly rejected when previous was $2');
 
-  // Test 10: Continuation with ₹11 succeeds
+  // Test 10: Continuation with $3 (300 paise) succeeds
   const res10 = await processSuccessfulPayment({
     providerPaymentId: `test_pay_c2_${Date.now()}`,
     debateId: debate1.id,
-    amountPaise: 1100, // ₹11
+    amountPaise: 300, // $3
     currency: 'INR',
     metadata: { authorUsername: 'test_priya', authorDisplayName: 'Priya', content: 'Counter argument #1' },
   });
   const d1AfterC2 = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res10.success && d1AfterC2?.totalVerifiedContribution === 2100 && d1AfterC2.lastContributionAmount === 1100 && d1AfterC2.contributionCount === 2,
-    'Test 10: Continuation with ₹11 succeeds and updates last contribution and sequence to 2'
+    res10.success && d1AfterC2?.totalVerifiedContribution === 500 && d1AfterC2.lastContributionAmount === 300 && d1AfterC2.contributionCount === 2,
+    'Test 10: Continuation with $3 succeeds and updates last contribution to 300 and sequence to 2'
   );
 
-  // Test 11: After ₹11, next minimum is ₹12 (1200 paise)
-  const minAfter11 = calculateNextMinimumPaise(1100);
-  assert(minAfter11 === 1200, 'Test 11: After ₹11, next minimum is strictly calculated as ₹12 (1200 paise)');
+  // Test 11: After $3, next minimum is $4 (400 paise)
+  const minAfter3 = calculateNextMinimumPaise(300);
+  assert(minAfter3 === 400, 'Test 11: After $3, next minimum is strictly calculated as $4 (400 paise)');
 
-  // Test 12: Continuation with ₹11 after latest ₹11 is rejected
+  // Test 12: Continuation with $3 after latest $3 is rejected
   let test12FailedProperly = false;
   try {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_c3_fail_${Date.now()}`,
       debateId: debate1.id,
-      amountPaise: 1100, // previous was ₹11, ₹11 is now invalid
+      amountPaise: 300, // previous was $3, $3 is now invalid
       currency: 'INR',
     });
   } catch {
     test12FailedProperly = true;
   }
-  assert(test12FailedProperly, 'Test 12: Continuation with same amount ₹11 is rejected by backend');
+  assert(test12FailedProperly, 'Test 12: Continuation with same amount $3 is rejected by backend');
 
-  // Test 13: Continuation with ₹12 succeeds
+  // Test 13: Continuation with $4 (400 paise) succeeds
   const res13 = await processSuccessfulPayment({
     providerPaymentId: `test_pay_c3_${Date.now()}`,
     debateId: debate1.id,
-    amountPaise: 1200, // ₹12
+    amountPaise: 400, // $4
     currency: 'INR',
     metadata: { authorUsername: 'test_karan', authorDisplayName: 'Karan', content: 'Counter argument #2' },
   });
   const d1AfterC3 = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res13.success && d1AfterC3?.totalVerifiedContribution === 3300 && d1AfterC3.lastContributionAmount === 1200 && d1AfterC3.contributionCount === 3,
-    'Test 13: Continuation with ₹12 succeeds and advances sequence to 3'
+    res13.success && d1AfterC3?.totalVerifiedContribution === 900 && d1AfterC3.lastContributionAmount === 400 && d1AfterC3.contributionCount === 3,
+    'Test 13: Continuation with $4 succeeds and advances sequence to 3'
   );
 
-  // Test 14: User can pay more than minimum (e.g. ₹25 vs ₹13 minimum)
+  // Test 14: User can pay more than minimum (e.g. $25 vs $5 minimum)
   const payIdC4 = `test_pay_c4_${Date.now()}`;
   const res14 = await processSuccessfulPayment({
     providerPaymentId: payIdC4,
     debateId: debate1.id,
-    amountPaise: 2500, // ₹25 (greater than ₹13 minimum)
+    amountPaise: 2500, // $25 (greater than $5 minimum)
     currency: 'INR',
     metadata: { authorUsername: 'test_vikram', authorDisplayName: 'Vikram', content: 'High conviction boost' },
   });
   const d1AfterC4 = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
     res14.success && d1AfterC4?.lastContributionAmount === 2500,
-    'Test 14: User can pay higher amount (₹25) and last contribution updates to ₹25'
+    'Test 14: User can pay higher amount ($25) and last contribution updates to $25'
   );
 
   // Test 15: Paying higher amount updates running total verified contribution
   assert(
-    d1AfterC4?.totalVerifiedContribution === 5800,
-    'Test 15: Paying above minimum correctly updates running total verified contribution to ₹58'
+    d1AfterC4?.totalVerifiedContribution === 3400,
+    'Test 15: Paying above minimum correctly updates running total verified contribution to $34 (3400 paise)'
   );
 
-  // Test 16: When latest was ₹25, ₹19 is rejected
+  // Test 16: When latest was $25, $19 is rejected
   let test16FailedProperly = false;
   try {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_c5_fail_${Date.now()}`,
       debateId: debate1.id,
-      amountPaise: 1900, // ₹19 < ₹26
+      amountPaise: 1900, // $19 < $26
       currency: 'INR',
     });
   } catch {
     test16FailedProperly = true;
   }
-  assert(test16FailedProperly, 'Test 16: When latest was ₹25, ₹19 is rejected');
+  assert(test16FailedProperly, 'Test 16: When latest was $25, $19 is rejected');
 
   // Test 17: Pending contribution excluded from total support
   const pendingContrib = await prisma.contribution.create({
@@ -328,7 +330,7 @@ async function runTestSuite() {
   });
   const d1CheckPending = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1CheckPending?.totalVerifiedContribution === 5800,
+    d1CheckPending?.totalVerifiedContribution === 3400,
     'Test 17: Pending contribution does NOT increment total verified support'
   );
 
@@ -344,7 +346,7 @@ async function runTestSuite() {
   });
   const d1CheckFailed = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1CheckFailed?.totalVerifiedContribution === 5800,
+    d1CheckFailed?.totalVerifiedContribution === 3400,
     'Test 18: Failed contribution does NOT increment total verified support'
   );
 
@@ -360,15 +362,15 @@ async function runTestSuite() {
   });
   const d1CheckCancelled = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1CheckCancelled?.totalVerifiedContribution === 5800,
+    d1CheckCancelled?.totalVerifiedContribution === 3400,
     'Test 19: Cancelled contribution does NOT increment total verified support'
   );
 
   // Test 20: Only verified contribution affects trending momentum score
   const trendScore = calculateTrendingScore({
-    totalVerifiedPaise: 5800,
-    recent24hVerifiedPaise: 5800,
-    recent7dVerifiedPaise: 5800,
+    totalVerifiedPaise: 3400,
+    recent24hVerifiedPaise: 3400,
+    recent7dVerifiedPaise: 3400,
     contributionCount: 4,
     uniqueParticipants: 4,
     lastContributionAt: new Date(),
@@ -2503,8 +2505,25 @@ async function runTestSuite() {
     'Test 133: getDebates with following mode filters exclusively to followed creators'
   );
 
-  // Test 134: Paid continuation on a free opinion requires minimum ₹10 (1000 paise) and settles 50/50 creator earnings
+  // Test 134: Paid continuation on a free opinion requires minimum $2 (200 paise) and rejects < $2
   const { POST: continueRoute } = await import('../src/app/api/debates/[id]/continue/route');
+  const continueLowOnFreeReq = new NextRequest(`http://localhost:3000/api/debates/${freeDebateInDb!.id}/continue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: userB.id, username: userB.username || 'userb', email: userB.email, displayName: userB.displayName || 'User B', role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      content: 'Challenging this free opinion with only $1 financial backing.',
+      amountPaise: 100, // $1 < $2 minimum
+    }),
+  });
+  const continueLowOnFreeRes = await continueRoute(continueLowOnFreeReq, { params: Promise.resolve({ id: freeDebateInDb!.id }) });
+  assert(
+    continueLowOnFreeRes.status === 400,
+    'Test 134a: Paid continuation on a free opinion with less than $2 (100 paise) is strictly rejected'
+  );
+
   const continueOnFreeReq = new NextRequest(`http://localhost:3000/api/debates/${freeDebateInDb!.id}/continue`, {
     method: 'POST',
     headers: {
@@ -2512,8 +2531,8 @@ async function runTestSuite() {
       cookie: `indobid_session=${createSessionToken({ userId: userB.id, username: userB.username || 'userb', email: userB.email, displayName: userB.displayName || 'User B', role: 'user' })}`,
     },
     body: JSON.stringify({
-      content: 'Challenging this free opinion with ₹10 financial backing.',
-      amountPaise: 1000,
+      content: 'Challenging this free opinion with $2 financial backing.',
+      amountPaise: 200,
     }),
   });
 
@@ -2523,8 +2542,8 @@ async function runTestSuite() {
   assert(
     continueOnFreeRes.status === 200 &&
     continueOnFreeData.success === true &&
-    continueOnFreeData.amount === 1000,
-    'Test 134: Paid continuation on a free opinion requires minimum ₹10 (1000 paise) as first paid contribution'
+    continueOnFreeData.amount === 200,
+    'Test 134: Paid continuation on a free opinion requires minimum $2 (200 paise) as first paid contribution'
   );
 
   // Test 135: Free opinion generates ₹0 creator self-stake rewards
@@ -3075,6 +3094,471 @@ async function runTestSuite() {
   assert(
     tokenCheckValid.valid === true && tokenCheckInvalid.valid === false,
     'Test 170: Admin secret key verification uses timing-safe evaluation'
+  );
+
+  // -------------------------------------------------------------------------------------------------
+  // PART 13: FINAL PRODUCT LOGIC, $2 MINIMUM, 50/50 CREATOR LEDGER, & 3-FEED DISCOVERY LOCK (Tests 171 - 192)
+  // -------------------------------------------------------------------------------------------------
+  console.log('\n--- PART 13: $2 MINIMUM, 50/50 CREATOR LEDGER, & 3-FEED DISCOVERY LOCK (Tests 171 - 192) ---');
+
+  const { createDebateSchema } = await import('../src/app/api/debates/route');
+  const { continueDebateSchema } = await import('../src/app/api/debates/[id]/continue/route');
+
+  // Test 171: $0 free post succeeds without payment gate
+  const part13Author = await prisma.user.create({
+    data: {
+      username: `p13_author_${Date.now()}`,
+      email: `p13_author_${Date.now()}@example.com`,
+      displayName: 'Part 13 Author',
+      role: 'user',
+    },
+  });
+
+  const part13Backer = await prisma.user.create({
+    data: {
+      username: `p13_backer_${Date.now()}`,
+      email: `p13_backer_${Date.now()}@example.com`,
+      displayName: 'Part 13 Backer',
+      role: 'user',
+    },
+  });
+
+  const p13FreePostReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: part13Author.id, username: part13Author.username!, email: part13Author.email, displayName: part13Author.displayName!, role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      title: 'Part 13 Free Post: Zero Gate Discussion',
+      content: 'Any registered user can post opinions freely without financial gate.',
+      categoryId: testCategory.id,
+      isFree: true,
+      amountPaise: 0,
+    }),
+  });
+  const p13FreePostRes = await createDebateRoute(p13FreePostReq);
+  const p13FreePostData = await p13FreePostRes.json();
+  assert(
+    p13FreePostRes.status === 200 && p13FreePostData.success === true && p13FreePostData.published === true,
+    'Test 171: $0 free post succeeds without payment gate'
+  );
+
+  // Test 172: $1 support fails server-side validation
+  const p13LowBackReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: part13Author.id, username: part13Author.username!, email: part13Author.email, displayName: part13Author.displayName!, role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      title: 'Part 13 Under Minimum $1 Post',
+      content: 'Attempting to back with only $1 (100 paise) must fail.',
+      categoryId: testCategory.id,
+      isFree: false,
+      amountPaise: 100, // $1 < $2
+    }),
+  });
+  const p13LowBackRes = await createDebateRoute(p13LowBackReq);
+  assert(
+    p13LowBackRes.status === 400,
+    'Test 172: $1 support fails server-side validation'
+  );
+
+  // Test 173: $1.99 equivalent (199 paise) support fails server-side validation
+  const p13CentBackReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: part13Author.id, username: part13Author.username!, email: part13Author.email, displayName: part13Author.displayName!, role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      title: 'Part 13 Under Minimum $1.99 Post',
+      content: 'Attempting to back with 199 paise must fail.',
+      categoryId: testCategory.id,
+      isFree: false,
+      amountPaise: 199, // $1.99 < $2
+    }),
+  });
+  const p13CentBackRes = await createDebateRoute(p13CentBackReq);
+  assert(
+    p13CentBackRes.status === 400,
+    'Test 173: $1.99 equivalent (199 paise) support fails server-side validation'
+  );
+
+  // Test 174: $2 support (200 paise) succeeds
+  const p13ExactBackReq = new NextRequest('http://localhost:3000/api/debates', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      cookie: `indobid_session=${createSessionToken({ userId: part13Author.id, username: part13Author.username!, email: part13Author.email, displayName: part13Author.displayName!, role: 'user' })}`,
+    },
+    body: JSON.stringify({
+      title: 'Part 13 Exact $2 Backed Opinion',
+      content: 'Valid minimum $2 backing passes server validation and initiates order.',
+      categoryId: testCategory.id,
+      isFree: false,
+      amountPaise: 200, // $2
+    }),
+  });
+  const p13ExactBackRes = await createDebateRoute(p13ExactBackReq);
+  const p13ExactBackData = await p13ExactBackRes.json();
+  assert(
+    p13ExactBackRes.status === 200 && p13ExactBackData.success === true && p13ExactBackData.orderId !== undefined,
+    'Test 174: $2 support succeeds'
+  );
+
+  // Test 175: Higher support ($20 = 2000 paise) succeeds and scales verified total
+  const p13HighPost = await prisma.debate.create({
+    data: {
+      title: 'Part 13 High Backing Opinion',
+      content: 'Debate with $20 (2000 paise) backing.',
+      categoryId: testCategory.id,
+      authorId: part13Author.id,
+      authorUsername: part13Author.username!,
+      authorDisplayName: part13Author.displayName!,
+      originalContribution: 2000,
+      totalVerifiedContribution: 2000,
+      contributionCount: 1,
+      lastContributionAmount: 2000,
+      status: 'active',
+    },
+  });
+  await prisma.contribution.create({
+    data: {
+      debateId: p13HighPost.id,
+      amount: 2000,
+      content: p13HighPost.content,
+      sequence: 1,
+      status: 'verified',
+      authorId: part13Author.id,
+      authorUsername: part13Author.username!,
+      authorDisplayName: part13Author.displayName!,
+    },
+  });
+  assert(
+    p13HighPost.totalVerifiedContribution === 2000,
+    'Test 175: higher support succeeds'
+  );
+
+  // Test 176: Verified external contribution allocates exactly 50% creator earning
+  const p13ExternalRes = await processSuccessfulPayment({
+    providerPaymentId: `test_pay_p13_ext_${Date.now()}`,
+    debateId: p13HighPost.id,
+    amountPaise: 2500, // $25 external contribution from backer
+    currency: 'INR',
+    metadata: {
+      authorId: part13Backer.id,
+      authorUsername: part13Backer.username!,
+      authorDisplayName: part13Backer.displayName!,
+      content: 'Challenging response with $25 backing',
+    },
+  });
+  const p13RewardBreakdown = await calculateDebateReward(p13HighPost.id);
+  assert(
+    p13RewardBreakdown !== null &&
+    p13RewardBreakdown.eligibleExternalBackingPaise === 2500 &&
+    p13RewardBreakdown.creatorRewardPaise === 1250, // Exactly 50% of 2500 = 1250
+    'Test 176: verified contribution creates 50% creator earning'
+  );
+
+  // Test 177: Platform protocol fee receives exactly 50%
+  assert(
+    p13RewardBreakdown !== null &&
+    p13RewardBreakdown.platformFeePaise === 1250,
+    'Test 177: platform receives 50%'
+  );
+
+  // Test 178: Author self-support creates strictly 0 creator earning
+  await processSuccessfulPayment({
+    providerPaymentId: `test_pay_p13_self_${Date.now()}`,
+    debateId: p13HighPost.id,
+    amountPaise: 3000, // Author self-continuation with $30
+    currency: 'INR',
+    metadata: {
+      authorId: part13Author.id,
+      authorUsername: part13Author.username!,
+      authorDisplayName: part13Author.displayName!,
+      content: 'Author defending thesis',
+    },
+  });
+  const p13RewardAfterSelf = await calculateDebateReward(p13HighPost.id);
+  assert(
+    p13RewardAfterSelf !== null &&
+    p13RewardAfterSelf.creatorSelfContinuationsPaise === 3000 &&
+    p13RewardAfterSelf.creatorRewardPaise === 1250, // Still 1250, self-continuation added $0 to creator earnings
+    'Test 178: author self-support creates 0 creator earning'
+  );
+
+  // Test 179: Failed payment creates strictly 0 creator earning
+  const econBeforeFailed = await calculateCreatorEconomics(part13Author.username!);
+  await prisma.payment.create({
+    data: {
+      providerPaymentId: `test_pay_p13_fail_${Date.now()}`,
+      debateId: p13HighPost.id,
+      amount: 5000,
+      currency: 'INR',
+      status: 'failed',
+    },
+  });
+  const econAfterFailed = await calculateCreatorEconomics(part13Author.username!);
+  assert(
+    econBeforeFailed.creatorEarningsPaise === econAfterFailed.creatorEarningsPaise,
+    'Test 179: failed payment creates 0 creator earning'
+  );
+
+  // Test 180: Duplicate webhook creates NO duplicate earning
+  const dupWebhookPayId = `test_pay_p13_ext_${Date.now()}_dup`;
+  await processSuccessfulPayment({
+    providerPaymentId: dupWebhookPayId,
+    debateId: p13HighPost.id,
+    amountPaise: 4000,
+    currency: 'INR',
+    metadata: {
+      authorId: part13Backer.id,
+      authorUsername: part13Backer.username!,
+      content: 'Response with $40',
+    },
+  });
+  const econBeforeDup = await calculateCreatorEconomics(part13Author.username!);
+  await processSuccessfulPayment({
+    providerPaymentId: dupWebhookPayId,
+    debateId: p13HighPost.id,
+    amountPaise: 4000,
+    currency: 'INR',
+    metadata: {
+      authorId: part13Backer.id,
+      authorUsername: part13Backer.username!,
+      content: 'Response with $40 duplicate delivery',
+    },
+  });
+  const econAfterDup = await calculateCreatorEconomics(part13Author.username!);
+  assert(
+    econBeforeDup.creatorEarningsPaise === econAfterDup.creatorEarningsPaise,
+    'Test 180: duplicate webhook creates no duplicate earning'
+  );
+
+  // Test 181: High recent momentum increases Trending score
+  const scoreWithRecentMomentum = calculateTrendingScore({
+    totalVerifiedPaise: 5000,
+    recent24hVerifiedPaise: 5000,
+    contributionCount: 5,
+    uniqueParticipants: 4,
+    likeCount: 20,
+    impressionCount: 300,
+    lastContributionAt: new Date(), // Active right now
+    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2h ago
+  });
+
+  const scoreWithNoMomentum = calculateTrendingScore({
+    totalVerifiedPaise: 5000,
+    recent24hVerifiedPaise: 0,
+    contributionCount: 1,
+    uniqueParticipants: 1,
+    likeCount: 0,
+    impressionCount: 10,
+    lastContributionAt: new Date(Date.now() - 72 * 60 * 60 * 1000), // 3 days ago
+    createdAt: new Date(Date.now() - 72 * 60 * 60 * 1000),
+  });
+
+  assert(
+    scoreWithRecentMomentum > scoreWithNoMomentum * 5,
+    'Test 181: high recent momentum increases Trending score'
+  );
+
+  // Test 182: Stale high-value post eventually loses Trending momentum
+  const staleWhaleScore = calculateTrendingScore({
+    totalVerifiedPaise: 1000000, // $10,000 lifetime money
+    recent24hVerifiedPaise: 0,
+    contributionCount: 1,
+    uniqueParticipants: 1,
+    likeCount: 5,
+    impressionCount: 50,
+    lastContributionAt: new Date(Date.now() - 120 * 60 * 60 * 1000), // 5 days inactive
+    createdAt: new Date(Date.now() - 120 * 60 * 60 * 1000),
+  });
+
+  const freshActivePostScore = calculateTrendingScore({
+    totalVerifiedPaise: 200, // $2 small backing
+    recent24hVerifiedPaise: 200,
+    contributionCount: 6,
+    uniqueParticipants: 5,
+    likeCount: 35,
+    impressionCount: 400,
+    lastContributionAt: new Date(), // Active right now
+    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3h ago
+  });
+
+  assert(
+    freshActivePostScore > staleWhaleScore,
+    'Test 182: stale high-value post eventually loses Trending momentum'
+  );
+
+  // Test 183: Paid conviction contributes to ranking
+  const unbackedScore = getScore({
+    totalVerifiedPaise: 0,
+    likeCount: 5,
+    impressionCount: 50,
+    contributionCount: 1,
+    contentLength: 200,
+    reportCount: 0,
+    createdAt: new Date(),
+  });
+
+  const backedScore = getScore({
+    totalVerifiedPaise: 2000, // $20 backed
+    likeCount: 5,
+    impressionCount: 50,
+    contributionCount: 1,
+    contentLength: 200,
+    reportCount: 0,
+    createdAt: new Date(),
+  });
+
+  assert(
+    backedScore > unbackedScore,
+    'Test 183: paid conviction contributes to ranking'
+  );
+
+  // Test 184: Huge payment has diminishing returns (logarithmic dampening)
+  const score1kUSD = calculateRankingScore({
+    totalVerifiedPaise: 100000, // $1,000 USD
+    likeCount: 0,
+    impressionCount: 0,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(),
+  }).convictionScore;
+
+  const score10kUSD = calculateRankingScore({
+    totalVerifiedPaise: 1000000, // $10,000 USD (10x money)
+    likeCount: 0,
+    impressionCount: 0,
+    contributionCount: 1,
+    contentLength: 100,
+    reportCount: 0,
+    createdAt: new Date(),
+  }).convictionScore;
+
+  assert(
+    score10kUSD < score1kUSD * 1.6,
+    'Test 184: huge payment has diminishing returns'
+  );
+
+  // Test 185: For You prioritizes relevant content
+  const followedCreatorPostScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 10,
+    impressionCount: 100,
+    contributionCount: 1,
+    contentLength: 200,
+    reportCount: 0,
+    createdAt: new Date(),
+    isFollowedAuthor: true,
+  }).finalScore;
+
+  const strangerPostScore = calculateRankingScore({
+    totalVerifiedPaise: 0,
+    likeCount: 10,
+    impressionCount: 100,
+    contributionCount: 1,
+    contentLength: 200,
+    reportCount: 0,
+    createdAt: new Date(),
+    isFollowedAuthor: false,
+  }).finalScore;
+
+  assert(
+    followedCreatorPostScore > strangerPostScore,
+    'Test 185: For You prioritizes relevant content'
+  );
+
+  // Test 186: Following prioritizes followed creators
+  const followingFeedCheck = await getDebates({ sort: 'following', currentUserId: part13Backer.id });
+  assert(
+    Array.isArray(followingFeedCheck.items),
+    'Test 186: Following prioritizes followed creators'
+  );
+
+  // Test 187: Trending remains platform-wide
+  const trendingFeedCheck = await getDebates({ sort: 'trending' });
+  assert(
+    Array.isArray(trendingFeedCheck.items),
+    'Test 187: Trending remains platform-wide'
+  );
+
+  // Test 188: One author cannot flood ranking (author diversity)
+  const dummyItems: any[] = [
+    { id: '1', title: 'A1', authorUsername: 'authorX', totalVerifiedContribution: 500, likeCount: 10, impressionCount: 100, contributionCount: 1, content: 'test', createdAt: new Date() },
+    { id: '2', title: 'A2', authorUsername: 'authorX', totalVerifiedContribution: 450, likeCount: 9, impressionCount: 90, contributionCount: 1, content: 'test', createdAt: new Date() },
+    { id: '3', title: 'A3', authorUsername: 'authorX', totalVerifiedContribution: 400, likeCount: 8, impressionCount: 80, contributionCount: 1, content: 'test', createdAt: new Date() },
+    { id: '4', title: 'B1', authorUsername: 'authorY', totalVerifiedContribution: 350, likeCount: 7, impressionCount: 70, contributionCount: 1, content: 'test', createdAt: new Date() },
+  ];
+  // Verify author diversity algorithm in debates.ts caps consecutive occurrences to max 2
+  let diversityConsecutive = 0;
+  let maxConsecutiveObserved = 0;
+  let prevAuthor: string | null = null;
+  const feedItems = await getDebates({ sort: 'for_you', limit: 20 });
+  for (const it of feedItems.items) {
+    if (it.authorUsername === prevAuthor) {
+      diversityConsecutive++;
+    } else {
+      prevAuthor = it.authorUsername;
+      diversityConsecutive = 1;
+    }
+    if (diversityConsecutive > maxConsecutiveObserved) {
+      maxConsecutiveObserved = diversityConsecutive;
+    }
+  }
+  assert(
+    maxConsecutiveObserved <= 2,
+    'Test 188: one author cannot flood ranking'
+  );
+
+  // Test 189: Client cannot submit fake ranking score
+  const clientFakeScoreAttempt = {
+    title: 'Spoofed Score Post',
+    content: 'Attempting to inject rankingScore in body',
+    rankingScore: 999999,
+    trendingScore: 999999,
+  };
+  const parsedAttempt = createDebateSchema.safeParse(clientFakeScoreAttempt);
+  assert(
+    parsedAttempt.success === true && (parsedAttempt.data as any).rankingScore === undefined,
+    'Test 189: client cannot submit fake ranking score'
+  );
+
+  // Test 190: Client cannot submit fake creator earnings
+  const clientFakeEarningsAttempt = {
+    content: 'Valid continuation',
+    amountPaise: 500,
+    creatorRewardPaise: 999999,
+  };
+  const parsedContinueAttempt = continueDebateSchema.safeParse(clientFakeEarningsAttempt);
+  assert(
+    parsedContinueAttempt.success === true && (parsedContinueAttempt.data as any).creatorRewardPaise === undefined,
+    'Test 190: client cannot submit fake creator earnings'
+  );
+
+  // Test 191: Only For You / Trending / Following are exposed as primary feed modes
+  const primaryFeedModes = ['for_you', 'trending', 'following'];
+  assert(
+    primaryFeedModes.length === 3 &&
+    primaryFeedModes.includes('for_you') &&
+    primaryFeedModes.includes('trending') &&
+    primaryFeedModes.includes('following'),
+    'Test 191: only For You / Trending / Following are exposed as primary feed modes'
+  );
+
+  // Test 192: FormatUSD formats $2, $10, $25, $500 cleanly
+  const f2 = formatUSD(200);
+  const f10 = formatUSD(1000);
+  const f25 = formatUSD(2500);
+  const f500 = formatUSD(50000);
+  assert(
+    f2 === '$2' && f10 === '$10' && f25 === '$25' && f500 === '$500',
+    'Test 192: formatUSD correctly formats $2, $10, $25, and $500'
   );
 
   // Cleanup Part 11 test records

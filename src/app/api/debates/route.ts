@@ -12,7 +12,7 @@ import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
-const createDebateSchema = z.object({
+export const createDebateSchema = z.object({
   title: z.string().min(5, 'Debate title/opinion must be at least 5 characters').max(200, 'Title cannot exceed 200 characters'),
   content: z.string().min(5, 'Main argument must be at least 5 characters').max(3000, 'Argument cannot exceed 3000 characters'),
   categorySlug: z.string().optional(),

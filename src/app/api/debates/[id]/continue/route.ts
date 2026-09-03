@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
-const continueDebateSchema = z.object({
+export const continueDebateSchema = z.object({
   content: z.string().min(5, 'Your response must be at least 5 characters').max(3000, 'Response cannot exceed 3000 characters'),
   amountPaise: z.number().int().optional(),
   amountRupees: z.number().optional(),

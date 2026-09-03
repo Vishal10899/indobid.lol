@@ -171,15 +171,32 @@ export async function getDebates(options: GetDebatesOptions = {}) {
   // Multi-Signal Personalization and Feed Diversity for 'for_you' feed
   if (sort === 'for_you' && items.length > 1) {
     let followedIds = new Set<string>();
+    let engagedCategoryIds = new Set<string>();
+
     if (currentUserId) {
-      const follows = await safeDb(() => prisma.follow.findMany({
-        where: { followerId: currentUserId },
-        select: { followingId: true },
-      }));
+      const [follows, likes, bookmarks] = await safeDb(() => Promise.all([
+        prisma.follow.findMany({
+          where: { followerId: currentUserId },
+          select: { followingId: true },
+        }),
+        prisma.debateLike.findMany({
+          where: { userId: currentUserId },
+          select: { debate: { select: { categoryId: true } } },
+          take: 30,
+        }),
+        prisma.debateBookmark.findMany({
+          where: { userId: currentUserId },
+          select: { debate: { select: { categoryId: true } } },
+          take: 30,
+        }),
+      ]));
       followedIds = new Set(follows.map((f) => f.followingId));
+      likes.forEach((l) => l.debate?.categoryId && engagedCategoryIds.add(l.debate.categoryId));
+      bookmarks.forEach((b) => b.debate?.categoryId && engagedCategoryIds.add(b.debate.categoryId));
     }
 
     const scoredItems = items.map((item) => {
+      const isAffinity = item.category?.id ? engagedCategoryIds.has(item.category.id) : false;
       const score = calculateRankingScore({
         totalVerifiedPaise: item.totalVerifiedContribution,
         likeCount: item.likeCount,
@@ -190,6 +207,7 @@ export async function getDebates(options: GetDebatesOptions = {}) {
         reportCount: 0,
         createdAt: item.createdAt,
         isFollowedAuthor: item.authorId ? followedIds.has(item.authorId) : false,
+        isCategoryAffinity: isAffinity,
       }).finalScore;
       return { item, score };
     });

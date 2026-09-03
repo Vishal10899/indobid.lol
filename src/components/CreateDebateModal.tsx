@@ -44,7 +44,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
   
   // Publishing Mode: 'free' (Default) or 'backed' (Optional Conviction)
   const [publishMode, setPublishMode] = useState<'free' | 'backed'>('free');
-  const [amountRupees, setAmountRupees] = useState(10);
+  const [amountRupees, setAmountRupees] = useState(2);
   const [email, setEmail] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -136,10 +136,10 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
 
   if (!isOpen) return null;
 
-  const presetAmounts = [10, 25, 50, 100, 250];
+  const presetAmounts = [2, 5, 10, 25, 50, 100];
 
   const handleAmountChange = (newVal: number) => {
-    setAmountRupees(Math.max(10, newVal));
+    setAmountRupees(Math.max(2, newVal));
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -555,12 +555,12 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                         Select Amount (USD)
                       </span>
                       <span className="text-[11px] text-[var(--color-amber)] font-mono font-bold">
-                        $10 minimum
+                        $2 minimum
                       </span>
                     </div>
 
                     {/* Preset Amount Chips */}
-                    <div className="grid grid-cols-5 gap-1.5 w-full min-w-0">
+                    <div className="grid grid-cols-6 gap-1.5 w-full min-w-0">
                       {presetAmounts.map((amt) => (
                         <button
                           key={amt}
@@ -581,8 +581,8 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                     <div className="flex items-center space-x-2 w-full min-w-0">
                       <button
                         type="button"
-                        onClick={() => handleAmountChange(amountRupees - 5)}
-                        disabled={amountRupees <= 10}
+                        onClick={() => handleAmountChange(amountRupees - 1)}
+                        disabled={amountRupees <= 2}
                         className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold text-xs disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                         aria-label="Decrease amount"
                       >
@@ -592,15 +592,15 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                         <span className="absolute left-3 top-1.5 text-xs font-bold text-[var(--color-coral)]">$</span>
                         <input
                           type="number"
-                          min={10}
+                          min={2}
                           value={amountRupees}
-                          onChange={(e) => handleAmountChange(parseInt(e.target.value || '10', 10))}
+                          onChange={(e) => handleAmountChange(parseInt(e.target.value || '2', 10))}
                           className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-7 pr-3 py-1 text-xs font-bold text-[var(--text-primary)] font-mono focus:outline-none"
                         />
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleAmountChange(amountRupees + 5)}
+                        onClick={() => handleAmountChange(amountRupees + 1)}
                         className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold text-xs hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                         aria-label="Increase amount"
                       >
@@ -618,7 +618,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || (publishMode === 'backed' && amountRupees < 10) || postText.trim().length < 5}
+                disabled={loading || (publishMode === 'backed' && amountRupees < 2) || postText.trim().length < 5}
                 className="w-full py-3 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-md transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] h-11 sm:h-12"
               >
                 {loading ? (

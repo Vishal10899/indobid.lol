@@ -392,10 +392,10 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
   };
 
   const presetAmounts = [
-    { label: `Min ₹${minRupees}`, value: minRupees },
-    { label: `₹${minRupees + 5}`, value: minRupees + 5 },
-    { label: `₹${minRupees + 15}`, value: minRupees + 15 },
-    { label: `₹${minRupees + 50}`, value: minRupees + 50 },
+    { label: `Min $${minRupees}`, value: minRupees },
+    { label: `$${minRupees + 3}`, value: minRupees + 3 },
+    { label: `$${minRupees + 8}`, value: minRupees + 8 },
+    { label: `$${minRupees + 23}`, value: minRupees + 23 },
   ];
 
   return (
@@ -539,7 +539,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                     Total Value
                   </span>
                   <span className="text-sm sm:text-base font-mono font-black text-[var(--color-amber)] block">
-                    {formatINR(debate.totalVerifiedContribution)}
+                    {formatUSD(debate.totalVerifiedContribution)}
                   </span>
                 </div>
 
@@ -566,7 +566,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                     Current Min
                   </span>
                   <span className="text-sm sm:text-base font-mono font-black text-[var(--color-coral)] block">
-                    {formatINR(debate.minimumNextContribution)}
+                    {formatUSD(debate.minimumNextContribution)}
                   </span>
                 </div>
               </div>
@@ -579,7 +579,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                   </div>
                   <div className="min-w-0">
                     <span className="font-bold text-[var(--text-primary)] block truncate">
-                      {formatINR(debate.totalVerifiedContribution)} Total Financial Conviction
+                      {formatUSD(debate.totalVerifiedContribution)} Total Financial Conviction
                     </span>
                     <span className="text-[11px] text-[var(--text-muted)] block truncate">
                       50% Creator pool / 50% Platform protocol allocation
@@ -589,7 +589,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
 
                 <div className="text-right shrink-0 ml-2">
                   <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-[var(--color-coral)]/10 text-[var(--color-coral)] font-bold">
-                    Start: {formatINR(debate.originalContribution || 1000)}
+                    Start: {debate.originalContribution ? formatUSD(debate.originalContribution) : 'Free ($0)'}
                   </span>
                 </div>
               </div>
