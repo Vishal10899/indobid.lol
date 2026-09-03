@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { isAuthorizedAdmin } from '@/lib/auth';
+import { isAuthorizedAdmin, ADMIN_EMAIL } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   if (!isAuthorizedAdmin(req)) {
@@ -64,6 +64,15 @@ export async function PATCH(req: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (isSuspended && (targetUser.role === 'founder' || (targetUser.email && targetUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()))) {
+      return NextResponse.json({ error: 'Cannot suspend the Founder account' }, { status: 400 });
     }
 
     const updatedUser = await prisma.user.update({

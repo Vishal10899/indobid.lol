@@ -19,13 +19,13 @@ async function main() {
   }
 
   // Seed authorized admin user
-  const adminEmail = process.env.ADMIN_EMAIL || 'vishalchaudhary74096@gmail.com';
+  const adminEmail = process.env.ADMIN_EMAIL || 'vishalkumar75912@gmail.com';
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { role: 'founder', username: 'vishalchaudhary', displayName: 'Vishal Chaudhary', isVerified: true },
+    update: { role: 'founder', username: 'vishalChaudhary', displayName: 'Vishal Chaudhary', isVerified: true },
     create: {
       email: adminEmail,
-      username: 'vishalchaudhary',
+      username: 'vishalChaudhary',
       displayName: 'Vishal Chaudhary',
       role: 'founder',
       isVerified: true,

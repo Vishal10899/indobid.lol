@@ -46,11 +46,12 @@ cp .env.example .env
 
 Edit `.env` with your credentials:
 ```env
-DATABASE_URL="file:./dev.db"
-CASHFREE_APP_ID="your_cashfree_app_id"
-CASHFREE_SECRET_KEY="your_cashfree_secret_key"
-CASHFREE_ENVIRONMENT="SANDBOX" # Or 'PRODUCTION'
+DATABASE_URL="postgresql://user:password@localhost:5432/indobid_db?schema=public"
+RAZORPAY_KEY_ID="your_razorpay_key_id"
+RAZORPAY_KEY_SECRET="your_razorpay_key_secret"
+RAZORPAY_WEBHOOK_SECRET="your_razorpay_webhook_secret"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+ADMIN_EMAIL="vishalkumar75912@gmail.com"
 ADMIN_SECRET_KEY="indobid_admin_secret_key_2026"
 ```
 

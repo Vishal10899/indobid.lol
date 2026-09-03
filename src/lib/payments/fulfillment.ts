@@ -2,6 +2,7 @@ import { prisma } from '../db';
 import { Prisma } from '@prisma/client';
 import { calculateTrendingScore } from '../trending';
 import { formatINR, MINIMUM_DEBATE_PAISE, MINIMUM_INCREMENT_PAISE } from '../money';
+import { CREATOR_SHARE_BPS } from '../creator-economics';
 
 export interface FulfillmentParams {
   providerPaymentId: string;
@@ -342,10 +343,10 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
             },
           });
 
-          // 4. Record Immutable Creator Earnings Ledger Entry (10% reward for external backers)
+          // 4. Record Immutable Creator Earnings Ledger Entry (50% reward for external backers)
           const isExternalChallenger = (contribAuthor || '').toLowerCase().trim() !== (debate.authorUsername || '').toLowerCase().trim();
           if (isExternalChallenger && activeContribId) {
-            const percentageBps = 1000; // 10% rate
+            const percentageBps = CREATOR_SHARE_BPS; // 50% rate
             const creatorRewardPaise = Math.floor((amountPaise * percentageBps) / 10000);
             const platformFeePaise = amountPaise - creatorRewardPaise;
 
