@@ -75,6 +75,23 @@ export class MessageService {
       throw new ValidationError('You cannot send a message to yourself');
     }
 
+    // Enforce Private Account restriction: Sender must follow private recipient
+    if (recipient.isPrivate) {
+      const follow = await safeDb(() =>
+        prisma.follow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId: senderId,
+              followingId: recipientId,
+            },
+          },
+        })
+      );
+      if (!follow) {
+        throw new AuthorizationError('This account is private. You must follow them to send a message.');
+      }
+    }
+
     const conversation = await messageRepository.getOrCreateConversation(senderId, recipientId);
 
     const message = await messageRepository.createMessage({
@@ -84,11 +101,23 @@ export class MessageService {
       content: content.trim(),
     });
 
+    const sender = await safeDb(() =>
+      prisma.user.findUnique({
+        where: { id: senderId },
+        select: { displayName: true, username: true, ghostMode: true, ghostDisplayName: true },
+      })
+    );
+
+    const senderDisplay = sender?.ghostMode
+      ? (sender.ghostDisplayName || 'Someone')
+      : (sender?.displayName || sender?.username || 'Someone');
+
     // Notify recipient
     await notificationRepository.create({
       user: { connect: { id: recipientId } },
+      actorId: senderId,
       type: 'message',
-      title: 'New Message',
+      title: `Message from ${senderDisplay}`,
       message: content.trim().substring(0, 100),
       linkUrl: `/messages/${conversation.id}`,
     });

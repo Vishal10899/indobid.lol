@@ -1,112 +1,130 @@
 /**
  * INDOBID — UNIFIED FEED SERVICE
- * Gateway for the 3 locked feed modes: For You, Trending, Following.
+ * Canonical architectural gateway uniting all rankers:
+ *  ├── ForYouRanker
+ *  ├── FollowingRanker
+ *  ├── TrendingRanker
+ *  ├── TopPaidRanker
+ *  ├── TopReachRanker
+ *  ├── TopEngagementRanker
+ *  └── SearchRanker
  */
 
-import { forYouService } from './for-you/for-you.service';
-import { followingFeedService } from './following/following.service';
-import { prisma } from '../../infrastructure/database/prisma';
-import { safeDb } from '../../infrastructure/database/transactions';
+import { forYouRanker, ForYouRanker, ForYouQueryOptions, ForYouResult } from './for-you/for-you-ranker';
+import { followingRanker, FollowingRanker, FollowingQueryOptions, FollowingResult } from './following/following-ranker';
+import { trendingRanker, TrendingRanker, TrendingQueryOptions, TrendingSectionsResult } from './trending/trending-ranker';
+import { topPaidRanker, TopPaidRanker, TopPaidQueryOptions, TopPaidResult } from './ranking/top-paid-ranker';
+import { topReachRanker, TopReachRanker, TopReachQueryOptions, TopReachResult } from './ranking/top-reach-ranker';
+import { topEngagementRanker, TopEngagementRanker, TopEngagementQueryOptions, TopEngagementResult } from './ranking/top-engagement-ranker';
+import { searchRanker, SearchRanker, SearchQueryOptions, SearchResult } from './search/search-ranker';
 import { FeedItem, FeedQueryOptions } from './feed.types';
+import { mapDebateToFeedItem } from './feed.mapper';
 
 export class FeedService {
+  readonly forYouRanker: ForYouRanker = forYouRanker;
+  readonly followingRanker: FollowingRanker = followingRanker;
+  readonly trendingRanker: TrendingRanker = trendingRanker;
+  readonly topPaidRanker: TopPaidRanker = topPaidRanker;
+  readonly topReachRanker: TopReachRanker = topReachRanker;
+  readonly topEngagementRanker: TopEngagementRanker = topEngagementRanker;
+  readonly searchRanker: SearchRanker = searchRanker;
+
+  /**
+   * Universal feed query dispatcher.
+   */
   async getFeed(options: FeedQueryOptions = {}): Promise<FeedItem[]> {
     const {
       feedType = 'for_you',
       categoryId,
-      authorId,
       search,
       skip = 0,
       take = 20,
       userId,
     } = options;
 
-    if (feedType === 'for_you' && !search && !authorId) {
-      return forYouService.getForYouFeed({ userId, categoryId, skip, take });
-    }
-
-    if (feedType === 'following' && userId && !search && !authorId && !categoryId) {
-      return followingFeedService.getFollowingFeed({ userId, skip, take });
-    }
-
-    // Standard filter & search query
-    const where: any = { status: 'active' };
-    if (categoryId) where.categoryId = categoryId;
-    if (authorId) where.authorId = authorId;
+    const page = Math.floor(skip / take) + 1;
 
     if (search && search.trim()) {
-      const q = search.trim();
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { content: { contains: q, mode: 'insensitive' } },
-        { authorUsername: { contains: q, mode: 'insensitive' } },
-        { authorDisplayName: { contains: q, mode: 'insensitive' } },
-        { category: { name: { contains: q, mode: 'insensitive' } } },
-      ];
+      const searchRes = await this.searchRanker.searchDebates({
+        query: search,
+        category: categoryId,
+        page,
+        limit: take,
+        currentUserId: userId,
+      });
+      return searchRes.items.map((it) => mapDebateToFeedItem(it, { currentUserId: userId }));
     }
 
-    let orderBy: any = [{ createdAt: 'desc' }];
+    if (feedType === 'for_you') {
+      const result = await this.forYouRanker.getForYouDebates({
+        currentUserId: userId,
+        category: categoryId,
+        page,
+        limit: take,
+      });
+      return result.items.map((it) => mapDebateToFeedItem(it, { currentUserId: userId }));
+    }
+
+    if (feedType === 'following') {
+      const result = await this.followingRanker.getFollowingDebates({
+        currentUserId: userId,
+        page,
+        limit: take,
+      });
+      return result.items.map((it) => mapDebateToFeedItem(it, { currentUserId: userId }));
+    }
+
     if (feedType === 'trending') {
-      orderBy = [{ trendingScore: 'desc' }, { createdAt: 'desc' }];
+      const result = await this.trendingRanker.getTrendingDebates({
+        category: categoryId,
+        page,
+        limit: take,
+        currentUserId: userId,
+      });
+      return result.items.map((it) => mapDebateToFeedItem(it, { currentUserId: userId }));
     }
 
-    const debates = await safeDb(() =>
-      prisma.debate.findMany({
-        where,
-        orderBy,
-        skip,
-        take,
-        include: {
-          author: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatarUrl: true,
-              isVerified: true,
-              role: true,
-            },
-          },
-          category: {
-            select: {
-              id: true,
-              name: true,
-              slug: true,
-            },
-          },
-          _count: {
-            select: {
-              likes: true,
-              bookmarks: true,
-              contributions: { where: { status: 'verified' } },
-            },
-          },
-        },
-      })
-    );
+    // Default: Top Paid / Highest Value
+    const result = await this.topPaidRanker.getTopPaidDebates({
+      category: categoryId,
+      page,
+      limit: take,
+      currentUserId: userId,
+    });
+    return result.items.map((it) => mapDebateToFeedItem(it, { currentUserId: userId }));
+  }
 
-    return debates.map((d) => ({
-      id: d.id,
-      title: d.title,
-      content: d.content,
-      authorId: d.author?.id || d.authorId || '',
-      authorUsername: d.author?.username || d.authorUsername || 'anonymous',
-      authorDisplayName: d.author?.displayName || d.authorDisplayName || 'Debater',
-      authorAvatarUrl: d.author?.avatarUrl || null,
-      authorIsVerified: d.author?.isVerified || false,
-      authorRole: d.author?.role || 'user',
-      categoryId: d.category.id,
-      categoryName: d.category.name,
-      categorySlug: d.category.slug,
-      totalVerifiedContribution: d.totalVerifiedContribution,
-      contributionCount: d.contributionCount,
-      lastContributionAmount: d.lastContributionAmount,
-      likesCount: d._count.likes,
-      bookmarksCount: d._count.bookmarks,
-      trendingScore: d.trendingScore,
-      createdAt: d.createdAt,
-      lastContributionAt: d.lastContributionAt,
-    }));
+  // Direct Ranker Access Methods
+  async getForYou(options: ForYouQueryOptions): Promise<ForYouResult> {
+    return this.forYouRanker.getForYouDebates(options);
+  }
+
+  async getFollowing(options: FollowingQueryOptions): Promise<FollowingResult> {
+    return this.followingRanker.getFollowingDebates(options);
+  }
+
+  async getTrending(options: TrendingQueryOptions) {
+    return this.trendingRanker.getTrendingDebates(options);
+  }
+
+  async getTopPaid(options: TopPaidQueryOptions): Promise<TopPaidResult> {
+    return this.topPaidRanker.getTopPaidDebates(options);
+  }
+
+  async getTopReach(options: TopReachQueryOptions): Promise<TopReachResult> {
+    return this.topReachRanker.getTopReachDebates(options);
+  }
+
+  async getTopEngagement(options: TopEngagementQueryOptions): Promise<TopEngagementResult> {
+    return this.topEngagementRanker.getTopEngagementDebates(options);
+  }
+
+  async search(options: SearchQueryOptions): Promise<SearchResult> {
+    return this.searchRanker.searchAll(options);
+  }
+
+  async getTrendingSections(options: { currentUserId?: string | null; category?: string } = {}): Promise<TrendingSectionsResult> {
+    return this.trendingRanker.getAllSections(options);
   }
 }
 

@@ -24,6 +24,9 @@ export async function GET() {
         role: true,
         countryCode: true,
         currencyCode: true,
+        isPrivate: true,
+        ghostMode: true,
+        ghostDisplayName: true,
         createdAt: true,
         _count: {
           select: {

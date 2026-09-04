@@ -31,6 +31,7 @@ export interface RankingFactors {
   // Personal Relevance
   isFollowedAuthor?: boolean;
   isCategoryAffinity?: boolean;
+  personalAffinityScore?: number;
 }
 
 export interface RankingBreakdown {
@@ -131,11 +132,15 @@ export function calculateRankingScore(factors: RankingFactors): RankingBreakdown
 
   // 6. Community Interest & Personal Affinity (15% Macro Pillar)
   let personalAffinityScore = 0;
-  if (factors.isFollowedAuthor) {
-    personalAffinityScore += RANKING_CONFIG.FOLLOWED_AUTHOR_BONUS;
-  }
-  if (factors.isCategoryAffinity) {
-    personalAffinityScore += RANKING_CONFIG.CATEGORY_AFFINITY_BONUS;
+  if (factors.personalAffinityScore !== undefined) {
+    personalAffinityScore = factors.personalAffinityScore;
+  } else {
+    if (factors.isFollowedAuthor) {
+      personalAffinityScore += RANKING_CONFIG.FOLLOWED_AUTHOR_BONUS;
+    }
+    if (factors.isCategoryAffinity) {
+      personalAffinityScore += RANKING_CONFIG.CATEGORY_AFFINITY_BONUS;
+    }
   }
 
   // 7. Time Decay Multiplier

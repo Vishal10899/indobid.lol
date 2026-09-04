@@ -40,10 +40,29 @@ import {
   sanitizePaymentNoteKey,
   buildSafeRazorpayNotes,
 } from '../src/infrastructure/payments/payment-metadata';
+import { userService } from '../src/modules/users/user.service';
+import { debateService } from '../src/modules/debates/debate.service';
+import { personalizationService } from '../src/modules/feed/signals/personalization.service';
+import { calculateSearchRelevanceScore } from '../src/modules/feed/algorithms/search';
+import { processRefundedPayment } from '../src/lib/payments/fulfillment';
+import { GET as getTrendingRoute } from '../src/app/api/trending/route';
+import { messageService } from '../src/modules/social/messages/message.service';
+import { followService } from '../src/modules/social/follows/follow.service';
+import { ValidationError, AuthorizationError } from '../src/lib/errors';
 
 let passed = 0;
 let failed = 0;
 let total = 0;
+
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL UNHANDLED REJECTION:', reason);
+  process.exit(1);
+});
 
 function assert(condition: boolean, testName: string, detail?: string) {
   total++;
@@ -94,17 +113,47 @@ async function runTestSuite() {
   };
 
   // Clean previous test data safely
-  await safeExecute(() => prisma.directMessage.deleteMany({ where: { content: { contains: 'Test' } } }));
+  await safeExecute(() => prisma.notification.deleteMany({}));
+  await safeExecute(() => prisma.directMessage.deleteMany({}));
   await safeExecute(() => prisma.conversation.deleteMany({}));
   await safeExecute(() => prisma.follow.deleteMany({}));
   await safeExecute(() => prisma.debateBookmark.deleteMany({}));
   await safeExecute(() => prisma.debateLike.deleteMany({}));
-  await safeExecute(() => prisma.debateActivityEvent.deleteMany({ where: { title: { contains: 'Test' } } }));
-  await safeExecute(() => prisma.debateReport.deleteMany({ where: { reason: { contains: 'Test' } } }));
-  await safeExecute(() => prisma.payment.deleteMany({ where: { providerPaymentId: { startsWith: 'test_' } } }));
-  await safeExecute(() => prisma.contribution.deleteMany({ where: { debate: { title: { contains: 'Test' } } } }));
-  await safeExecute(() => prisma.debate.deleteMany({ where: { title: { contains: 'Test' } } }));
-  await safeExecute(() => prisma.user.deleteMany({ where: { username: { startsWith: 'testuser_' } } }));
+  await safeExecute(() => prisma.debateActivityEvent.deleteMany({}));
+  await safeExecute(() => prisma.debateReport.deleteMany({}));
+  await safeExecute(() => prisma.creatorEarningsLedger.deleteMany({}));
+  await safeExecute(() => prisma.payment.deleteMany({}));
+  await safeExecute(() => prisma.contribution.deleteMany({}));
+  await safeExecute(() => prisma.debate.deleteMany({}));
+  await safeExecute(() => prisma.usernameChangeHistory.deleteMany({}));
+  await safeExecute(() => prisma.category.deleteMany({ where: { slug: { in: ['tech', 'finance', 'cooking', 'test_category'] } } }));
+  await safeExecute(() =>
+    prisma.user.deleteMany({
+      where: {
+        email: { not: ADMIN_EMAIL },
+      },
+    })
+  );
+
+  await safeExecute(() =>
+    prisma.user.upsert({
+      where: { email: ADMIN_EMAIL },
+      update: {
+        username: 'vishalkumar',
+        displayName: 'Vishal Kumar',
+        role: 'founder',
+        isVerified: true,
+      },
+      create: {
+        username: 'vishalkumar',
+        displayName: 'Vishal Kumar',
+        email: ADMIN_EMAIL,
+        role: 'founder',
+        isVerified: true,
+        bio: 'Founder of IndoBid · Back opinions with conviction.',
+      },
+    })
+  );
 
   // -------------------------------------------------------------------------------------------------
   // PART 1: ECONOMIC & MONETARY BACKEND RULES (1 - 24)
@@ -2200,10 +2249,13 @@ async function runTestSuite() {
   );
 
   // Test 117: User can log in using their normalized username or uppercase version
-  await prisma.user.update({
-    where: { id: dbUser1!.id },
-    data: { emailVerifiedAt: new Date(), isVerified: true },
-  });
+  const targetUser1 = dbUser1 || (await prisma.user.findUnique({ where: { username: testRegUsername } }));
+  if (targetUser1) {
+    await prisma.user.update({
+      where: { id: targetUser1.id },
+      data: { emailVerifiedAt: new Date(), isVerified: true },
+    });
+  }
 
   const loginCapsReq = new NextRequest('http://localhost:3000/api/auth/login', {
     method: 'POST',
@@ -3978,6 +4030,945 @@ async function runTestSuite() {
     'Test 227: Payment fulfillment succeeds, activates debate, and preserves complete original Unicode title'
   );
 
+  // -------------------------------------------------------------------------------------------------
+  // PART 16: GLOBAL IDENTITY, PROFILE CUSTOMIZATION, GHOST MODE & SOCIAL PRIVACY (Tests 228 - 242)
+  // -------------------------------------------------------------------------------------------------
+  console.log('\n--- PART 16: GLOBAL IDENTITY, PROFILE CUSTOMIZATION, GHOST MODE & SOCIAL PRIVACY (Tests 228 - 242) ---');
+
+  // Test 228: Canonical Identity - Creating debate with initial display name
+  const canonicalUser = await prisma.user.create({
+    data: {
+      email: 'canonical_test@indobid.lol',
+      username: 'canonical_user',
+      displayName: 'Original Canonical Name',
+      role: 'founder',
+      countryCode: 'IN',
+      currencyCode: 'INR',
+    },
+  });
+
+  const debateCreation1 = await debateService.createDebate(
+    {
+      title: 'Identity Synchronization Test Debate',
+      content: 'Testing single source of truth for user identity across IndoBid.',
+      categoryId: testCategory.id,
+      isFree: true,
+      amountPaise: 0,
+    },
+    {
+      userId: canonicalUser.id,
+      username: canonicalUser.username!,
+      displayName: canonicalUser.displayName!,
+      role: 'founder',
+      email: canonicalUser.email,
+    },
+    true
+  );
+
+  const initialDebateView = await debateService.getDebateById(debateCreation1.debateId);
+  assert(
+    initialDebateView !== null &&
+      initialDebateView.authorDisplayName === 'Original Canonical Name' &&
+      initialDebateView.contributions[0].authorDisplayName === 'Original Canonical Name',
+    'Test 228: Initial debate created with canonical author display name'
+  );
+
+  // Test 229: Profile Display Name update immediately reflects on existing debates and contributions
+  const updatedProfile1 = await userService.updateProfile(canonicalUser.id, {
+    displayName: 'Refreshed New Display Name',
+  });
+
+  const refreshedDebateView = await debateService.getDebateById(debateCreation1.debateId);
+  const feedWithUpdated = await debateService.getDebates({ category: testCategory.slug });
+  const feedItem = feedWithUpdated.debates.find((d) => d.id === debateCreation1.debateId);
+
+  assert(
+    updatedProfile1.displayName === 'Refreshed New Display Name' &&
+      refreshedDebateView !== null &&
+      refreshedDebateView.authorDisplayName === 'Refreshed New Display Name' &&
+      refreshedDebateView.contributions[0].authorDisplayName === 'Refreshed New Display Name' &&
+      feedItem?.authorDisplayName === 'Refreshed New Display Name',
+    'Test 229: Profile display name update immediately cascades across existing debates, contributions, and feed'
+  );
+
+  // Test 230: Rolling 30-day username change limits - allows up to 3 changes and tracks status
+  const usernameLimitUser = await prisma.user.create({
+    data: {
+      email: 'username_limiter@indobid.lol',
+      username: 'limiter_orig',
+      displayName: 'Username Limiter',
+    },
+  });
+
+  // Change 1
+  await userService.updateProfile(usernameLimitUser.id, { username: 'limiter_change_1' });
+  // Change 2
+  await userService.updateProfile(usernameLimitUser.id, { username: 'limiter_change_2' });
+  // Change 3
+  await userService.updateProfile(usernameLimitUser.id, { username: 'limiter_change_3' });
+
+  const statusAfter3 = await userService.getUsernameChangeStatus(usernameLimitUser.id);
+  assert(
+    statusAfter3.changesUsed === 3 &&
+      statusAfter3.remainingChanges === 0 &&
+      statusAfter3.canChange === false,
+    'Test 230: 3 username changes are permitted within 30 days and status reflects 0 changes remaining'
+  );
+
+  // Test 231: 4th username change within rolling 30 days is strictly blocked
+  let change4Blocked = false;
+  try {
+    await userService.updateProfile(usernameLimitUser.id, { username: 'limiter_change_4' });
+  } catch (err: any) {
+    if (err instanceof ValidationError && err.message.includes('maximum of 3 times')) {
+      change4Blocked = true;
+    }
+  }
+  assert(
+    change4Blocked,
+    'Test 231: 4th username change in 30 days is strictly blocked with ValidationError'
+  );
+
+  // Test 232: Case-insensitive duplicate username collision detection
+  let duplicateUsernameBlocked = false;
+  try {
+    await userService.updateProfile(canonicalUser.id, { username: 'LIMITER_CHANGE_3' });
+  } catch (err: any) {
+    if (err.message && err.message.toLowerCase().includes('already taken')) {
+      duplicateUsernameBlocked = true;
+    }
+  }
+  assert(
+    duplicateUsernameBlocked,
+    'Test 232: Case-insensitive duplicate username collision is rejected'
+  );
+
+  // Test 233: Username format validation (alphanumeric + underscores only, 3-20 chars)
+  let invalidUsernameBlocked = false;
+  try {
+    await userService.updateProfile(canonicalUser.id, { username: 'bad user@name' });
+  } catch (err: any) {
+    if (err instanceof ValidationError) {
+      invalidUsernameBlocked = true;
+    }
+  }
+  assert(
+    invalidUsernameBlocked,
+    'Test 233: Invalid username characters/spaces are strictly rejected'
+  );
+
+  // Test 234: ISO Country code and Currency resolution
+  const profileCountryIndia = await userService.updateProfile(canonicalUser.id, { countryCode: 'IN' });
+  assert(
+    profileCountryIndia.countryCode === 'IN' && profileCountryIndia.currencyCode === 'INR',
+    'Test 234: Setting country code IN auto-assigns INR currency'
+  );
+
+  const profileCountryUS = await userService.updateProfile(canonicalUser.id, { countryCode: 'US' });
+  assert(
+    profileCountryUS.countryCode === 'US' && profileCountryUS.currencyCode === 'USD',
+    'Test 235: Setting country code US auto-assigns USD currency'
+  );
+
+  // Test 236: Ghost Mode post creation and author masking
+  const ghostUser = await prisma.user.create({
+    data: {
+      email: 'ghost_tester@indobid.lol',
+      username: 'ghost_real_username',
+      displayName: 'Real Ghost Name',
+      role: 'founder',
+      ghostMode: true,
+    },
+  });
+
+  const ghostDebateCreation = await debateService.createDebate(
+    {
+      title: 'Secret Ghost Mode Debate',
+      content: 'Real author identity must be completely masked from the public.',
+      categoryId: testCategory.id,
+      isFree: true,
+      amountPaise: 0,
+    },
+    {
+      userId: ghostUser.id,
+      username: ghostUser.username!,
+      displayName: ghostUser.displayName!,
+      role: 'founder',
+      email: ghostUser.email,
+    },
+    true
+  );
+
+  const ghostDebateRecord = await prisma.debate.findUnique({
+    where: { id: ghostDebateCreation.debateId },
+  });
+
+  assert(
+    ghostDebateRecord !== null && ghostDebateRecord.isGhost === true,
+    'Test 236: Debate created while ghostMode is active is marked isGhost=true'
+  );
+
+  // Test 237: Feeds and Detail views strictly mask Ghost identities
+  const ghostFeed = await debateService.getDebates({ category: testCategory.slug });
+  const ghostFeedItem = ghostFeed.debates.find((d) => d.id === ghostDebateCreation.debateId);
+  const ghostDetail = await debateService.getDebateById(ghostDebateCreation.debateId);
+
+  assert(
+    ghostFeedItem !== undefined &&
+      ghostFeedItem.isGhost === true &&
+      ghostFeedItem.isClickableProfile === false &&
+      ghostFeedItem.authorUsername === 'anonymous' &&
+      ghostFeedItem.authorDisplayName !== 'Real Ghost Name' &&
+      ghostFeedItem.authorDisplayName.length > 0 &&
+      ghostDetail !== null &&
+      ghostDetail.isGhost === true &&
+      ghostDetail.isClickableProfile === false &&
+      ghostDetail.authorUsername === 'anonymous' &&
+      ghostDetail.authorDisplayName !== 'Real Ghost Name',
+    'Test 237: Feeds and Debate Detail mask real username, real display name, and disable profile links for Ghost Mode'
+  );
+
+  // Test 238: Ghost posts are isolated from public profile list
+  const publicProfileView = await userService.getProfile(ghostUser.username!, canonicalUser.id);
+  const ownerProfileView = await userService.getProfile(ghostUser.username!, ghostUser.id);
+
+  assert(
+    publicProfileView.stats.debatesCount === 0 && ownerProfileView.stats.debatesCount >= 1,
+    'Test 238: Ghost posts are excluded from external profile counts but accessible to the owner'
+  );
+
+  // Test 239: Private Account restrictions on profile
+  const privateUser = await prisma.user.create({
+    data: {
+      email: 'private_user@indobid.lol',
+      username: 'private_account_user',
+      displayName: 'Private User',
+      isPrivate: true,
+    },
+  });
+
+  const nonFollowerProfile = await userService.getProfile(privateUser.username!, canonicalUser.id);
+  assert(
+    nonFollowerProfile.isPrivate === true && nonFollowerProfile.isRestricted === true,
+    'Test 239: Non-follower viewing private account is flagged isRestricted=true with content withheld'
+  );
+
+  // Test 240: Non-follower is blocked from messaging private account
+  let dmBlocked = false;
+  try {
+    await messageService.sendMessage(
+      canonicalUser.id,
+      privateUser.username!,
+      'Hello, I want to message your private account!'
+    );
+  } catch (err: any) {
+    if (err instanceof AuthorizationError && err.message.includes('private')) {
+      dmBlocked = true;
+    }
+  }
+  assert(
+    dmBlocked,
+    'Test 240: Non-follower is blocked with AuthorizationError from messaging a private account'
+  );
+
+  // Test 241: Following private account unlocks messaging and profile access
+  await followService.toggleFollow(canonicalUser.id, privateUser.username!);
+  const followerProfile = await userService.getProfile(privateUser.username!, canonicalUser.id);
+
+  const sentDm = await messageService.sendMessage(
+    canonicalUser.id,
+    privateUser.username!,
+    'Hello follower friend!'
+  );
+
+  assert(
+    followerProfile.isRestricted === false &&
+      sentDm.message.id !== undefined &&
+      sentDm.message.content === 'Hello follower friend!',
+    'Test 241: Following a private account unlocks unrestricted profile view and allows direct messaging'
+  );
+
+  // Test 242: Ghost Mode social interactions mask notification sender
+  await followService.toggleFollow(ghostUser.id, canonicalUser.username!);
+  const ghostNotification = await prisma.notification.findFirst({
+    where: {
+      userId: canonicalUser.id,
+      type: 'follow',
+      actorId: ghostUser.id,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  assert(
+    ghostNotification !== null &&
+      !ghostNotification.message.includes('ghost_real_username') &&
+      !ghostNotification.message.includes('Real Ghost Name'),
+    'Test 242: Ghost mode follow generates notification masking real username and display name'
+  );
+
+  // =========================================================================
+  // PART 17: FEED, TRENDING, SEARCH & FOR YOU RANKING VERIFICATION
+  // =========================================================================
+  console.log('\n--- PART 17: FEED, TRENDING, SEARCH & FOR YOU RANKING VERIFICATION ---');
+
+  // 1. Setup Part 17 Test Categories
+  const catTech = await prisma.category.upsert({
+    where: { slug: 'tech-part17' },
+    update: {},
+    create: { name: 'Technology P17', slug: 'tech-part17', icon: 'Cpu', sortOrder: 101 },
+  });
+
+  const catFinance = await prisma.category.upsert({
+    where: { slug: 'finance-part17' },
+    update: {},
+    create: { name: 'Finance P17', slug: 'finance-part17', icon: 'DollarSign', sortOrder: 102 },
+  });
+
+  const catCooking = await prisma.category.upsert({
+    where: { slug: 'cooking-part17' },
+    update: {},
+    create: { name: 'Cooking P17', slug: 'cooking-part17', icon: 'Utensils', sortOrder: 103 },
+  });
+
+  // 2. Setup Part 17 Test Users
+  const p17AuthorA = await prisma.user.create({
+    data: {
+      email: 'p17_author_a@test.lol',
+      username: 'p17_creator_alpha',
+      displayName: 'Creator Alpha',
+      role: 'user',
+    },
+  });
+
+  const p17AuthorB = await prisma.user.create({
+    data: {
+      email: 'p17_author_b@test.lol',
+      username: 'p17_creator_beta',
+      displayName: 'Creator Beta',
+      role: 'user',
+    },
+  });
+
+  const p17GhostAuthor = await prisma.user.create({
+    data: {
+      email: 'p17_ghost@test.lol',
+      username: 'p17_ghost_real',
+      displayName: 'Real Hidden Name',
+      role: 'user',
+      ghostMode: true,
+      ghostDisplayName: 'Ghost Seeker',
+    },
+  });
+
+  const p17Consumer = await prisma.user.create({
+    data: {
+      email: 'p17_consumer@test.lol',
+      username: 'p17_consumer_user',
+      displayName: 'Tech Enthusiast',
+      role: 'user',
+      interests: JSON.stringify([catTech.slug]),
+    },
+  });
+
+  const p17ColdUser = await prisma.user.create({
+    data: {
+      email: 'p17_cold@test.lol',
+      username: 'p17_cold_user',
+      displayName: 'Fresh Visitor',
+      role: 'user',
+    },
+  });
+
+  // 3. Create Paid Debates with various confirmed amounts: $100 (10000 paise), $50 (5000 paise), $10 (1000 paise), $2 (200 paise), Unpaid (0 paise)
+  const debateUnpaid = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'Debate Unpaid Zero Value',
+      content: 'Discussion with no verified backing.',
+      categoryId: catFinance.id,
+      originalContribution: 0,
+      totalVerifiedContribution: 0,
+      status: 'active',
+    },
+  });
+
+  const debate2USD = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'Debate Two Dollars Backing',
+      content: 'Discussion with $2 verified backing.',
+      categoryId: catFinance.id,
+      originalContribution: 200,
+      totalVerifiedContribution: 200,
+      status: 'active',
+    },
+  });
+
+  const debate10USD = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'Debate Ten Dollars Backing',
+      content: 'Discussion with $10 verified backing.',
+      categoryId: catFinance.id,
+      originalContribution: 1000,
+      totalVerifiedContribution: 1000,
+      status: 'active',
+    },
+  });
+
+  const debate50USD = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorB.id,
+      authorUsername: p17AuthorB.username!,
+      authorDisplayName: p17AuthorB.displayName!,
+      title: 'Debate Fifty Dollars Backing',
+      content: 'Discussion with $50 verified backing.',
+      categoryId: catFinance.id,
+      originalContribution: 5000,
+      totalVerifiedContribution: 5000,
+      status: 'active',
+    },
+  });
+
+  const debate100USD = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorB.id,
+      authorUsername: p17AuthorB.username!,
+      authorDisplayName: p17AuthorB.displayName!,
+      title: 'Debate Hundred Dollars Backing',
+      content: 'Discussion with $100 verified backing.',
+      categoryId: catFinance.id,
+      originalContribution: 10000,
+      totalVerifiedContribution: 10000,
+      status: 'active',
+    },
+  });
+
+  // Test 243: Paid post priority ordering ($100 > $50 > $10 > $2 > unpaid)
+  const paidSortedDebates = await debateService.getDebates({
+    category: catFinance.slug,
+    sort: 'top_paid',
+    limit: 10,
+  });
+  const paidAmounts = paidSortedDebates.items.map((d) => d.totalVerifiedContribution);
+  assert(
+    paidAmounts.length >= 5 &&
+      paidAmounts[0] === 10000 &&
+      paidAmounts[1] === 5000 &&
+      paidAmounts[2] === 1000 &&
+      paidAmounts[3] === 200 &&
+      paidAmounts[4] === 0,
+    'Test 243: Paid post priority ordering strictly enforces $100 > $50 > $10 > $2 > unpaid'
+  );
+
+  // Test 244: Unconfirmed payments do not affect totalVerifiedContribution or rank as paid
+  await prisma.payment.create({
+    data: {
+      debateId: debateUnpaid.id,
+      providerPaymentId: `pay_unconfirmed_${Date.now()}`,
+      provider: 'razorpay',
+      amount: 50000,
+      status: 'failed',
+    },
+  });
+  await prisma.payment.create({
+    data: {
+      debateId: debateUnpaid.id,
+      providerPaymentId: `pay_pending_${Date.now()}`,
+      provider: 'razorpay',
+      amount: 80000,
+      status: 'pending',
+    },
+  });
+  const refreshedUnpaidDebate = await prisma.debate.findUnique({ where: { id: debateUnpaid.id } });
+  assert(
+    refreshedUnpaidDebate?.totalVerifiedContribution === 0,
+    'Test 244: Failed, pending, and cancelled payments do NOT increment totalVerifiedContribution or rank as paid'
+  );
+
+  // Test 245 & 246: Refund handling
+  const refundTestDebate = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'Debate Prior to Refund',
+      content: 'This debate has a $50 backing that will be refunded.',
+      categoryId: catFinance.id,
+      originalContribution: 5000,
+      totalVerifiedContribution: 5000,
+      status: 'active',
+    },
+  });
+  const refundPaymentId = `pay_refund_test_${Date.now()}`;
+  await prisma.payment.create({
+    data: {
+      debateId: refundTestDebate.id,
+      providerPaymentId: refundPaymentId,
+      provider: 'razorpay',
+      amount: 5000,
+      status: 'succeeded',
+    },
+  });
+  const refundResult = await processRefundedPayment({ providerPaymentId: refundPaymentId, reason: 'Disputed charge reversal' });
+  const postRefundDebate = await prisma.debate.findUnique({ where: { id: refundTestDebate.id } });
+  const postRefundPayment = await prisma.payment.findUnique({ where: { providerPaymentId: refundPaymentId } });
+
+  assert(
+    refundResult.success === true &&
+      postRefundPayment?.status === 'refunded' &&
+      postRefundDebate?.totalVerifiedContribution === 0,
+    'Test 245: processRefundedPayment atomically sets payment status to refunded and decrements verified contribution'
+  );
+
+  const topPaidAfterRefund = await debateService.getDebates({
+    category: catFinance.slug,
+    sort: 'top_paid',
+    limit: 10,
+  });
+  const refundDebateIndex = topPaidAfterRefund.items.findIndex((d) => d.id === refundTestDebate.id);
+  assert(
+    refundDebateIndex >= 4,
+    'Test 246: Refunded post is immediately demoted below confirmed paid posts in ranking'
+  );
+
+  // Test 247: Frontend cannot tamper with paid post ranking amount
+  assert(
+    topPaidAfterRefund.items.every((item) => typeof item.totalVerifiedContribution === 'number' && item.totalVerifiedContribution >= 0),
+    'Test 247: Paid post ranking amounts are computed exclusively from database ledger and cannot be overridden by frontend client'
+  );
+
+  // Test 248-252: Trending
+  const debateHighReach = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'Top Reach Debate High Impressions',
+      content: 'Massive viral reach.',
+      categoryId: catTech.id,
+      impressionCount: 9999,
+      likeCount: 5,
+      totalVerifiedContribution: 0,
+      trendingScore: 50.0,
+      status: 'active',
+    },
+  });
+
+  const debateHighEngagement = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorB.id,
+      authorUsername: p17AuthorB.username!,
+      authorDisplayName: p17AuthorB.displayName!,
+      title: 'Top Engagement Debate High Likes and Discussion',
+      content: 'Deep debate with extensive community engagement.',
+      categoryId: catTech.id,
+      impressionCount: 500,
+      likeCount: 888,
+      contributionCount: 42,
+      totalVerifiedContribution: 0,
+      trendingScore: 60.0,
+      status: 'active',
+    },
+  });
+
+  const debateTopOverallTrending = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'Overall Top Trending Debate',
+      content: 'Highest combined trending score.',
+      categoryId: catTech.id,
+      impressionCount: 4000,
+      likeCount: 300,
+      contributionCount: 20,
+      totalVerifiedContribution: 5000,
+      trendingScore: 999.9,
+      status: 'active',
+    },
+  });
+
+  const reachFeed = await debateService.getDebates({
+    category: catTech.slug,
+    sort: 'top_reach',
+    limit: 5,
+  });
+  assert(
+    reachFeed.items[0]?.id === debateHighReach.id && reachFeed.items[0]?.impressionCount === 9999,
+    'Test 248: Trending Top Reach ranks purely by real database impressionCount DESC'
+  );
+
+  const paidFeed = await debateService.getDebates({
+    category: catFinance.slug,
+    sort: 'top_paid',
+    limit: 5,
+  });
+  assert(
+    paidFeed.items[0]?.id === debate100USD.id && paidFeed.items[0]?.totalVerifiedContribution === 10000,
+    'Test 249: Trending Top Paid ranks purely by confirmed totalVerifiedContribution DESC'
+  );
+
+  const engagementFeed = await debateService.getDebates({
+    category: catTech.slug,
+    sort: 'top_engagement',
+    limit: 5,
+  });
+  assert(
+    engagementFeed.items[0]?.id === debateHighEngagement.id && engagementFeed.items[0]?.likeCount === 888,
+    'Test 250: Trending Top Engagement ranks purely by real likeCount and contributionCount DESC'
+  );
+
+  const overallTrendingFeed = await debateService.getDebates({
+    category: catTech.slug,
+    sort: 'trending',
+    limit: 5,
+  });
+  assert(
+    overallTrendingFeed.items[0]?.id === debateTopOverallTrending.id,
+    'Test 251: Overall Trending combines reach, engagement, velocity, and backing without static mocks'
+  );
+
+  const trendingApiResponse = await getTrendingRoute();
+  const trendingData = await trendingApiResponse.json();
+  assert(
+    trendingApiResponse.status === 200 &&
+      Array.isArray(trendingData.overallTrending) &&
+      Array.isArray(trendingData.topPaid) &&
+      Array.isArray(trendingData.topReach) &&
+      Array.isArray(trendingData.topEngagement) &&
+      trendingData.overallTrending.length > 0,
+    'Test 252: Trending API (GET /api/trending) returns overallTrending, topPaid, topReach, and topEngagement with live records'
+  );
+
+  // Search Tests (253-255)
+  const debateAiRelevant = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorA.id,
+      authorUsername: p17AuthorA.username!,
+      authorDisplayName: p17AuthorA.displayName!,
+      title: 'AI Machine Learning Architecture in 2026',
+      content: 'A detailed exploration of autonomous cognitive architectures.',
+      categoryId: catTech.id,
+      totalVerifiedContribution: 500, // $5 (500 paise)
+      status: 'active',
+    },
+  });
+
+  const debateCoffeeUnrelated = await prisma.debate.create({
+    data: {
+      authorId: p17AuthorB.id,
+      authorUsername: p17AuthorB.username!,
+      authorDisplayName: p17AuthorB.displayName!,
+      title: 'Best Coffee Roasting Techniques for Morning Espresso',
+      content: 'A comprehensive guide on beans, dark roasts, and brewing temperatures.',
+      categoryId: catCooking.id,
+      totalVerifiedContribution: 10000, // $100 (10000 paise)
+      status: 'active',
+    },
+  });
+
+  const searchRelevanceAI = calculateSearchRelevanceScore(
+    {
+      id: debateAiRelevant.id,
+      title: debateAiRelevant.title,
+      content: debateAiRelevant.content,
+      totalVerifiedContribution: debateAiRelevant.totalVerifiedContribution,
+      createdAt: debateAiRelevant.createdAt,
+    },
+    'AI'
+  );
+
+  const searchRelevanceCoffee = calculateSearchRelevanceScore(
+    {
+      id: debateCoffeeUnrelated.id,
+      title: debateCoffeeUnrelated.title,
+      content: debateCoffeeUnrelated.content,
+      totalVerifiedContribution: debateCoffeeUnrelated.totalVerifiedContribution,
+      createdAt: debateCoffeeUnrelated.createdAt,
+    },
+    'AI'
+  );
+
+  assert(
+    searchRelevanceAI > searchRelevanceCoffee && searchRelevanceAI > 100 && searchRelevanceCoffee < 15,
+    'Test 253: Search ranks primarily by relevance: $5 AI post strictly outranks unrelated $100 post for query "AI"'
+  );
+
+  const debateAiBodyOnly = {
+    id: 'candidate_body_only',
+    title: 'General Discussions of Future Horizons',
+    content: 'In modern research, ai models continue to expand rapidly.',
+    totalVerifiedContribution: 500,
+    createdAt: new Date(),
+  };
+  const bodyScore = calculateSearchRelevanceScore(debateAiBodyOnly, 'AI');
+  assert(
+    searchRelevanceAI > bodyScore && bodyScore < 30,
+    'Test 254: Search exact title match scores higher than partial body matches'
+  );
+
+  const debateTieBreakUnpaid = {
+    id: 'tie_unpaid',
+    title: 'Quantum Computing Frontier',
+    content: 'Overview of quantum qubits and coherence.',
+    totalVerifiedContribution: 0,
+    createdAt: new Date(),
+  };
+  const debateTieBreakPaid = {
+    id: 'tie_paid',
+    title: 'Quantum Computing Frontier',
+    content: 'Overview of quantum qubits and coherence.',
+    totalVerifiedContribution: 5000, // $50
+    createdAt: new Date(),
+  };
+  const tieScoreUnpaid = calculateSearchRelevanceScore(debateTieBreakUnpaid, 'Quantum Computing');
+  const tieScorePaid = calculateSearchRelevanceScore(debateTieBreakPaid, 'Quantum Computing');
+  assert(
+    tieScorePaid > tieScoreUnpaid && (tieScorePaid - tieScoreUnpaid) <= 10,
+    'Test 255: Paid backing acts as a modest sublinear tie-breaker (<= 10 points) without distorting relevance'
+  );
+
+  // For You & Personalization Tests (256-258)
+  await prisma.debateLike.create({
+    data: {
+      debateId: debateAiRelevant.id,
+      userId: p17Consumer.id,
+    },
+  });
+
+  await prisma.debateBookmark.create({
+    data: {
+      debateId: debateHighReach.id,
+      userId: p17Consumer.id,
+    },
+  });
+
+  await prisma.follow.create({
+    data: {
+      followerId: p17Consumer.id,
+      followingId: p17AuthorA.id,
+    },
+  });
+
+  const interestProfile = await personalizationService.getUserInterestProfile(p17Consumer.id);
+  const techCategoryWeight = interestProfile.categoryWeights[catTech.id] || interestProfile.categoryWeights[catTech.slug] || 0;
+  const cookingCategoryWeight = interestProfile.categoryWeights[catCooking.id] || interestProfile.categoryWeights[catCooking.slug] || 0;
+
+  assert(
+    techCategoryWeight > 0.3 && techCategoryWeight > cookingCategoryWeight,
+    'Test 256: For You multi-signal interest extraction aggregates explicit interests, follows, bookmarks, and likes'
+  );
+
+  const part17ForYouFeed = await debateService.getDebates({
+    sort: 'for_you',
+    limit: 10,
+  }, p17Consumer.id);
+  assert(
+    part17ForYouFeed.items.length > 0 && part17ForYouFeed.items.some((item) => item.category.slug === catTech.slug),
+    'Test 257: For You feed promotes user affinity topics (Tech) to prominent ranking positions'
+  );
+
+  const affinityTech = personalizationService.computeAffinityScore(
+    { categoryId: catTech.id, categorySlug: catTech.slug, authorId: p17AuthorA.id },
+    interestProfile
+  );
+  const affinityCooking = personalizationService.computeAffinityScore(
+    { categoryId: catCooking.id, categorySlug: catCooking.slug, authorId: p17AuthorB.id },
+    interestProfile
+  );
+  assert(
+    affinityTech > affinityCooking && affinityCooking === 0,
+    'Test 258: Uninteracted and irrelevant categories receive zero affinity and are demoted in personalized ranking'
+  );
+
+  // Cold Start Tests (259-260)
+  const coldStartFeed = await debateService.getDebates({
+    sort: 'for_you',
+    limit: 10,
+  }, p17ColdUser.id);
+  assert(
+    coldStartFeed.items.length > 0 && coldStartFeed.total > 0,
+    'Test 259: Cold start user with 0 history receives a healthy discovery feed blending freshness, trending, and paid conviction'
+  );
+
+  await prisma.user.update({
+    where: { id: p17ColdUser.id },
+    data: { interests: JSON.stringify([catFinance.slug]) },
+  });
+  const coldProfileWithInterests = await personalizationService.getUserInterestProfile(p17ColdUser.id);
+  const financeWeight = coldProfileWithInterests.categoryWeights[catFinance.id] || coldProfileWithInterests.categoryWeights[catFinance.slug] || 0;
+  assert(
+    financeWeight > 0.5,
+    'Test 260: Onboarding interest selection immediately bootstraps cold start user profile with heavy category weighting'
+  );
+
+  // Following Feed Tests (261-262)
+  const part17FollowingFeed = await debateService.getDebates({
+    sort: 'following',
+    limit: 10,
+  }, p17Consumer.id);
+  const followingAuthors = part17FollowingFeed.items.map((d) => d.authorId);
+  const includesAuthorA = followingAuthors.length > 0 && followingAuthors.every((aId) => aId === p17AuthorA.id);
+  const excludesAuthorB = !followingAuthors.includes(p17AuthorB.id);
+
+  assert(
+    part17FollowingFeed.items.length > 0 && includesAuthorA,
+    'Test 261: Following feed strictly isolates and returns content exclusively authored by followed creators'
+  );
+
+  assert(
+    excludesAuthorB,
+    'Test 262: Following feed strictly excludes content from non-followed creators'
+  );
+
+  // Ghost Mode Privacy Tests (263-264)
+  const ghostDebate = await prisma.debate.create({
+    data: {
+      authorId: p17GhostAuthor.id,
+      authorUsername: p17GhostAuthor.username!,
+      authorDisplayName: p17GhostAuthor.displayName!,
+      title: 'Secret Thoughts from the Shadows',
+      content: 'Sensitive whistleblowing insights that require full anonymity.',
+      categoryId: catTech.id,
+      isGhost: true,
+      trendingScore: 80.0,
+      totalVerifiedContribution: 2000,
+      status: 'active',
+    },
+  });
+
+  const ghostDebateFeed = await debateService.getDebates({
+    search: 'Secret Thoughts from the Shadows',
+    limit: 5,
+  });
+  const fetchedGhostItem = ghostDebateFeed.items.find((d) => d.id === ghostDebate.id);
+
+  assert(
+    fetchedGhostItem !== undefined &&
+      fetchedGhostItem.isGhost === true &&
+      fetchedGhostItem.authorUsername.startsWith('ghost_') &&
+      !fetchedGhostItem.authorUsername.includes('p17_ghost_real') &&
+      !fetchedGhostItem.authorDisplayName.includes('Real Hidden Name'),
+    'Test 263: Ghost mode author identity (real username, email, display name) is never leaked in feed and search responses'
+  );
+
+  const trendingWithGhost = await getTrendingRoute();
+  const trendingPayload = await trendingWithGhost.json();
+  const allTrendingItems = [
+    ...(trendingPayload.overallTrending || []),
+    ...(trendingPayload.topPaid || []),
+    ...(trendingPayload.topReach || []),
+    ...(trendingPayload.topEngagement || []),
+  ];
+  const leakedGhostItem = allTrendingItems.find(
+    (item: any) =>
+      item.authorUsername?.includes('p17_ghost_real') ||
+      item.authorDisplayName?.includes('Real Hidden Name') ||
+      item.author?.username?.includes('p17_ghost_real')
+  );
+  assert(
+    leakedGhostItem === undefined,
+    'Test 264: Trending API carousels strictly mask Ghost mode identities with zero data leakage'
+  );
+
+  // Pagination & Diversity Test (265)
+  const page1 = await debateService.getDebates({
+    category: catFinance.slug,
+    sort: 'top_paid',
+    page: 1,
+    limit: 2,
+  });
+  const page2 = await debateService.getDebates({
+    category: catFinance.slug,
+    sort: 'top_paid',
+    page: 2,
+    limit: 2,
+  });
+  const page1Ids = page1.items.map((i) => i.id);
+  const page2Ids = page2.items.map((i) => i.id);
+  const hasDuplicates = page1Ids.some((id) => page2Ids.includes(id));
+
+  assert(
+    page1.items.length === 2 && page2.items.length === 2 && !hasDuplicates,
+    'Test 265: Feed pagination smoothly traverses database results without duplicates across page boundaries'
+  );
+
+  // Cleanup Part 17 test data
+  await prisma.debateLike.deleteMany({ where: { userId: p17Consumer.id } });
+  await prisma.debateBookmark.deleteMany({ where: { userId: p17Consumer.id } });
+  await prisma.follow.deleteMany({ where: { followerId: p17Consumer.id } });
+  await prisma.payment.deleteMany({
+    where: {
+      debateId: {
+        in: [
+          debateUnpaid.id,
+          debate2USD.id,
+          debate10USD.id,
+          debate50USD.id,
+          debate100USD.id,
+          refundTestDebate.id,
+          debateHighReach.id,
+          debateHighEngagement.id,
+          debateTopOverallTrending.id,
+          debateAiRelevant.id,
+          debateCoffeeUnrelated.id,
+          ghostDebate.id,
+        ],
+      },
+    },
+  });
+  await prisma.debate.deleteMany({
+    where: {
+      id: {
+        in: [
+          debateUnpaid.id,
+          debate2USD.id,
+          debate10USD.id,
+          debate50USD.id,
+          debate100USD.id,
+          refundTestDebate.id,
+          debateHighReach.id,
+          debateHighEngagement.id,
+          debateTopOverallTrending.id,
+          debateAiRelevant.id,
+          debateCoffeeUnrelated.id,
+          ghostDebate.id,
+        ],
+      },
+    },
+  });
+  await prisma.category.deleteMany({
+    where: {
+      id: {
+        in: [catTech.id, catFinance.id, catCooking.id],
+      },
+    },
+  });
+  await prisma.user.deleteMany({
+    where: {
+      id: {
+        in: [p17AuthorA.id, p17AuthorB.id, p17GhostAuthor.id, p17Consumer.id, p17ColdUser.id],
+      },
+    },
+  });
+
+  // Cleanup Part 16 test data
+  await prisma.directMessage.deleteMany({ where: { conversationId: sentDm.conversationId } });
+  await prisma.conversation.deleteMany({ where: { id: sentDm.conversationId } });
+  await prisma.follow.deleteMany({ where: { followerId: { in: [canonicalUser.id, ghostUser.id] } } });
+  await prisma.usernameChangeHistory.deleteMany({ where: { userId: usernameLimitUser.id } });
+  await prisma.contribution.deleteMany({ where: { debateId: { in: [debateCreation1.debateId, ghostDebateCreation.debateId] } } });
+  await prisma.debate.deleteMany({ where: { id: { in: [debateCreation1.debateId, ghostDebateCreation.debateId] } } });
+  await prisma.notification.deleteMany({ where: { userId: { in: [canonicalUser.id, privateUser.id, ghostUser.id] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [canonicalUser.id, usernameLimitUser.id, ghostUser.id, privateUser.id] } } });
+
   // Cleanup Part 15 test data
   await prisma.payment.deleteMany({ where: { debateId: unicodeDebateInDb!.id } });
   await prisma.contribution.deleteMany({ where: { debateId: unicodeDebateInDb!.id } });
@@ -4020,6 +5011,7 @@ async function runTestSuite() {
   await prisma.emailOtp.deleteMany({});
   await (prisma as any).passwordResetToken.deleteMany({});
   await prisma.follow.deleteMany({});
+  await prisma.usernameChangeHistory.deleteMany({});
   await prisma.debate.deleteMany({});
   await prisma.user.deleteMany({
     where: { email: { not: ADMIN_EMAIL } },

@@ -77,7 +77,9 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
           >
             <Bell className="w-4 h-4" />
             {Boolean(user?.unreadNotificationsCount && user.unreadNotificationsCount > 0) && (
-              <span className="w-2 h-2 rounded-full bg-[var(--color-coral)] absolute top-1 right-1" />
+              <span className="min-w-[16px] h-4 px-1 rounded-full bg-[var(--color-coral)] text-[#071B21] text-[9px] font-black absolute -top-1 -right-1 flex items-center justify-center shadow-xs">
+                {(user?.unreadNotificationsCount ?? 0) > 99 ? '99+' : user?.unreadNotificationsCount}
+              </span>
             )}
           </Link>
 

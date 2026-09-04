@@ -265,12 +265,14 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
           let activeContribId = contributionId;
           let contribAuthor = debate.authorUsername;
           let contribDisplayName = debate.authorDisplayName;
+          let contribAuthorId = debate.authorId;
 
           if (contributionId) {
             const existingContrib = await tx.contribution.findUnique({ where: { id: contributionId } });
             if (existingContrib) {
               contribAuthor = existingContrib.authorUsername;
               contribDisplayName = existingContrib.authorDisplayName;
+              contribAuthorId = existingContrib.authorId;
               await tx.contribution.update({
                 where: { id: contributionId },
                 data: {
@@ -405,13 +407,14 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
           });
 
           // 6. Notify Debate Author if authorId exists and not own continuation
-          if (debate.authorId) {
+          if (debate.authorId && debate.authorId !== contribAuthorId) {
             await tx.notification.create({
               data: {
                 userId: debate.authorId,
+                actorId: contribAuthorId,
                 type: 'continuation',
-                title: 'Debate Continued',
-                message: `${contribDisplayName} backed your debate with ${formatINR(amountPaise)}. You earned ${formatINR(Math.floor((amountPaise * 1000) / 10000))} (10%).`,
+                title: 'Opinion Continued',
+                message: `${contribDisplayName} backed your opinion with ${formatINR(amountPaise)}. You earned ${formatINR(Math.floor((amountPaise * 1000) / 10000))} (10%).`,
                 linkUrl: `/debate/${debateId}`,
               },
             }).catch(() => {});
@@ -516,3 +519,154 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
     ...result,
   };
 }
+
+/**
+ * INDOBID — TRANSACTIONAL REFUND FULFILLMENT
+ * Reverses payment, deducts debate verified contribution, marks contribution refunded,
+ * and reverses creator earnings ledger entry in a single ACID transaction.
+ */
+export async function processRefundedPayment(
+  paramsOrPaymentId:
+    | string
+    | {
+        providerPaymentId: string;
+        amountPaise?: number;
+        debateId?: string;
+        contributionId?: string;
+        reason?: string;
+      },
+  reasonArg?: string
+): Promise<{
+  success: boolean;
+  alreadyRefunded?: boolean;
+  newVerifiedContribution?: number;
+}> {
+  let providerPaymentId: string;
+  let amountPaise: number | undefined;
+  let debateId: string | undefined;
+  let contributionId: string | undefined;
+  let reason = 'Payment refunded';
+
+  if (typeof paramsOrPaymentId === 'string') {
+    providerPaymentId = paramsOrPaymentId;
+    reason = reasonArg || 'Payment refunded';
+  } else if (paramsOrPaymentId && typeof paramsOrPaymentId === 'object') {
+    providerPaymentId =
+      paramsOrPaymentId.providerPaymentId ||
+      (paramsOrPaymentId as any).paymentId ||
+      (paramsOrPaymentId as any).id;
+    amountPaise = paramsOrPaymentId.amountPaise;
+    debateId = paramsOrPaymentId.debateId;
+    contributionId = paramsOrPaymentId.contributionId;
+    reason = paramsOrPaymentId.reason || reasonArg || 'Payment refunded';
+  } else {
+    throw new Error(`processRefundedPayment received invalid argument: ${JSON.stringify(paramsOrPaymentId)}`);
+  }
+
+  if (!providerPaymentId) {
+    throw new Error(`processRefundedPayment: providerPaymentId could not be resolved from: ${JSON.stringify(paramsOrPaymentId)}`);
+  }
+
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const payment = await tx.payment.findUnique({
+      where: { providerPaymentId },
+      include: { debate: true, contribution: true },
+    });
+
+    if (!payment) {
+      throw new Error(`Payment ${providerPaymentId} not found`);
+    }
+
+    if (payment.status === 'refunded') {
+      return {
+        alreadyRefunded: true,
+        newVerifiedContribution: payment.debate?.totalVerifiedContribution || 0,
+      };
+    }
+
+    // 1. Mark payment refunded
+    await tx.payment.update({
+      where: { providerPaymentId },
+      data: { status: 'refunded' },
+    });
+
+    // 2. Mark contribution refunded and reverse creator ledger entry
+    const targetContributionId = contributionId || payment.contributionId;
+    if (targetContributionId) {
+      await tx.contribution.updateMany({
+        where: { id: targetContributionId },
+        data: { status: 'refunded' },
+      });
+
+      await tx.creatorEarningsLedger.updateMany({
+        where: { contributionId: targetContributionId },
+        data: {
+          status: 'reversed',
+          reversedAt: new Date(),
+          reversalReason: reason,
+        },
+      });
+    }
+
+    // 3. Decrement debate totalVerifiedContribution
+    const targetDebateId = debateId || payment.debateId;
+    let newVerifiedTotal = 0;
+    if (targetDebateId) {
+      const debate = await tx.debate.findUnique({ where: { id: targetDebateId } });
+      if (debate) {
+        const deductionPaise = amountPaise !== undefined ? amountPaise : (payment.amount || 0);
+        newVerifiedTotal = Math.max(0, debate.totalVerifiedContribution - deductionPaise);
+        await tx.debate.update({
+          where: { id: targetDebateId },
+          data: {
+            totalVerifiedContribution: newVerifiedTotal,
+          },
+        });
+      }
+    }
+
+    return {
+      alreadyRefunded: false,
+      newVerifiedContribution: newVerifiedTotal,
+      debateId: targetDebateId,
+    };
+  });
+
+  // 4. Recalculate trending score outside transaction
+  if (result.debateId) {
+    try {
+      const debate = await prisma.debate.findUnique({
+        where: { id: result.debateId },
+        include: {
+          contributions: {
+            where: { status: 'verified' },
+            select: { amount: true, authorUsername: true, createdAt: true },
+          },
+        },
+      });
+
+      if (debate) {
+        const score = calculateTrendingScore({
+          totalVerifiedPaise: debate.totalVerifiedContribution,
+          contributionCount: debate.contributions.length,
+          lastContributionAt: debate.lastContributionAt,
+          createdAt: debate.createdAt,
+        });
+
+        await prisma.debate.update({
+          where: { id: debate.id },
+          data: { trendingScore: score },
+        });
+      }
+    } catch (err) {
+      console.error('Failed to recalculate trending score after refund:', err);
+    }
+  }
+
+  return {
+    success: true,
+    alreadyRefunded: result.alreadyRefunded,
+    newVerifiedContribution: result.newVerifiedContribution,
+  };
+}
+

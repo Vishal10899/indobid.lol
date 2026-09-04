@@ -35,11 +35,13 @@ interface DebateItem {
 }
 
 export default function TrendingPage() {
-  const [activeSection, setActiveSection] = useState<'trending' | 'rising' | 'new' | 'top'>('trending');
+  const [activeSection, setActiveSection] = useState<'trending' | 'top' | 'top_reach' | 'top_engagement' | 'rising' | 'new'>('trending');
   const [trendingNow, setTrendingNow] = useState<DebateItem[]>([]);
+  const [topPaid, setTopPaid] = useState<DebateItem[]>([]);
+  const [topReach, setTopReach] = useState<DebateItem[]>([]);
+  const [topEngagement, setTopEngagement] = useState<DebateItem[]>([]);
   const [rising, setRising] = useState<DebateItem[]>([]);
   const [newDebates, setNewDebates] = useState<DebateItem[]>([]);
-  const [topDebates, setTopDebates] = useState<DebateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
@@ -50,10 +52,12 @@ export default function TrendingPage() {
         const res = await fetch('/api/trending');
         if (res.ok) {
           const data = await res.json();
-          setTrendingNow(data.trendingNow || []);
+          setTrendingNow(data.trendingNow || data.overallTrending || []);
+          setTopPaid(data.topPaid || data.topDebates || []);
+          setTopReach(data.topReach || []);
+          setTopEngagement(data.topEngagement || []);
           setRising(data.rising || []);
           setNewDebates(data.newDebates || []);
-          setTopDebates(data.topDebates || []);
         }
       } catch (e) {
         console.error('Failed to load trending data:', e);
@@ -69,12 +73,16 @@ export default function TrendingPage() {
     switch (activeSection) {
       case 'trending':
         return trendingNow;
+      case 'top':
+        return topPaid;
+      case 'top_reach':
+        return topReach;
+      case 'top_engagement':
+        return topEngagement;
       case 'rising':
         return rising;
       case 'new':
         return newDebates;
-      case 'top':
-        return topDebates;
     }
   };
 
@@ -101,9 +109,11 @@ export default function TrendingPage() {
             <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
               {[
                 { id: 'trending', label: 'Trending', count: trendingNow.length },
+                { id: 'top', label: 'Top Paid', count: topPaid.length },
+                { id: 'top_reach', label: 'Top Reach', count: topReach.length },
+                { id: 'top_engagement', label: 'Top Engagement', count: topEngagement.length },
                 { id: 'rising', label: 'Rising', count: rising.length },
                 { id: 'new', label: 'Newest', count: newDebates.length },
-                { id: 'top', label: 'Top Backed', count: topDebates.length },
               ].map((tab) => (
                 <button
                   key={tab.id}

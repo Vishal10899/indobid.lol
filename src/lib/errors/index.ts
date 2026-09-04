@@ -28,6 +28,7 @@ export class AuthorizationError extends AppError {
     super(message, 403, 'FORBIDDEN');
   }
 }
+export const ForbiddenError = AuthorizationError;
 
 export class ValidationError extends AppError {
   public readonly errors?: Record<string, string[]>;

@@ -12,6 +12,11 @@ export interface AuthUser {
   isVerified: boolean;
   rank: number;
   role: string;
+  countryCode?: string;
+  currencyCode?: string;
+  isPrivate?: boolean;
+  ghostMode?: boolean;
+  ghostDisplayName?: string | null;
   totalContributedPaise: number;
   unreadNotificationsCount: number;
   unreadMessagesCount: number;

@@ -12,6 +12,11 @@ export interface UserProfileDTO {
   isVerified: boolean;
   countryCode: string | null;
   currencyCode: string | null;
+  isPrivate: boolean;
+  isRestricted?: boolean;
+  isFollowing?: boolean;
+  ghostMode?: boolean;
+  ghostDisplayName?: string | null;
   createdAt: Date;
   stats: {
     debatesCount: number;
@@ -23,6 +28,11 @@ export interface UserProfileDTO {
 
 export interface UpdateProfileDTO {
   displayName?: string;
+  username?: string;
   bio?: string;
+  avatarUrl?: string;
+  interests?: string;
   countryCode?: string;
+  isPrivate?: boolean;
+  ghostMode?: boolean;
 }

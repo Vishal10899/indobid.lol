@@ -15,6 +15,11 @@ export class FollowRepository {
     );
   }
 
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    const follow = await this.findUnique(followerId, followingId);
+    return Boolean(follow);
+  }
+
   async create(followerId: string, followingId: string): Promise<Follow> {
     return safeDb(() =>
       prisma.follow.create({

@@ -46,6 +46,8 @@ export interface DebateCardProps {
   likeCount?: number;
   impressionCount?: number;
   isAnonymous?: boolean;
+  isGhost?: boolean;
+  isClickableProfile?: boolean;
   hashtags?: string | null;
   createdAt: string | Date;
   updatedAt?: string | Date;
@@ -69,6 +71,8 @@ export function DebateCard(props: DebateCardProps) {
     likeCount = 0,
     impressionCount = 0,
     isAnonymous = false,
+    isGhost = false,
+    isClickableProfile = true,
     hashtags: initialHashtags,
     createdAt,
     updatedAt: initialUpdatedAt,
@@ -233,12 +237,14 @@ export function DebateCard(props: DebateCardProps) {
             name={authorDisplayName}
             username={authorUsername}
             size="sm"
-            isAnonymous={isAnonymous}
+            isAnonymous={isAnonymous || isGhost}
           />
 
           <div className="flex items-center space-x-1 sm:space-x-1.5 text-xs truncate min-w-0 flex-1">
-            {isAnonymous ? (
-              <span className="font-bold text-[var(--text-primary)] shrink-0">Anonymous</span>
+            {isAnonymous || isGhost || !isClickableProfile ? (
+              <span className="font-bold text-[var(--text-primary)] shrink-0">
+                {authorDisplayName || 'Anonymous'}
+              </span>
             ) : (
               <Link
                 href={`/profile/${authorUsername}`}
@@ -248,15 +254,15 @@ export function DebateCard(props: DebateCardProps) {
                 {authorDisplayName}
               </Link>
             )}
-            {!isAnonymous && authorIsVerified && (
+            {!isAnonymous && !isGhost && authorIsVerified && (
               <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)] shrink-0" />
             )}
-            {!isAnonymous && (authorRole === 'founder' || authorRole === 'admin') && (
+            {!isAnonymous && !isGhost && (authorRole === 'founder' || authorRole === 'admin') && (
               <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
                 Founder
               </span>
             )}
-            {!isAnonymous && (
+            {!isAnonymous && !isGhost && (
               <span className="text-[var(--text-muted)] truncate hidden sm:inline">@{authorUsername}</span>
             )}
             <span className="text-[var(--text-muted)] shrink-0">·</span>

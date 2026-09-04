@@ -62,13 +62,24 @@ export async function POST(
       });
 
       // Send notification to target user
+      const follower = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { ghostMode: true, ghostDisplayName: true, displayName: true, username: true },
+      });
+
+      const isGhost = Boolean(follower?.ghostMode);
+      const followerName = isGhost
+        ? (follower?.ghostDisplayName || 'Someone')
+        : `@${session.username}`;
+
       await prisma.notification.create({
         data: {
           userId: targetUser.id,
+          actorId: session.userId,
           type: 'follow',
           title: 'New Follower',
-          message: `@${session.username} followed you.`,
-          linkUrl: `/profile/${session.username}`,
+          message: `${followerName} followed you.`,
+          linkUrl: isGhost ? null : `/profile/${session.username}`,
         },
       }).catch(() => {});
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, Suspense } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { RightSidebar } from '@/components/RightSidebar';
@@ -32,6 +32,7 @@ import {
   CheckCircle2,
   Heart,
   Eye,
+  EyeOff,
   ArrowRight,
   Lock,
   Wallet,
@@ -86,6 +87,9 @@ interface ProfileData {
   followersCount: number;
   followingCount: number;
   isFollowing: boolean;
+  isPrivate?: boolean;
+  ghostMode?: boolean;
+  countryCode?: string;
   stats: {
     debatesStarted: number;
     contributionsMade: number;
@@ -98,6 +102,7 @@ interface ProfileData {
 }
 
 function UserProfileContent() {
+  const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
   const rawUsername = params.username as string;
@@ -128,6 +133,14 @@ function UserProfileContent() {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editBio, setEditBio] = useState('');
+  const [editCountryCode, setEditCountryCode] = useState('IN');
+  const [editIsPrivate, setEditIsPrivate] = useState(false);
+  const [editGhostMode, setEditGhostMode] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<{
+    remainingChanges: number;
+    maxChanges: number;
+    daysWindow: number;
+  } | null>(null);
   const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -157,6 +170,9 @@ function UserProfileContent() {
         setEditDisplayName(data.profile.displayName || '');
         setEditUsername(data.profile.username || '');
         setEditBio(data.profile.bio || '');
+        setEditCountryCode(data.profile.countryCode || 'IN');
+        setEditIsPrivate(Boolean(data.profile.isPrivate));
+        setEditGhostMode(Boolean(data.profile.ghostMode));
         setEditAvatarPreview(data.profile.avatarUrl || null);
         if (data.profile.creatorEconomics?.payoutAccount?.accountHolderName) {
           setHolderName(data.profile.creatorEconomics.payoutAccount.accountHolderName);
@@ -167,6 +183,28 @@ function UserProfileContent() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openEditProfileModal = async () => {
+    setIsEditModalOpen(true);
+    setAvatarError(null);
+    try {
+      const res = await fetch('/api/auth/profile');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.usernameStatus) {
+          setUsernameStatus(data.usernameStatus);
+        }
+        if (data.profile) {
+          setEditDisplayName(data.profile.displayName || editDisplayName);
+          setEditUsername(data.profile.username || editUsername);
+          setEditBio(data.profile.bio || editBio);
+          setEditCountryCode(data.profile.countryCode || 'IN');
+          setEditIsPrivate(Boolean(data.profile.isPrivate));
+          setEditGhostMode(Boolean(data.profile.ghostMode));
+        }
+      }
+    } catch {}
   };
 
   useEffect(() => {
@@ -266,14 +304,23 @@ function UserProfileContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           displayName: editDisplayName.trim(),
+          username: editUsername.trim().toLowerCase(),
           bio: editBio.trim(),
+          countryCode: editCountryCode,
+          isPrivate: editIsPrivate,
+          ghostMode: editGhostMode,
         }),
       });
 
       if (res.ok) {
         await refreshUser();
-        await fetchProfile();
         setIsEditModalOpen(false);
+        const newUsername = editUsername.trim().toLowerCase();
+        if (newUsername && newUsername !== username.toLowerCase()) {
+          router.push(`/profile/${encodeURIComponent(newUsername)}`);
+        } else {
+          await fetchProfile();
+        }
       } else {
         const err = await res.json();
         throw new Error(err.error || 'Failed to update profile');
@@ -370,7 +417,7 @@ function UserProfileContent() {
                     />
                     {isOwner && (
                       <button
-                        onClick={() => setIsEditModalOpen(true)}
+                        onClick={openEditProfileModal}
                         className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[var(--color-coral)] text-[#071B21] shadow hover:scale-105 transition cursor-pointer"
                         title="Change profile photo"
                       >
@@ -381,7 +428,7 @@ function UserProfileContent() {
 
                   {isOwner ? (
                     <button
-                      onClick={() => setIsEditModalOpen(true)}
+                      onClick={openEditProfileModal}
                       className="px-4 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-xs font-bold text-[var(--text-primary)] transition flex items-center space-x-1.5 cursor-pointer shadow-sm"
                     >
                       <Edit3 className="w-3.5 h-3.5 text-[var(--color-coral)]" />
@@ -446,11 +493,11 @@ function UserProfileContent() {
                   </div>
                   <div>
                     <span className="font-bold text-[var(--text-primary)]">{profile.stats.debatesStarted}</span>{' '}
-                    <span className="text-[var(--text-muted)]">Opinions</span>
+                    <span className="text-[var(--text-muted)]">Posts</span>
                   </div>
                   <div>
                     <span className="font-bold text-[var(--text-primary)]">{profile.stats.contributionsMade}</span>{' '}
-                    <span className="text-[var(--text-muted)]">Responses</span>
+                    <span className="text-[var(--text-muted)]">Shared</span>
                   </div>
                   <div>
                     <span className="font-bold font-mono text-[var(--color-amber)]">{formatINR(profile.stats.totalContributedPaise)}</span>{' '}
@@ -541,35 +588,57 @@ function UserProfileContent() {
                 )}
               </div>
 
-              {/* 3. PROFILE TABS */}
-              <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-page)] overflow-x-auto scrollbar-none">
-                <button
-                  onClick={() => setActiveTab('debates')}
-                  className={`flex-1 min-w-[100px] py-3.5 text-xs font-bold text-center transition cursor-pointer relative whitespace-nowrap ${
-                    activeTab === 'debates'
-                      ? 'text-[var(--text-primary)]'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  <span>Opinions ({profile.debates.length})</span>
-                  {activeTab === 'debates' && (
-                    <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-[var(--color-coral)] rounded-full" />
-                  )}
-                </button>
+              {/* 3. PROFILE CONTENT OR PRIVATE ACCOUNT NOTICE */}
+              {profile.isPrivate && !isOwner && !isFollowing ? (
+                <div className="py-20 px-6 text-center space-y-4 bg-[var(--bg-page-deep)]/40 m-4 sm:m-6 rounded-2xl border border-[var(--border-subtle)]">
+                  <div className="w-12 h-12 mx-auto rounded-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] flex items-center justify-center text-[var(--color-coral)]">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-[var(--text-primary)]">This Account is Private</h3>
+                    <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
+                      Follow @{profile.username} to view their posts, shared contributions, and activity.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleFollowToggle}
+                    className="px-4 py-2 rounded-xl bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] text-xs font-bold transition shadow-sm cursor-pointer inline-flex items-center space-x-1.5"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Follow to see posts</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* 3. PROFILE TABS */}
+                  <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-page)] overflow-x-auto scrollbar-none">
+                    <button
+                      onClick={() => setActiveTab('debates')}
+                      className={`flex-1 min-w-[100px] py-3.5 text-xs font-bold text-center transition cursor-pointer relative whitespace-nowrap ${
+                        activeTab === 'debates'
+                          ? 'text-[var(--text-primary)]'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <span>Posts ({profile.debates.length})</span>
+                      {activeTab === 'debates' && (
+                        <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-[var(--color-coral)] rounded-full" />
+                      )}
+                    </button>
 
-                <button
-                  onClick={() => setActiveTab('contributions')}
-                  className={`flex-1 min-w-[100px] py-3.5 text-xs font-bold text-center transition cursor-pointer relative whitespace-nowrap ${
-                    activeTab === 'contributions'
-                      ? 'text-[var(--text-primary)]'
-                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                  }`}
-                >
-                  <span>Responses ({profile.contributions.length})</span>
-                  {activeTab === 'contributions' && (
-                    <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-[var(--color-coral)] rounded-full" />
-                  )}
-                </button>
+                    <button
+                      onClick={() => setActiveTab('contributions')}
+                      className={`flex-1 min-w-[100px] py-3.5 text-xs font-bold text-center transition cursor-pointer relative whitespace-nowrap ${
+                        activeTab === 'contributions'
+                          ? 'text-[var(--text-primary)]'
+                          : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <span>Shared ({profile.contributions.length})</span>
+                      {activeTab === 'contributions' && (
+                        <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-[var(--color-coral)] rounded-full" />
+                      )}
+                    </button>
 
                 {isOwner && (
                   <button
@@ -815,7 +884,9 @@ function UserProfileContent() {
                   )
                 )}
               </div>
-            </div>
+            </>
+          )}
+        </div>
           ) : (
             <div className="py-32 text-center text-xs text-[var(--text-muted)]">
               Debater profile not found.
@@ -905,6 +976,32 @@ function UserProfileContent() {
               </div>
 
               <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                    Username
+                  </label>
+                  {usernameStatus && (
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                      {usernameStatus.remainingChanges} of {usernameStatus.maxChanges} changes left
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs text-[var(--text-muted)] font-mono">@</span>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    maxLength={30}
+                    className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-7 pr-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-[var(--text-muted)] mt-1">
+                  Lowercase letters, numbers, and underscores only. Max 3 changes every 30 days.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
                   Bio
                 </label>
@@ -916,6 +1013,72 @@ function UserProfileContent() {
                   placeholder="Share your background, conviction, or areas of expertise..."
                   className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl p-3 text-xs text-[var(--text-primary)] focus:outline-none resize-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                  Country & Currency
+                </label>
+                <select
+                  value={editCountryCode}
+                  onChange={(e) => setEditCountryCode(e.target.value)}
+                  className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none font-medium"
+                >
+                  <option value="IN">India (₹ INR)</option>
+                  <option value="US">United States ($ USD)</option>
+                  <option value="GB">United Kingdom (£ GBP)</option>
+                  <option value="CA">Canada ($ CAD)</option>
+                  <option value="AU">Australia ($ AUD)</option>
+                  <option value="DE">Germany (€ EUR)</option>
+                  <option value="FR">France (€ EUR)</option>
+                  <option value="AE">United Arab Emirates (AED)</option>
+                  <option value="SG">Singapore ($ SGD)</option>
+                </select>
+              </div>
+
+              {/* Privacy Settings & Ghost Mode */}
+              <div className="space-y-3 p-3.5 rounded-xl bg-[var(--bg-page-deep)] border border-[var(--border-subtle)]">
+                <div className="flex items-center justify-between">
+                  <div className="pr-4">
+                    <div className="text-xs font-bold text-[var(--text-primary)] flex items-center space-x-1.5">
+                      <Lock className="w-3.5 h-3.5 text-[var(--color-coral)]" />
+                      <span>Private Account</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                      Only approved followers can view your profile, posts, and direct message you.
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={editIsPrivate}
+                      onChange={(e) => setEditIsPrivate(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-[var(--color-slate)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--color-coral)]"></div>
+                  </label>
+                </div>
+
+                <div className="border-t border-[var(--border-subtle)] pt-3 flex items-center justify-between">
+                  <div className="pr-4">
+                    <div className="text-xs font-bold text-[var(--text-primary)] flex items-center space-x-1.5">
+                      <EyeOff className="w-3.5 h-3.5 text-[var(--color-lime)]" />
+                      <span>Ghost Mode</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-0.5">
+                      Completely mask your real identity. Post and comment as a safe ghost alias {user?.ghostDisplayName ? `("${user.ghostDisplayName}")` : ''}.
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={editGhostMode}
+                      onChange={(e) => setEditGhostMode(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-[var(--color-slate)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--color-lime)]"></div>
+                  </label>
+                </div>
               </div>
 
               <div>

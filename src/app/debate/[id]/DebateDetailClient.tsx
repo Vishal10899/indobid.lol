@@ -42,6 +42,8 @@ interface Contribution {
   authorAvatarUrl?: string | null;
   authorIsVerified?: boolean;
   isAnonymous?: boolean;
+  isGhost?: boolean;
+  isClickableProfile?: boolean;
   createdAt: string;
 }
 
@@ -61,6 +63,8 @@ interface DebateDetail {
   authorIsVerified?: boolean;
   authorRole?: string | null;
   isAnonymous?: boolean;
+  isGhost?: boolean;
+  isClickableProfile?: boolean;
   originalContribution: number;
   totalVerifiedContribution: number;
   contributionCount: number;
@@ -436,13 +440,15 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                     name={debate.authorDisplayName}
                     username={debate.authorUsername}
                     size="md"
-                    isAnonymous={debate.isAnonymous}
+                    isAnonymous={debate.isAnonymous || debate.isGhost}
                   />
 
                   <div>
                     <div className="flex items-center space-x-1.5 text-xs">
-                      {debate.isAnonymous ? (
-                        <span className="font-bold text-[var(--text-primary)]">Anonymous</span>
+                      {debate.isAnonymous || debate.isGhost || debate.isClickableProfile === false ? (
+                        <span className="font-bold text-[var(--text-primary)]">
+                          {debate.authorDisplayName || 'Anonymous'}
+                        </span>
                       ) : (
                         <Link
                           href={`/profile/${debate.authorUsername}`}
@@ -451,16 +457,16 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                           {debate.authorDisplayName}
                         </Link>
                       )}
-                      {!debate.isAnonymous && debate.authorIsVerified && (
+                      {!debate.isAnonymous && !debate.isGhost && debate.authorIsVerified && (
                         <ShieldCheck className="w-3.5 h-3.5 text-[var(--color-lime)] shrink-0" />
                       )}
-                      {!debate.isAnonymous && (debate.authorRole === 'founder' || debate.authorRole === 'admin') && (
+                      {!debate.isAnonymous && !debate.isGhost && (debate.authorRole === 'founder' || debate.authorRole === 'admin') && (
                         <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30 shrink-0">
                           Founder
                         </span>
                       )}
                     </div>
-                    {!debate.isAnonymous && (
+                    {!debate.isAnonymous && !debate.isGhost && (
                       <span className="text-[11px] text-[var(--text-muted)]">@{debate.authorUsername}</span>
                     )}
                   </div>
@@ -673,15 +679,17 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                             name={c.authorDisplayName}
                             username={c.authorUsername}
                             size="xs"
-                            isAnonymous={c.isAnonymous}
+                            isAnonymous={c.isAnonymous || c.isGhost}
                           />
 
                           <span className="font-mono text-[11px] font-bold text-[var(--color-amber)] shrink-0">
                             #{c.sequence} · {formatUSD(c.amount)} supported
                           </span>
                           <span className="text-[var(--text-muted)]">·</span>
-                          {c.isAnonymous ? (
-                            <span className="font-bold text-[var(--text-primary)] truncate">Anonymous</span>
+                          {c.isAnonymous || c.isGhost || c.isClickableProfile === false ? (
+                            <span className="font-bold text-[var(--text-primary)] truncate">
+                              {c.authorDisplayName || 'Anonymous'}
+                            </span>
                           ) : (
                             <Link
                               href={`/profile/${c.authorUsername}`}

@@ -30,11 +30,19 @@ export class FollowService {
     await followRepository.create(followerId, targetUser.id);
 
     // Notify target user
+    const follower = await userRepository.findById(followerId);
+    const isGhost = Boolean(follower?.ghostMode);
+    const followerName = isGhost
+      ? (follower?.ghostDisplayName || 'Someone')
+      : (follower?.displayName || `@${follower?.username || 'user'}`);
+
     await notificationRepository.create({
       user: { connect: { id: targetUser.id } },
       type: 'follow',
       title: 'New Follower',
-      message: 'Someone started following you',
+      message: `${followerName} started following you`,
+      linkUrl: isGhost ? undefined : `/profile/${follower?.username}`,
+      actorId: followerId,
     });
 
     const followersCount = await followRepository.countFollowers(targetUser.id);

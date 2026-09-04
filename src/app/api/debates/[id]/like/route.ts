@@ -71,12 +71,22 @@ export async function POST(
 
       // Notify debate author if not liking own post
       if (debate.authorId && debate.authorId !== userId) {
+        let actorName = 'Someone';
+        if (userId) {
+          const liker = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { ghostMode: true, ghostDisplayName: true, displayName: true },
+          });
+          actorName = liker?.ghostMode ? (liker.ghostDisplayName || 'Someone') : (liker?.displayName || 'Someone');
+        }
+
         await prisma.notification.create({
           data: {
             userId: debate.authorId,
+            actorId: userId,
             type: 'like',
             title: 'New Like',
-            message: `${session?.displayName || 'Someone'} liked your debate: "${debate.title.substring(0, 40)}..."`,
+            message: `${actorName} liked your opinion: "${debate.title.substring(0, 40)}..."`,
             linkUrl: `/debate/${debateId}`,
           },
         }).catch(() => {});

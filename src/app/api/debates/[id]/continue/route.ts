@@ -4,6 +4,7 @@ import { razorpayProvider } from '@/lib/payments/razorpay-provider';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { calculateNextMinimumPaise, formatINR, MINIMUM_INCREMENT_PAISE } from '@/lib/money';
 import { getCurrentUser } from '@/lib/user-auth';
+import { getOrAssignGhostDisplayName } from '@/lib/ghost/ghost-identity';
 import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +94,31 @@ export async function POST(
     let authorId = session?.userId || null;
     let authorUsername = session?.username;
     let authorDisplayName = session?.displayName;
+    let isGhost = false;
+    let isAnonymous = Boolean(data.isAnonymous);
+
+    if (session?.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          ghostMode: true,
+          ghostDisplayName: true,
+        },
+      });
+
+      if (user?.ghostMode) {
+        isGhost = true;
+        isAnonymous = true;
+        authorDisplayName = user.ghostDisplayName || (await getOrAssignGhostDisplayName(user));
+        authorUsername = 'anonymous';
+      } else if (!isAnonymous) {
+        authorUsername = user?.username || authorUsername;
+        authorDisplayName = user?.displayName || authorDisplayName;
+      }
+    }
 
     if (!authorUsername) {
       const rawUsername = (data.authorUsername || 'debater').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().substring(0, 20);
@@ -100,7 +126,7 @@ export async function POST(
       authorDisplayName = (data.authorDisplayName || authorUsername).trim().substring(0, 40);
     }
 
-    const isAnonymous = Boolean(data.isAnonymous);
+    const effectiveDisplayName = isAnonymous ? (isGhost ? authorDisplayName : 'Anonymous') : (authorDisplayName || authorUsername);
 
     // 6. Create pending Contribution
     const pendingContribution = await prisma.contribution.create({
@@ -110,9 +136,10 @@ export async function POST(
         amount: contributionPaise,
         content: data.content.trim(),
         sequence: debate.contributionCount + 1,
-        authorUsername,
-        authorDisplayName: authorDisplayName || authorUsername,
+        authorUsername: isAnonymous ? 'anonymous' : authorUsername,
+        authorDisplayName: effectiveDisplayName,
         isAnonymous,
+        isGhost,
         status: 'pending_payment',
       },
     });

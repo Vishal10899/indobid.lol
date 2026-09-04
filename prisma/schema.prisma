@@ -23,6 +23,9 @@ model User {
   role             String          @default("user") // admin, user
   countryCode      String?         @default("IN") @map("country_code")
   currencyCode     String?         @default("INR") @map("currency_code")
+  isPrivate        Boolean         @default(false) @map("is_private")
+  ghostMode        Boolean         @default(false) @map("ghost_mode")
+  ghostDisplayName String?         @map("ghost_display_name")
   createdAt        DateTime        @default(now()) @map("created_at")
   
   debates          Debate[]
@@ -36,6 +39,7 @@ model User {
   notifications    Notification[]
   earningsLedgerEntries CreatorEarningsLedger[]
   payoutAccount    PayoutAccount?
+  usernameChanges  UsernameChangeHistory[]
 
   @@map("users")
 }
@@ -73,6 +77,7 @@ model Debate {
   trendingScore              Float          @default(0.0) @map("trending_score")
   reportCount                Int            @default(0) @map("report_count")
   isAnonymous                Boolean        @default(false) @map("is_anonymous")
+  isGhost                    Boolean        @default(false) @map("is_ghost")
   likeCount                  Int            @default(0) @map("like_count")
   impressionCount            Int            @default(0) @map("impression_count")
   hashtags                   String?
@@ -94,6 +99,9 @@ model Debate {
   @@index([status, lastContributionAt(sort: Desc)])
   @@index([categoryId, status, trendingScore(sort: Desc)])
   @@index([authorUsername])
+  @@index([status, impressionCount(sort: Desc)])
+  @@index([status, likeCount(sort: Desc)])
+  @@index([authorId, status, createdAt(sort: Desc)])
   @@map("debates")
 }
 
@@ -112,6 +120,7 @@ model Contribution {
   providerPaymentId String?        @map("provider_payment_id")
   reportCount       Int            @default(0) @map("report_count")
   isAnonymous       Boolean        @default(false) @map("is_anonymous")
+  isGhost           Boolean        @default(false) @map("is_ghost")
   likeCount         Int            @default(0) @map("like_count")
   createdAt         DateTime       @default(now()) @map("created_at")
   verifiedAt        DateTime?      @map("verified_at")
@@ -187,6 +196,7 @@ model Notification {
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String   // follow, like, continuation, mention, trending, payment, moderation
+  actorId   String?  @map("actor_id")
   title     String
   message   String
   linkUrl   String?  @map("link_url")
@@ -498,6 +508,18 @@ model PasswordResetToken {
   @@index([email, expiresAt])
   @@index([email, used])
   @@map("password_reset_tokens")
+}
+
+model UsernameChangeHistory {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oldUsername String?  @map("old_username")
+  newUsername String   @map("new_username")
+  changedAt   DateTime @default(now()) @map("changed_at")
+
+  @@index([userId, changedAt(sort: Desc)])
+  @@map("username_change_history")
 }
 
 

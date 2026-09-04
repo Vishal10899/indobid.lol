@@ -27,6 +27,8 @@ export interface DebateListItem {
   likeCount: number;
   impressionCount: number;
   isAnonymous: boolean;
+  isGhost?: boolean;
+  isClickableProfile?: boolean;
   hashtags?: string | null;
   status: string;
   createdAt: Date;
@@ -35,7 +37,19 @@ export interface DebateListItem {
 
 export interface GetDebatesOptions {
   category?: string;
-  sort?: 'for_you' | 'highest_value' | 'trending' | 'new' | 'newest' | 'top' | 'rising' | 'active' | 'following';
+  sort?:
+    | 'for_you'
+    | 'highest_value'
+    | 'trending'
+    | 'new'
+    | 'newest'
+    | 'top'
+    | 'rising'
+    | 'active'
+    | 'following'
+    | 'top_paid'
+    | 'top_reach'
+    | 'top_engagement';
   page?: number;
   limit?: number;
   search?: string;
@@ -54,6 +68,7 @@ export interface CreateDebateDTO {
   amountPaise?: number | null;
   amountRupees?: number | null;
   isAnonymous?: boolean;
+  isGhost?: boolean;
   hashtags?: string | null;
   email?: string | null;
 }

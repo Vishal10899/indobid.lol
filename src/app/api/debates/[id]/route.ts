@@ -17,7 +17,8 @@ export async function GET(
       return NextResponse.json({ error: 'Debate ID is required' }, { status: 400 });
     }
 
-    const debate = await getDebateById(id);
+    const session = await getCurrentUser();
+    const debate = await getDebateById(id, session?.userId || null);
 
     if (!debate) {
       // Check if it's pending_payment or hidden

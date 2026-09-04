@@ -15,21 +15,26 @@ import { isFounder, getOrCreateFounderUser } from '../auth/authorization';
 import { UserSession } from '../auth/session.service';
 import { AuthorizationError, NotFoundError, ValidationError } from '../../lib/errors';
 import { CreateDebateDTO, DebateListItem, GetDebatesOptions, UpdateDebateDTO } from './debate.types';
+import { resolveAuthorIdentity } from '../users/author-identity';
+import { getOrAssignGhostDisplayName } from '../../lib/ghost/ghost-identity';
+import { calculateSearchRelevanceScore } from '../feed/algorithms/search';
+import { personalizationService } from '../feed/signals/personalization.service';
 
 export class DebateService {
   /**
    * Fetch public debates with pagination, search, category filter, and sorting.
    * Strictly excludes hidden, pending_payment, or removed debates.
    */
-  async getDebates(options: GetDebatesOptions = {}) {
+  async getDebates(options: GetDebatesOptions = {}, userIdArg?: string | null) {
     const {
       category = 'all',
       sort = 'for_you',
       page = 1,
       limit = 20,
       search = '',
-      currentUserId = null,
     } = options;
+
+    const currentUserId = options.currentUserId || userIdArg || null;
 
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));
@@ -53,15 +58,19 @@ export class DebateService {
     }
 
     // Following feed filter
-    if (sort === 'following' && currentUserId) {
-      const following = await safeDb(() =>
-        prisma.follow.findMany({
-          where: { followerId: currentUserId },
-          select: { followingId: true },
-        })
-      );
-      const followingIds = following.map((f) => f.followingId);
-      where.authorId = { in: followingIds };
+    if (sort === 'following') {
+      if (currentUserId) {
+        const following = await safeDb(() =>
+          prisma.follow.findMany({
+            where: { followerId: currentUserId },
+            select: { followingId: true },
+          })
+        );
+        const followingIds = following.map((f) => f.followingId);
+        where.authorId = { in: followingIds };
+      } else {
+        where.authorId = { in: [] };
+      }
     }
 
     // Search filter
@@ -77,10 +86,16 @@ export class DebateService {
       ];
     }
 
+    const isSearchQuery = Boolean(search && search.trim());
+
     // Sort order
     let orderBy: any = [{ trendingScore: 'desc' }, { createdAt: 'desc' }];
-    if (sort === 'highest_value' || sort === 'top') {
+    if (sort === 'highest_value' || sort === 'top' || sort === 'top_paid') {
       orderBy = [{ totalVerifiedContribution: 'desc' }, { createdAt: 'desc' }];
+    } else if (sort === 'top_reach') {
+      orderBy = [{ impressionCount: 'desc' }, { createdAt: 'desc' }];
+    } else if (sort === 'top_engagement') {
+      orderBy = [{ likeCount: 'desc' }, { contributionCount: 'desc' }, { createdAt: 'desc' }];
     } else if (sort === 'trending') {
       orderBy = [{ trendingScore: 'desc' }, { lastContributionAt: 'desc' }, { createdAt: 'desc' }];
     } else if (sort === 'new' || sort === 'newest') {
@@ -93,84 +108,113 @@ export class DebateService {
       orderBy = [{ trendingScore: 'desc' }, { totalVerifiedContribution: 'desc' }, { createdAt: 'desc' }];
     }
 
+    const candidateTake = isSearchQuery || sort === 'for_you'
+      ? Math.min(150, Math.max(safeLimit * (safePage + 1), 50))
+      : safeLimit;
+
+    const candidateSkip = isSearchQuery || sort === 'for_you' ? 0 : skip;
+
     const [total, debates] = await safeDb(() =>
       Promise.all([
         prisma.debate.count({ where }),
         prisma.debate.findMany({
           where,
           orderBy,
-          skip,
-          take: safeLimit,
+          skip: candidateSkip,
+          take: candidateTake,
           include: {
             category: {
               select: { id: true, name: true, slug: true, icon: true },
             },
             author: {
-              select: { avatarUrl: true, isVerified: true, role: true },
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+                isVerified: true,
+                role: true,
+                isPrivate: true,
+                ghostMode: true,
+                ghostDisplayName: true,
+              },
             },
           },
         }),
       ])
     );
 
-    let items: DebateListItem[] = debates.map((d) => ({
-      id: d.id,
-      title: d.title,
-      content: d.content,
-      category: d.category,
-      authorId: d.isAnonymous ? null : d.authorId,
-      authorUsername: d.isAnonymous ? 'anonymous' : d.authorUsername,
-      authorDisplayName: d.isAnonymous ? 'Anonymous' : d.authorDisplayName,
-      authorAvatarUrl: d.isAnonymous ? null : d.author?.avatarUrl || null,
-      authorIsVerified: d.isAnonymous ? false : d.author?.isVerified || false,
-      authorRole: d.isAnonymous ? null : d.author?.role || null,
-      originalContribution: d.originalContribution,
-      totalVerifiedContribution: d.totalVerifiedContribution,
-      contributionCount: d.contributionCount,
-      lastContributionAmount: d.lastContributionAmount,
-      minimumNextContribution: calculateNextMinimumPaise(d.lastContributionAmount),
-      trendingScore: d.trendingScore,
-      likeCount: d.likeCount,
-      impressionCount: d.impressionCount,
-      isAnonymous: d.isAnonymous,
-      hashtags: d.hashtags,
-      status: d.status,
-      createdAt: d.createdAt,
-      updatedAt: d.updatedAt,
-    }));
+    let items: DebateListItem[] = debates.map((d) => {
+      const resolved = resolveAuthorIdentity(
+        {
+          authorId: d.authorId,
+          authorUsername: d.authorUsername,
+          authorDisplayName: d.authorDisplayName,
+          author: d.author,
+          isAnonymous: d.isAnonymous,
+          isGhost: d.isGhost,
+        },
+        { currentUserId }
+      );
 
-    // Multi-Signal Personalization and Feed Diversity for 'for_you' feed
-    if (sort === 'for_you' && items.length > 1) {
-      let followedIds = new Set<string>();
-      let engagedCategoryIds = new Set<string>();
+      return {
+        id: d.id,
+        title: d.title,
+        content: d.content,
+        category: d.category,
+        authorId: resolved.authorId,
+        authorUsername: resolved.authorUsername,
+        authorDisplayName: resolved.authorDisplayName,
+        authorAvatarUrl: resolved.authorAvatarUrl,
+        authorIsVerified: resolved.authorIsVerified,
+        authorRole: resolved.authorRole,
+        originalContribution: d.originalContribution,
+        totalVerifiedContribution: d.totalVerifiedContribution,
+        contributionCount: d.contributionCount,
+        lastContributionAmount: d.lastContributionAmount,
+        minimumNextContribution: calculateNextMinimumPaise(d.lastContributionAmount),
+        trendingScore: d.trendingScore,
+        likeCount: d.likeCount,
+        impressionCount: d.impressionCount,
+        isAnonymous: resolved.isAnonymous,
+        isGhost: resolved.isGhost,
+        isClickableProfile: resolved.isClickableProfile,
+        hashtags: d.hashtags,
+        status: d.status,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      };
+    });
 
-      if (currentUserId) {
-        const [follows, likes, bookmarks] = await safeDb(() =>
-          Promise.all([
-            prisma.follow.findMany({
-              where: { followerId: currentUserId },
-              select: { followingId: true },
-            }),
-            prisma.debateLike.findMany({
-              where: { userId: currentUserId },
-              select: { debate: { select: { categoryId: true } } },
-              take: 30,
-            }),
-            prisma.debateBookmark.findMany({
-              where: { userId: currentUserId },
-              select: { debate: { select: { categoryId: true } } },
-              take: 30,
-            }),
-          ])
-        );
-        followedIds = new Set(follows.map((f) => f.followingId));
-        likes.forEach((l) => l.debate?.categoryId && engagedCategoryIds.add(l.debate.categoryId));
-        bookmarks.forEach((b) => b.debate?.categoryId && engagedCategoryIds.add(b.debate.categoryId));
-      }
+    // 1. Search Relevance Scoring (Relevance dominates paid conviction)
+    if (isSearchQuery && items.length > 0) {
+      const queryStr = search.trim();
+      const scoredForSearch = items.map((item) => ({
+        item,
+        relevance: calculateSearchRelevanceScore(item, queryStr),
+      }));
+      scoredForSearch.sort((a, b) => b.relevance - a.relevance);
+      items = scoredForSearch.map((s) => s.item).slice(skip, skip + safeLimit);
+    }
+    // 2. Multi-Signal Personalization and Feed Diversity for 'for_you' feed
+    else if (sort === 'for_you' && items.length > 1) {
+      const userProfile = await personalizationService.getUserInterestProfile(currentUserId);
 
       const scoredItems = items.map((item) => {
-        const isAffinity = item.category?.id ? engagedCategoryIds.has(item.category.id) : false;
-        const score = calculateRankingScore({
+        const personalAffinityScore = personalizationService.computeAffinityScore(
+          {
+            categoryId: item.category.id,
+            categorySlug: item.category.slug,
+            authorId: item.authorId,
+          },
+          userProfile
+        );
+
+        const paidPriorityBoost = item.totalVerifiedContribution > 0
+          ? 10 + Math.min(25, Math.round(5 * Math.log10(1 + item.totalVerifiedContribution / 1000) * 10) / 10)
+          : 0;
+
+        const baseScore = calculateRankingScore({
           totalVerifiedPaise: item.totalVerifiedContribution,
           likeCount: item.likeCount,
           impressionCount: item.impressionCount,
@@ -179,9 +223,10 @@ export class DebateService {
           hasHashtags: Boolean(item.hashtags),
           reportCount: 0,
           createdAt: item.createdAt,
-          isFollowedAuthor: item.authorId ? followedIds.has(item.authorId) : false,
-          isCategoryAffinity: isAffinity,
+          personalAffinityScore,
         }).finalScore;
+
+        const score = baseScore + paidPriorityBoost;
         return { item, score };
       });
 
@@ -212,7 +257,7 @@ export class DebateService {
         diversified.push(picked.item);
       }
 
-      items = diversified;
+      items = diversified.slice(skip, skip + safeLimit);
     }
 
     return {
@@ -228,7 +273,7 @@ export class DebateService {
   /**
    * Fetch a single debate by ID with its verified contribution chain
    */
-  async getDebateById(id: string) {
+  async getDebateById(id: string, currentUserId?: string | null) {
     if (!id) return null;
 
     const debate = await safeDb(() =>
@@ -239,14 +284,34 @@ export class DebateService {
             select: { id: true, name: true, slug: true, icon: true },
           },
           author: {
-            select: { avatarUrl: true, isVerified: true, role: true },
+            select: {
+              id: true,
+              username: true,
+              displayName: true,
+              avatarUrl: true,
+              isVerified: true,
+              role: true,
+              isPrivate: true,
+              ghostMode: true,
+              ghostDisplayName: true,
+            },
           },
           contributions: {
             where: { status: 'verified' },
             orderBy: { sequence: 'asc' },
             include: {
               author: {
-                select: { avatarUrl: true, isVerified: true, role: true },
+                select: {
+                  id: true,
+                  username: true,
+                  displayName: true,
+                  avatarUrl: true,
+                  isVerified: true,
+                  role: true,
+                  isPrivate: true,
+                  ghostMode: true,
+                  ghostDisplayName: true,
+                },
               },
             },
           },
@@ -260,14 +325,32 @@ export class DebateService {
 
     const minimumNextContribution = calculateNextMinimumPaise(debate.lastContributionAmount);
 
-    const sanitizedContributions = debate.contributions.map((c) => ({
-      ...c,
-      authorUsername: c.isAnonymous ? 'anonymous' : c.authorUsername,
-      authorDisplayName: c.isAnonymous ? 'Anonymous' : c.authorDisplayName,
-      authorAvatarUrl: c.isAnonymous ? null : c.author?.avatarUrl || null,
-      authorIsVerified: c.isAnonymous ? false : c.author?.isVerified || false,
-      authorId: c.isAnonymous ? null : c.authorId,
-    }));
+    const sanitizedContributions = debate.contributions.map((c) => {
+      const resolved = resolveAuthorIdentity(
+        {
+          authorId: c.authorId,
+          authorUsername: c.authorUsername,
+          authorDisplayName: c.authorDisplayName,
+          author: c.author,
+          isAnonymous: c.isAnonymous,
+          isGhost: c.isGhost,
+        },
+        { currentUserId }
+      );
+
+      return {
+        ...c,
+        authorUsername: resolved.authorUsername,
+        authorDisplayName: resolved.authorDisplayName,
+        authorAvatarUrl: resolved.authorAvatarUrl,
+        authorIsVerified: resolved.authorIsVerified,
+        authorRole: resolved.authorRole,
+        authorId: resolved.authorId,
+        isAnonymous: resolved.isAnonymous,
+        isGhost: resolved.isGhost,
+        isClickableProfile: resolved.isClickableProfile,
+      };
+    });
 
     const creatorClean = (debate.authorUsername || '').toLowerCase().trim();
     let creatorInitialPaise = 0;
@@ -289,13 +372,29 @@ export class DebateService {
 
     const creatorRewardPaise = Math.floor((eligibleExternalBackingPaise * 1000) / 10000);
 
+    const resolvedDebateAuthor = resolveAuthorIdentity(
+      {
+        authorId: debate.authorId,
+        authorUsername: debate.authorUsername,
+        authorDisplayName: debate.authorDisplayName,
+        author: debate.author,
+        isAnonymous: debate.isAnonymous,
+        isGhost: debate.isGhost,
+      },
+      { currentUserId }
+    );
+
     return {
       ...debate,
-      authorUsername: debate.isAnonymous ? 'anonymous' : debate.authorUsername,
-      authorDisplayName: debate.isAnonymous ? 'Anonymous' : debate.authorDisplayName,
-      authorAvatarUrl: debate.isAnonymous ? null : debate.author?.avatarUrl || null,
-      authorIsVerified: debate.isAnonymous ? false : debate.author?.isVerified || false,
-      authorId: debate.isAnonymous ? null : debate.authorId,
+      authorUsername: resolvedDebateAuthor.authorUsername,
+      authorDisplayName: resolvedDebateAuthor.authorDisplayName,
+      authorAvatarUrl: resolvedDebateAuthor.authorAvatarUrl,
+      authorIsVerified: resolvedDebateAuthor.authorIsVerified,
+      authorRole: resolvedDebateAuthor.authorRole,
+      authorId: resolvedDebateAuthor.authorId,
+      isAnonymous: resolvedDebateAuthor.isAnonymous,
+      isGhost: resolvedDebateAuthor.isGhost,
+      isClickableProfile: resolvedDebateAuthor.isClickableProfile,
       contributions: sanitizedContributions,
       minimumNextContribution,
       rewardBreakdown: {
@@ -426,7 +525,8 @@ export class DebateService {
       throw new ValidationError('Category not found');
     }
 
-    const isAnonymous = Boolean(data.isAnonymous);
+    let isGhost = Boolean(data.isGhost);
+    let isAnonymous = Boolean(data.isAnonymous);
 
     // Extract hashtags from content / title if not passed
     let hashtags = data.hashtags;
@@ -441,6 +541,34 @@ export class DebateService {
     let authorId = session?.userId || null;
     let authorUsername = session?.username;
     let authorDisplayName = session?.displayName;
+
+    if (session?.userId) {
+      const userRecord = await safeDb(() =>
+        prisma.user.findUnique({
+          where: { id: session.userId },
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            ghostMode: true,
+            ghostDisplayName: true,
+            countryCode: true,
+            currencyCode: true,
+          },
+        })
+      );
+
+      if (userRecord?.ghostMode) {
+        isGhost = true;
+        isAnonymous = true;
+        const ghostName = userRecord.ghostDisplayName || (await getOrAssignGhostDisplayName(userRecord));
+        authorDisplayName = ghostName;
+        authorUsername = 'anonymous';
+      } else if (!isAnonymous) {
+        authorUsername = userRecord?.username || authorUsername;
+        authorDisplayName = userRecord?.displayName || authorDisplayName;
+      }
+    }
 
     if (!authorUsername) {
       const rawUsername = (data.authorUsername || 'debater')
@@ -486,7 +614,7 @@ export class DebateService {
         : await getOrCreateFounderUser();
 
       const finalUsername = isAnonymous ? 'anonymous' : founderUser.username || 'vishalchaudhary';
-      const finalDisplayName = isAnonymous ? 'Anonymous' : founderUser.displayName || 'Vishal Chaudhary';
+      const finalDisplayName = isAnonymous ? (isGhost ? authorDisplayName : 'Anonymous') : founderUser.displayName || 'Vishal Chaudhary';
 
       const initialRanking = calculateRankingScore({
         totalVerifiedPaise: backingPaise,
@@ -510,6 +638,7 @@ export class DebateService {
             authorUsername: finalUsername,
             authorDisplayName: finalDisplayName,
             isAnonymous,
+            isGhost,
             hashtags: hashtags || null,
             originalContribution: backingPaise,
             totalVerifiedContribution: backingPaise,
@@ -534,6 +663,7 @@ export class DebateService {
             authorUsername: finalUsername,
             authorDisplayName: finalDisplayName,
             isAnonymous,
+            isGhost,
             status: 'verified',
           },
         })
@@ -545,9 +675,11 @@ export class DebateService {
         debateTitle: debate.title,
         categoryName: category.name,
         authorUsername: finalUsername,
+        authorDisplayName: finalDisplayName,
         published: true,
         isFounderFree: true,
         isFree: isFreePost,
+        isGhost,
       };
     }
 
@@ -565,6 +697,8 @@ export class DebateService {
         createdAt: new Date(),
       });
 
+      const effectiveDisplayName = isAnonymous ? (isGhost ? authorDisplayName : 'Anonymous') : (authorDisplayName || authorUsername);
+
       const debate = await safeDb(() =>
         prisma.debate.create({
           data: {
@@ -573,8 +707,9 @@ export class DebateService {
             content: data.content.trim(),
             categoryId: category.id,
             authorUsername: isAnonymous ? 'anonymous' : authorUsername,
-            authorDisplayName: isAnonymous ? 'Anonymous' : authorDisplayName || authorUsername,
+            authorDisplayName: effectiveDisplayName,
             isAnonymous,
+            isGhost,
             hashtags: hashtags || null,
             originalContribution: 0,
             totalVerifiedContribution: 0,
@@ -597,8 +732,9 @@ export class DebateService {
             content: data.content.trim(),
             sequence: 1,
             authorUsername: isAnonymous ? 'anonymous' : authorUsername,
-            authorDisplayName: isAnonymous ? 'Anonymous' : authorDisplayName || authorUsername,
+            authorDisplayName: effectiveDisplayName,
             isAnonymous,
+            isGhost,
             status: 'verified',
           },
         })
@@ -612,12 +748,15 @@ export class DebateService {
         debateTitle: debate.title,
         categoryName: category.name,
         authorUsername: isAnonymous ? 'anonymous' : authorUsername,
-        authorDisplayName: isAnonymous ? 'Anonymous' : authorDisplayName,
+        authorDisplayName: effectiveDisplayName,
         isAnonymous,
+        isGhost,
       };
     }
 
     // 4. OPTIONAL FINANCIALLY BACKED POST (Creates Pending Debate & Initiates Payment)
+    const effectiveDisplayName = isAnonymous ? (isGhost ? authorDisplayName : 'Anonymous') : (authorDisplayName || authorUsername);
+
     const debate = await safeDb(() =>
       prisma.debate.create({
         data: {
@@ -626,8 +765,9 @@ export class DebateService {
           content: data.content.trim(),
           categoryId: category.id,
           authorUsername: isAnonymous ? 'anonymous' : authorUsername,
-          authorDisplayName: isAnonymous ? 'Anonymous' : authorDisplayName || authorUsername,
+          authorDisplayName: effectiveDisplayName,
           isAnonymous,
+          isGhost,
           hashtags: hashtags || null,
           originalContribution: backingPaise,
           totalVerifiedContribution: 0,
@@ -649,8 +789,9 @@ export class DebateService {
           content: data.content.trim(),
           sequence: 1,
           authorUsername: isAnonymous ? 'anonymous' : authorUsername,
-          authorDisplayName: isAnonymous ? 'Anonymous' : authorDisplayName || authorUsername,
+          authorDisplayName: effectiveDisplayName,
           isAnonymous,
+          isGhost,
           status: 'pending_payment',
         },
       })
@@ -710,6 +851,7 @@ export class DebateService {
 
 export const debateService = new DebateService();
 export const getDebates = (options?: GetDebatesOptions) => debateService.getDebates(options);
-export const getDebateById = (id: string) => debateService.getDebateById(id);
+export const getDebateById = (id: string, currentUserId?: string | null) =>
+  debateService.getDebateById(id, currentUserId);
 export const updateDebateTrendingScore = (debateId: string) =>
   debateService.updateDebateTrendingScore(debateId);

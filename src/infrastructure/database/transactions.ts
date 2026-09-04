@@ -8,13 +8,13 @@ import { prisma } from './prisma';
 /**
  * Retries a database query with exponential backoff on connection pauses / cold starts.
  */
-export async function safeDb<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
+export async function safeDb<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       return await fn();
     } catch (err: any) {
       if (attempt === retries - 1) throw err;
-      await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
     }
   }
   return fn();
