@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyEmailOtp } from '@/lib/email-otp';
+import { verifyOtp } from '@/lib/email-otp';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -18,17 +18,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, code, otp, username, displayName } = body || {};
+    const { email, phone, target, code, otp, username, displayName } = body || {};
+    const inputTarget = (target || phone || email || '').toString().trim();
     const otpCode = (otp || code || '').toString().trim();
 
-    if (!email || typeof email !== 'string' || !otpCode) {
+    if (!inputTarget || !otpCode) {
       return NextResponse.json(
-        { success: false, error: 'Email and 6-digit OTP code are required.' },
+        { success: false, error: 'Email or phone number and 6-digit verification code are required.' },
         { status: 400 }
       );
     }
 
-    const result = await verifyEmailOtp(email, otpCode, { username, displayName });
+    const result = await verifyOtp(inputTarget, otpCode, { username, displayName });
 
     if (!result.success || !result.token) {
       return NextResponse.json(

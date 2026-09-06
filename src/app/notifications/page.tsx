@@ -20,7 +20,9 @@ interface NotificationItem {
   createdAt: string;
 }
 
-export function NotificationsPage() {
+import { AuthGate } from '@/components/AuthGate';
+
+function NotificationsContent() {
   const { user, openAuthModal, refreshUser } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,10 +88,10 @@ export function NotificationsPage() {
 
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between w-full min-w-0">
             <div className="flex items-center space-x-2.5">
               <Bell className="w-5 h-5 text-[var(--color-coral)]" />
-              <h1 className="text-lg font-black text-[var(--text-primary)]">Notifications</h1>
+              <h1 className="text-lg font-bold font-bodoni text-[var(--text-primary)]">Notifications</h1>
             </div>
 
             {notifications.some((n) => !n.isRead) && (
@@ -180,4 +182,10 @@ export function NotificationsPage() {
   );
 }
 
-export default NotificationsPage;
+export default function NotificationsPage() {
+  return (
+    <AuthGate>
+      <NotificationsContent />
+    </AuthGate>
+  );
+}

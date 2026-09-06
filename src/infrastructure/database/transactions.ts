@@ -21,10 +21,17 @@ export async function safeDb<T>(fn: () => Promise<T>, retries = 5): Promise<T> {
 }
 
 /**
- * Runs a transactional unit of work.
+ * Runs a transactional unit of work with safe retries and generous timeouts for remote connections.
  */
 export async function runTransaction<T>(
-  action: (tx: Prisma.TransactionClient) => Promise<T>
+  action: (tx: Prisma.TransactionClient) => Promise<T>,
+  options?: { maxWait?: number; timeout?: number }
 ): Promise<T> {
-  return prisma.$transaction(action);
+  return safeDb(async () => {
+    return prisma.$transaction(action, {
+      maxWait: options?.maxWait ?? 15000,
+      timeout: options?.timeout ?? 30000,
+    });
+  });
 }
+

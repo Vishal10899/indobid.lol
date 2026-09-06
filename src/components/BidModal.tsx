@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowRight, Minus, Plus, CheckCircle2, AlertCircle, Loader2, Building2 } from 'lucide-react';
+import { X, ArrowRight, Minus, Plus, CheckCircle2, AlertCircle, Loader2, Building2, Coins } from 'lucide-react';
 import { PlatformIcon } from './PlatformIcon';
 import { launchRazorpayCheckout } from '@/lib/payments/client-checkout';
 import { POPULAR_COUNTRIES, DEFAULT_COUNTRY_CODE } from '@/lib/countries';
@@ -241,49 +241,49 @@ export function BidModal({
   const estimatedRank = estimation?.estimatedGlobalRank || 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto w-full">
-      <div className="bg-[var(--bg-card)] border border-[var(--border-color)] rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-xl relative my-0 sm:my-8 text-[var(--text-primary)] max-h-[92vh] overflow-y-auto min-w-0">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-md overflow-y-auto w-full">
+      <div className="glass-modal rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_40px_rgba(217,138,108,0.04)] relative my-0 sm:my-8 text-[var(--text-primary)] max-h-[92vh] overflow-y-auto min-w-0 border border-white/[0.09]">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1.5 rounded-xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition cursor-pointer"
+          className="absolute top-4 right-4 p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
         {/* Modal Title */}
         <div className="mb-4">
-          <div className="flex items-center space-x-1.5 text-xs font-bold text-[var(--color-teal)] uppercase tracking-wide">
-            <Building2 className="w-4 h-4" />
-            <span>{urlLookup?.exists ? 'Upgrade Building Spot' : 'Claim Your Spot in the City'}</span>
+          <div className="flex items-center space-x-1.5 text-xs font-bold text-[var(--color-coral)] uppercase tracking-wide">
+            <Coins className="w-4 h-4" />
+            <span>{urlLookup?.exists ? 'Update Backing' : 'Back with Conviction'}</span>
           </div>
-          <h2 className="text-xl font-extrabold text-[var(--text-primary)] mt-1">
-            {urlLookup?.exists ? `Upgrade ${urlLookup.title}` : 'Build & Rank Your Startup'}
+          <h2 className="text-xl font-bold font-bodoni text-[var(--text-primary)] mt-1">
+            {urlLookup?.exists ? `Back ${urlLookup.title}` : 'Support & Back Perspective'}
           </h2>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+          <div className="mb-4 p-3 bg-red-500/15 border border-red-500/30 text-red-300 text-xs rounded-xl flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3.5 text-xs sm:text-sm">
           {/* Target Bid Amount Stepper */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-3">
+          <div className="bg-[var(--bg-surface)] border border-white/[0.08] rounded-xl p-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="font-bold text-[var(--text-primary)] text-xs">Target Total Bid</span>
-              <span className="text-xs font-extrabold text-[var(--color-teal)]">
-                Estimated Rank #{estimatedRank} in City
+              <span className="font-bold text-[var(--text-primary)] text-xs">Target Total Conviction</span>
+              <span className="text-xs font-bold font-mono text-[var(--color-amber)]">
+                Rank #{estimatedRank}
               </span>
             </div>
 
-            <div className="flex items-center justify-between bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-1.5">
+            <div className="flex items-center justify-between bg-[var(--bg-page-deep)] border border-white/[0.08] rounded-xl p-1.5">
               <button
                 type="button"
                 onClick={() => handleAdjustBid(-1)}
-                className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
+                className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] hover:bg-white/[0.08] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
                 aria-label="Decrease bid by $1"
               >
                 <Minus className="w-3.5 h-3.5" />
@@ -306,7 +306,7 @@ export function BidModal({
               <button
                 type="button"
                 onClick={() => handleAdjustBid(1)}
-                className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--border-color)] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
+                className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] hover:bg-white/[0.08] text-[var(--text-primary)] flex items-center justify-center font-bold cursor-pointer"
                 aria-label="Increase bid by $1"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -316,13 +316,13 @@ export function BidModal({
 
           {/* Existing Listing Notification */}
           {urlLookup?.exists && (
-            <div className="bg-[var(--color-teal-light)] border border-[var(--color-teal-border)] rounded-xl p-3 flex items-start space-x-2 text-xs text-[var(--color-teal)]">
-              <CheckCircle2 className="w-4 h-4 text-[var(--color-teal)] shrink-0 mt-0.5" />
+            <div className="bg-[var(--color-coral)]/10 border border-[var(--color-coral)]/25 rounded-xl p-3 flex items-start space-x-2 text-xs text-[var(--text-primary)]">
+              <CheckCircle2 className="w-4 h-4 text-[var(--color-coral)] shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Existing listing found:</span> Currently at{' '}
-                <span className="font-extrabold text-[var(--color-teal)]">${currentVerifiedDollars.toLocaleString()}</span>.
+                <span className="font-bold text-[var(--color-coral)]">Existing listing found:</span> Currently at{' '}
+                <span className="font-extrabold text-[var(--color-amber)] font-mono">${currentVerifiedDollars.toLocaleString()}</span>.
                 You pay the difference ({' '}
-                <span className="font-bold text-[var(--text-primary)]">${Math.max(0, targetBidDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
+                <span className="font-bold text-[var(--text-primary)] font-mono">${Math.max(0, targetBidDollars - currentVerifiedDollars).toLocaleString()}</span>{' '}
                 ) to reach ${targetBidDollars.toLocaleString()}.
               </div>
             </div>
@@ -330,8 +330,8 @@ export function BidModal({
 
           {/* Destination URL */}
           <div>
-            <label className="block font-bold text-[var(--text-primary)] text-xs mb-1">
-              Destination URL <span className="text-[var(--color-salmon)]">*</span>
+            <label className="block font-semibold text-[var(--text-secondary)] text-xs mb-1">
+              Destination URL <span className="text-[var(--color-coral)]">*</span>
             </label>
             <div className="relative">
               <input
@@ -340,7 +340,7 @@ export function BidModal({
                 value={destinationUrl}
                 onChange={(e) => setDestinationUrl(e.target.value)}
                 placeholder="indobid.lol, example.com or https://..."
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--color-teal)] focus:bg-[var(--bg-card)] rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
+                className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
               />
               {urlLookup?.destinationType && (
                 <div className="absolute right-3 top-3 text-[var(--text-secondary)]">
@@ -361,20 +361,20 @@ export function BidModal({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Acme AI"
-              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--color-teal)] focus:bg-[var(--bg-card)] rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
+              className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition"
             />
           </div>
 
           {/* Category & Country */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block font-bold text-[var(--text-primary)] text-xs mb-1">
+              <label className="block font-semibold text-[var(--text-secondary)] text-xs mb-1">
                 Category
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--color-teal)] focus:bg-[var(--bg-card)] rounded-xl py-2.5 px-3 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
+                className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl py-2.5 px-3 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -385,13 +385,13 @@ export function BidModal({
             </div>
 
             <div>
-              <label className="block font-bold text-[var(--text-primary)] text-xs mb-1">
+              <label className="block font-semibold text-[var(--text-secondary)] text-xs mb-1">
                 Country
               </label>
               <select
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--color-teal)] focus:bg-[var(--bg-card)] rounded-xl py-2.5 px-3 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
+                className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl py-2.5 px-3 text-[var(--text-primary)] text-xs sm:text-sm focus:outline-none transition cursor-pointer truncate"
               >
                 {POPULAR_COUNTRIES.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -404,7 +404,7 @@ export function BidModal({
 
           {/* Description */}
           <div>
-            <label className="block font-bold text-[var(--text-primary)] text-xs mb-1">
+            <label className="block font-semibold text-[var(--text-secondary)] text-xs mb-1">
               Short Description
             </label>
             <textarea
@@ -412,24 +412,24 @@ export function BidModal({
               maxLength={500}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does your startup build?"
-              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--color-teal)] focus:bg-[var(--bg-card)] rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition resize-none"
+              placeholder="What does your opinion or project discuss?"
+              className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl py-2.5 px-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] text-xs sm:text-sm focus:outline-none transition resize-none"
             />
           </div>
 
           {/* Compact Info Row */}
-          <div className="grid grid-cols-3 gap-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl p-2.5 text-center">
+          <div className="grid grid-cols-3 gap-2 bg-[var(--bg-page-deep)]/60 border border-white/[0.08] rounded-xl p-2.5 text-center">
             <div>
-              <div className="text-[10px] text-[var(--text-secondary)] font-medium">Target Total</div>
+              <div className="text-[10px] text-[var(--text-muted)] font-medium">Target Total</div>
               <div className="font-extrabold text-[var(--text-primary)] font-mono">${targetBidDollars.toLocaleString()}</div>
             </div>
             <div>
-              <div className="text-[10px] text-[var(--text-secondary)] font-medium">Pay Today</div>
-              <div className="font-extrabold text-[var(--color-salmon)] font-mono">${chargeAmountDollars.toLocaleString()}</div>
+              <div className="text-[10px] text-[var(--text-muted)] font-medium">Pay Today</div>
+              <div className="font-extrabold text-[var(--color-amber)] font-mono">${chargeAmountDollars.toLocaleString()}</div>
             </div>
             <div>
-              <div className="text-[10px] text-[var(--text-secondary)] font-medium">Estimated Rank</div>
-              <div className="font-extrabold text-[var(--color-teal)] font-mono">#{estimatedRank}</div>
+              <div className="text-[10px] text-[var(--text-muted)] font-medium">Estimated Rank</div>
+              <div className="font-extrabold text-[var(--color-coral)] font-mono">#{estimatedRank}</div>
             </div>
           </div>
 
@@ -437,7 +437,7 @@ export function BidModal({
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 bg-[var(--color-salmon)] hover:bg-[var(--color-salmon-hover)] disabled:opacity-60 text-white font-bold text-sm rounded-xl shadow-xs transition flex items-center justify-center space-x-2 cursor-pointer mt-3 active:scale-[0.99]"
+            className="w-full h-12 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] disabled:opacity-50 text-[#07171C] font-semibold text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 transition flex items-center justify-center space-x-2 cursor-pointer mt-4 active:scale-[0.99]"
           >
             {loading ? (
               <>
@@ -446,7 +446,7 @@ export function BidModal({
               </>
             ) : (
               <>
-                <span>Bid Now</span>
+                <span>Back with Conviction</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}

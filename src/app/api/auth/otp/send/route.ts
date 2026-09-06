@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requestEmailOtp } from '@/lib/email-otp';
+import { requestOtp } from '@/lib/email-otp';
+import { detectContactType, isValidEmail, isValidPhoneNumber } from '@/modules/auth/auth.validation';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
@@ -16,16 +17,40 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const email = body?.email;
+    const rawTarget = body?.target || body?.phone || body?.email;
 
-    if (!email || typeof email !== 'string') {
+    if (!rawTarget || typeof rawTarget !== 'string' || !rawTarget.trim()) {
       return NextResponse.json(
-        { success: false, error: 'Valid email address is required.' },
+        { success: false, error: 'Please enter your email or phone number.' },
         { status: 400 }
       );
     }
 
-    const result = await requestEmailOtp(email);
+    const cleanTarget = rawTarget.trim();
+    const contactType = detectContactType(cleanTarget);
+
+    if (contactType === 'phone') {
+      if (!isValidPhoneNumber(cleanTarget)) {
+        return NextResponse.json(
+          { success: false, error: 'Please enter a valid phone number.' },
+          { status: 400 }
+        );
+      }
+    } else if (contactType === 'email') {
+      if (!isValidEmail(cleanTarget)) {
+        return NextResponse.json(
+          { success: false, error: 'Please enter a valid email address.' },
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { success: false, error: 'Please enter a valid phone number or email address.' },
+        { status: 400 }
+      );
+    }
+
+    const result = await requestOtp(cleanTarget, contactType === 'phone' ? 'phone' : 'email');
     if (!result.success) {
       return NextResponse.json(
         {

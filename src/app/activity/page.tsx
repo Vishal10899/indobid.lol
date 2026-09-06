@@ -23,7 +23,9 @@ interface ActivityItem {
   createdAt: string;
 }
 
-export default function ActivityPage() {
+import { AuthGate } from '@/components/AuthGate';
+
+function ActivityContent() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -59,10 +61,10 @@ export default function ActivityPage() {
 
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 space-y-1 w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 space-y-1 w-full min-w-0">
             <div className="flex items-center space-x-2">
               <Activity className="w-5 h-5 text-[var(--color-coral)]" />
-              <h1 className="text-lg font-black text-[var(--text-primary)]">Live Conviction Stream</h1>
+              <h1 className="text-lg font-bold font-bodoni text-[var(--text-primary)]">Live Conviction Stream</h1>
             </div>
             <p className="text-xs text-[var(--text-secondary)]">
               Verified debates and continuations backed by skin in the game.
@@ -154,5 +156,13 @@ export default function ActivityPage() {
       <BottomNav onOpenCreate={() => setIsCreateModalOpen(true)} />
       <CreateDebateModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
     </div>
+  );
+}
+
+export default function ActivityPage() {
+  return (
+    <AuthGate>
+      <ActivityContent />
+    </AuthGate>
   );
 }

@@ -42,7 +42,7 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col justify-between w-[280px] h-screen sticky top-0 py-6 px-4 border-r border-[var(--border-subtle)] bg-[var(--bg-page)] shrink-0 select-none overflow-y-auto scrollbar-none">
+    <aside className="hidden lg:flex flex-col justify-between w-[280px] h-screen sticky top-0 py-6 px-4 border-r border-[var(--border-subtle)] bg-[var(--bg-page)]/80 backdrop-blur-xl shrink-0 select-none overflow-y-auto scrollbar-none">
       <div className="space-y-6">
         {/* Brand Logo Header */}
         <div className="px-2 pt-1 pb-1">
@@ -65,10 +65,10 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
                     openAuthModal('login');
                   }
                 }}
-                className={`flex items-center justify-between px-4 py-3 rounded-2xl text-xs sm:text-sm font-semibold transition group ${
+                className={`flex items-center justify-between px-4 py-3 rounded-xl text-xs sm:text-sm font-semibold transition group ${
                   isActive
-                    ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-bold shadow-xs border border-[var(--border-subtle)]'
-                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]/60'
+                    ? 'bg-white/[0.05] text-[var(--text-primary)] font-bold shadow-xs border border-white/[0.08]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.03]'
                 }`}
               >
                 <div className="flex items-center space-x-3.5">
@@ -93,7 +93,7 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
         <div className="px-1 pt-2">
           <button
             onClick={onOpenCreate}
-            className="w-full py-3.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs sm:text-sm rounded-2xl shadow-md transition flex items-center justify-center space-x-2 cursor-pointer active:scale-[0.98]"
+            className="w-full py-3.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#07171C] font-semibold text-xs sm:text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 transition flex items-center justify-center space-x-2 cursor-pointer active:scale-[0.98]"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>Start Conversation</span>
@@ -104,7 +104,7 @@ export function Sidebar({ onOpenCreate }: SidebarProps) {
       {/* User Mini-Profile / Sign In CTA */}
       <div className="pt-4 border-t border-[var(--border-subtle)] px-1">
         {user ? (
-          <div className="bg-[var(--bg-surface)]/90 hover:bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-3 flex items-center justify-between transition">
+          <div className="glass-panel rounded-2xl p-3 flex items-center justify-between transition hover:border-white/[0.14]">
             <Link
               href={`/profile/${user.username}`}
               className="flex items-center space-x-2.5 overflow-hidden flex-1 group"

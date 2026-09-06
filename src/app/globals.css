@@ -15,23 +15,24 @@
 @layer base {
   :root {
     /* IndoBid Ultra-Sophisticated Dark Editorial Palette */
-    --bg-page: #091114;
-    --bg-page-deep: #060B0D;
-    --bg-surface: #0F1A1E;
-    --bg-surface-subtle: #142227;
-    --bg-card: #121E23;
-    --bg-card-hover: #17262D;
-    --bg-elevated: #1C2E35;
-    --bg-slate: #2A3B42;
+    --bg-page: #080E12;
+    --bg-page-deep: #05090C;
+    --bg-surface: #0E171E;
+    --bg-surface-subtle: #121D26;
+    --bg-card: #101B24;
+    --bg-card-hover: #162430;
+    --bg-elevated: #1B2B38;
+    --bg-slate: #243644;
 
-    --border-color: rgba(244, 238, 230, 0.10);
-    --border-subtle: rgba(244, 238, 230, 0.05);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-hover: rgba(255, 255, 255, 0.14);
     --border-highlight: #D98A6C;
     --border-amber: rgba(216, 178, 87, 0.35);
 
-    --text-primary: #F4EEE6;
-    --text-secondary: #9BAEAF;
-    --text-muted: #687D82;
+    --text-primary: #F6F2EB;
+    --text-secondary: #8E9FA5;
+    --text-muted: #5C6F77;
 
     /* Accents */
     --color-coral: #D98A6C;
@@ -44,6 +45,12 @@
 
     --accent-cta: #D98A6C;
     --accent-cta-hover: #E2987D;
+
+    /* Shadows & Atmospheric Glows */
+    --shadow-card: 0 8px 32px -4px rgba(0, 0, 0, 0.5);
+    --shadow-modal: 0 24px 60px -12px rgba(0, 0, 0, 0.7);
+    --glow-coral: 0 0 35px -5px rgba(217, 138, 108, 0.15);
+    --glow-slate: 0 0 40px -5px rgba(72, 126, 160, 0.12);
   }
 
   html.light {
@@ -59,6 +66,7 @@
 
     --border-color: rgba(13, 22, 25, 0.14);
     --border-subtle: rgba(13, 22, 25, 0.08);
+    --border-hover: rgba(13, 22, 25, 0.20);
     --border-highlight: #BA5133;
     --border-amber: rgba(148, 110, 19, 0.40);
 
@@ -77,6 +85,11 @@
 
     --accent-cta: #BA5133;
     --accent-cta-hover: #A84428;
+
+    --shadow-card: 0 8px 30px -4px rgba(0, 0, 0, 0.08);
+    --shadow-modal: 0 20px 50px -10px rgba(0, 0, 0, 0.15);
+    --glow-coral: 0 0 30px -5px rgba(186, 81, 51, 0.12);
+    --glow-slate: 0 0 35px -5px rgba(44, 62, 68, 0.08);
   }
 
   html, body {
@@ -94,6 +107,42 @@
     text-rendering: optimizeLegibility;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
+}
+
+/* Reusable Glassmorphism & UI Tokens */
+.glass-panel {
+  background: rgba(14, 24, 32, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-nav {
+  background: rgba(8, 14, 18, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-modal {
+  background: rgba(13, 22, 30, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(217, 138, 108, 0.04);
+}
+
+.input-premium {
+  background: rgba(9, 16, 22, 0.80);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--text-primary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.input-premium:focus {
+  border-color: rgba(217, 138, 108, 0.8);
+  box-shadow: 0 0 0 3px rgba(217, 138, 108, 0.15);
+  outline: none;
 }
 
 /* Custom theme scrollbar */
@@ -130,3 +179,23 @@ button, a, input, textarea, select {
     scroll-behavior: auto !important;
   }
 }
+
+/* Floating card keyframe animations for Landing Page */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(0.8deg);
+  }
+}
+
+@keyframes floatReverse {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(8px) rotate(-0.8deg);
+  }
+}
+

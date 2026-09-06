@@ -5,6 +5,7 @@ import { VisitorTracker } from '@/components/VisitorTracker';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
+import { GlobalAtmosphericBackground } from '@/components/GlobalAtmosphericBackground';
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -33,8 +34,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'IndoBid — Back Opinions With Conviction',
-  description: 'The premium social marketplace where opinions compete through financial conviction. Read complete conversations for free. Put money behind your ideas to debate, back, and earn with skin in the game.',
+  title: 'IndoBid — Put Value Behind Your Opinion',
+  description: 'Share opinions, discover perspectives, join conversations, and back ideas with conviction.',
   keywords: ['paid debate', 'social opinion', 'skin in the game', 'indobid', 'arguments', 'debates', 'conviction', 'opinions', 'vishal chaudhary'],
   authors: [{ name: 'Vishal Chaudhary', url: 'https://indobid.lol' }],
   creator: 'Vishal Chaudhary',
@@ -49,8 +50,8 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: 'IndoBid — Back Opinions With Conviction',
-    description: 'Read complete conversations for free. Put money behind your opinion to participate with skin in the game.',
+    title: 'IndoBid — Put Value Behind Your Opinion',
+    description: 'Share opinions, discover perspectives, join conversations, and back ideas with conviction.',
     url: 'https://indobid.lol',
     siteName: 'IndoBid',
     locale: 'en_IN',
@@ -58,8 +59,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'IndoBid — Back Opinions With Conviction',
-    description: 'Read complete conversations for free. Put money behind your opinion to participate with skin in the game.',
+    title: 'IndoBid — Put Value Behind Your Opinion',
+    description: 'Share opinions, discover perspectives, join conversations, and back ideas with conviction.',
     creator: '@vishalchaudhary',
   },
   robots: {
@@ -106,7 +107,8 @@ export default function RootLayout({
         {/* Razorpay Checkout Script */}
         <script src="https://checkout.razorpay.com/v1/checkout.js" async />
       </head>
-      <body className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased flex flex-col selection:bg-[var(--color-coral)] selection:text-[var(--bg-page-deep)]">
+      <body className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] antialiased flex flex-col selection:bg-[var(--color-coral)] selection:text-[var(--bg-page-deep)] relative">
+        <GlobalAtmosphericBackground />
         <ThemeProvider>
           <AuthProvider>
             <VisitorTracker />

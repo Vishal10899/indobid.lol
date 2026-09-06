@@ -41,6 +41,8 @@ export async function generateMetadata(
   };
 }
 
+import { AuthGate } from '@/components/AuthGate';
+
 export default async function DebatePage(
   props: { params: Promise<{ id: string }> }
 ) {
@@ -51,5 +53,9 @@ export default async function DebatePage(
     notFound();
   }
 
-  return <DebateDetailClient initialDebate={JSON.parse(JSON.stringify(debate))} />;
+  return (
+    <AuthGate>
+      <DebateDetailClient initialDebate={JSON.parse(JSON.stringify(debate))} />
+    </AuthGate>
+  );
 }

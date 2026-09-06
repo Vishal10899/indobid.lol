@@ -21,7 +21,9 @@ interface Message {
   createdAt: string;
 }
 
-export default function ConversationThreadPage() {
+import { AuthGate } from '@/components/AuthGate';
+
+function ConversationThreadContent() {
   const params = useParams();
   const conversationId = params.conversationId as string;
   const { user } = useAuth();
@@ -93,7 +95,7 @@ export default function ConversationThreadPage() {
 
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen border-r-0 lg:border-r border-[var(--border-subtle)] flex flex-col justify-between pb-24 lg:pb-6">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/90 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center space-x-3 w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center space-x-3 w-full min-w-0">
             <Link
               href="/messages"
               className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition"
@@ -186,5 +188,13 @@ export default function ConversationThreadPage() {
       <BottomNav onOpenCreate={() => setIsCreateModalOpen(true)} />
       <CreateDebateModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
     </div>
+  );
+}
+
+export default function ConversationThreadPage() {
+  return (
+    <AuthGate>
+      <ConversationThreadContent />
+    </AuthGate>
   );
 }

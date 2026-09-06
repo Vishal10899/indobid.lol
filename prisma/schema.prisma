@@ -81,6 +81,7 @@ model Debate {
   likeCount                  Int            @default(0) @map("like_count")
   impressionCount            Int            @default(0) @map("impression_count")
   hashtags                   String?
+  isAutomated                Boolean        @default(false) @map("is_automated")
   createdAt                  DateTime       @default(now()) @map("created_at")
   updatedAt                  DateTime       @updatedAt @map("updated_at")
 
@@ -92,6 +93,7 @@ model Debate {
   bookmarks                  DebateBookmark[]
   impressions                DebateImpression[]
   earningsLedgerEntries      CreatorEarningsLedger[]
+  automatedPost              AutomatedPost?
 
   @@index([status, trendingScore(sort: Desc)])
   @@index([status, totalVerifiedContribution(sort: Desc)])
@@ -521,5 +523,89 @@ model UsernameChangeHistory {
   @@index([userId, changedAt(sort: Desc)])
   @@map("username_change_history")
 }
+
+model NewsArticle {
+  id              String        @id @default(cuid())
+  sourceId        String        @map("source_id")
+  sourceName      String        @map("source_name")
+  title           String
+  normalizedTitle String        @map("normalized_title")
+  description     String?
+  articleUrl      String        @unique @map("article_url")
+  fingerprint     String
+  category        String
+  region          String
+  publishedAt     DateTime?     @map("published_at")
+  fetchedAt       DateTime      @default(now()) @map("fetched_at")
+  clusterId       String?       @map("cluster_id")
+  cluster         StoryCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+
+  @@index([fingerprint])
+  @@index([clusterId])
+  @@index([publishedAt(sort: Desc)])
+  @@map("news_articles")
+}
+
+model StoryCluster {
+  id              String          @id @default(cuid())
+  fingerprint     String          @unique
+  canonicalTitle  String          @map("canonical_title")
+  category        String
+  region          String
+  sourceCount     Int             @default(1) @map("source_count")
+  trendScore      Float           @default(0.0) @map("trend_score")
+  status          String          @default("NEW") // NEW, CANDIDATE, GENERATED, PUBLISHED, REJECTED
+  rejectionReason String?         @map("rejection_reason")
+  firstSeenAt     DateTime        @default(now()) @map("first_seen_at")
+  lastSeenAt      DateTime        @default(now()) @map("last_seen_at")
+  publishedAt     DateTime?       @map("published_at")
+  articles        NewsArticle[]
+  automatedPosts  AutomatedPost[]
+
+  @@index([status, trendScore(sort: Desc)])
+  @@index([fingerprint])
+  @@index([category, status])
+  @@map("story_clusters")
+}
+
+model AutomatedPost {
+  id               String       @id @default(cuid())
+  debateId         String       @unique @map("debate_id")
+  debate           Debate       @relation(fields: [debateId], references: [id], onDelete: Cascade)
+  clusterId        String       @map("cluster_id")
+  cluster          StoryCluster @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  trendScore       Float        @map("trend_score")
+  confidenceScore  Float        @default(1.0) @map("confidence_score")
+  sourceCount      Int          @default(1) @map("source_count")
+  sourcesJson      String       @map("sources_json")
+  generationMethod String       @default("editorial_deterministic") @map("generation_method")
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@index([clusterId])
+  @@index([createdAt(sort: Desc)])
+  @@map("automated_posts")
+}
+
+model AutomationRun {
+  id                 String    @id @default(cuid())
+  startedAt          DateTime  @default(now()) @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  status             String    @default("running") // running, success, partial_failure, failed, dry_run
+  isDryRun           Boolean   @default(false) @map("is_dry_run")
+  sourcesAttempted   Int       @default(0) @map("sources_attempted")
+  sourcesSuccessful  Int       @default(0) @map("sources_successful")
+  articlesFetched    Int       @default(0) @map("articles_fetched")
+  duplicatesRemoved  Int       @default(0) @map("duplicates_removed")
+  clustersCreated    Int       @default(0) @map("clusters_created")
+  candidatesSelected Int       @default(0) @map("candidates_selected")
+  postsPublished     Int       @default(0) @map("posts_published")
+  postsRejected      Int       @default(0) @map("posts_rejected")
+  summaryJson        String?   @map("summary_json")
+  errorsJson         String?   @map("errors_json")
+
+  @@index([startedAt(sort: Desc)])
+  @@map("automation_runs")
+}
+
 
 

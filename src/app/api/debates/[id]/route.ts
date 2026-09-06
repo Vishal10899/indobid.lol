@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { getCurrentUser } from '@/lib/user-auth';
 import { isAuthorizedAdmin } from '@/lib/auth';
 import { isFounder } from '@/lib/founder';
+import { safeDb } from '@/infrastructure/database/transactions';
 
 export const dynamic = 'force-dynamic';
 
@@ -243,10 +244,12 @@ export async function DELETE(
       );
     }
 
-    const debate = await prisma.debate.findUnique({
-      where: { id },
-      select: { id: true, authorId: true, authorUsername: true, status: true },
-    });
+    const debate = await safeDb(() =>
+      prisma.debate.findUnique({
+        where: { id },
+        select: { id: true, authorId: true, authorUsername: true, status: true },
+      })
+    );
 
     if (!debate) {
       return NextResponse.json({ success: false, error: 'Debate not found' }, { status: 404 });
@@ -265,10 +268,12 @@ export async function DELETE(
       );
     }
 
-    await prisma.debate.update({
-      where: { id },
-      data: { status: 'hidden' },
-    });
+    await safeDb(() =>
+      prisma.debate.update({
+        where: { id },
+        data: { status: 'hidden' },
+      })
+    );
 
     return NextResponse.json({
       success: true,

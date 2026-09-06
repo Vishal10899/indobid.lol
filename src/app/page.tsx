@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 import { RightSidebar } from '@/components/RightSidebar';
 import { Navbar } from '@/components/Navbar';
@@ -9,6 +10,8 @@ import { BottomNav } from '@/components/BottomNav';
 import { DebateCard } from '@/components/DebateCard';
 import { CreateDebateModal } from '@/components/CreateDebateModal';
 import { Avatar } from '@/components/Avatar';
+import { LandingPage } from '@/components/LandingPage';
+import { Logo } from '@/components/Logo';
 import { useAuth } from '@/context/AuthContext';
 import {
   Flame,
@@ -23,8 +26,11 @@ interface CategoryItem {
   slug: string;
 }
 
-export default function HomePage() {
-  const { user, openAuthModal } = useAuth();
+function MainContent() {
+  const { user, loading: authLoading, openAuthModal } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [activeTab, setActiveTab] = useState<'for_you' | 'trending' | 'following'>('for_you');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [categories, setCategories] = useState<CategoryItem[]>([
@@ -43,7 +49,33 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+  // Handle URL auth/redirect parameters
+  useEffect(() => {
+    if (authLoading) return;
+
+    const redirectTarget = searchParams.get('redirect');
+    const authAction = searchParams.get('auth');
+    const createParam = searchParams.get('create');
+
+    if (user) {
+      // If authenticated and there is a safe redirect target, navigate to it
+      if (redirectTarget && redirectTarget.startsWith('/') && !redirectTarget.startsWith('//')) {
+        router.replace(redirectTarget);
+      } else if (createParam === 'true') {
+        setIsCreateModalOpen(true);
+      }
+    } else {
+      // If unauthenticated and auth modal is requested via query param
+      if (authAction === 'signup') {
+        openAuthModal('signup');
+      } else if (authAction === 'login') {
+        openAuthModal('login');
+      }
+    }
+  }, [user, authLoading, searchParams, router, openAuthModal]);
+
   const fetchFeed = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     try {
       let sortParam = 'for_you';
@@ -66,12 +98,32 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, activeCategory]);
+  }, [user, activeTab, activeCategory]);
 
   useEffect(() => {
-    fetchFeed();
-  }, [fetchFeed]);
+    if (user) {
+      fetchFeed();
+    }
+  }, [user, fetchFeed]);
 
+  // 1. Initial Session Resolution Splash
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-page)] flex flex-col items-center justify-center space-y-4">
+        <div className="animate-pulse">
+          <Logo size="lg" />
+        </div>
+        <div className="w-5 h-5 border-2 border-[var(--color-coral)] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // 2. Unauthenticated Experience: Public Landing Page
+  if (!user) {
+    return <LandingPage />;
+  }
+
+  // 3. Authenticated Experience: Primary IndoBid Application
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] w-full flex flex-col">
       {/* Mobile Top Header */}
@@ -86,7 +138,7 @@ export default function HomePage() {
         {/* Center Column: Primary Feed Stream */}
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Top Sticky Header with Feed Tabs & Category Chips */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] w-full min-w-0">
             {/* Primary Feed Tabs: For You, Trending, Following */}
             <div className="flex border-b border-[var(--border-subtle)] w-full overflow-x-auto scrollbar-none">
               {/* For You */}
@@ -103,7 +155,7 @@ export default function HomePage() {
               >
                 <span>For You</span>
                 {activeTab === 'for_you' && (
-                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-[var(--color-coral)] rounded-full" />
                 )}
               </button>
 
@@ -111,30 +163,26 @@ export default function HomePage() {
               <button
                 onClick={() => {
                   setActiveTab('trending');
+                  setActiveCategory('all');
                 }}
-                className={`flex-1 py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
+                className={`flex-1 py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 flex items-center justify-center space-x-1 ${
                   activeTab === 'trending'
                     ? 'text-[var(--text-primary)]'
                     : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
-                <span className="flex items-center justify-center space-x-1">
-                  <Flame className="w-3.5 h-3.5 text-[var(--color-coral)]" />
-                  <span>Trending</span>
-                </span>
+                <Flame className={`w-3.5 h-3.5 ${activeTab === 'trending' ? 'text-[var(--color-coral)]' : ''}`} />
+                <span>Trending</span>
                 {activeTab === 'trending' && (
-                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-[var(--color-coral)] rounded-full" />
                 )}
               </button>
 
               {/* Following */}
               <button
                 onClick={() => {
-                  if (!user) {
-                    openAuthModal('login');
-                  } else {
-                    setActiveTab('following');
-                  }
+                  setActiveTab('following');
+                  setActiveCategory('all');
                 }}
                 className={`flex-1 py-3 text-xs sm:text-sm font-bold text-center transition cursor-pointer relative shrink-0 ${
                   activeTab === 'following'
@@ -144,7 +192,7 @@ export default function HomePage() {
               >
                 <span>Following</span>
                 {activeTab === 'following' && (
-                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-[var(--color-coral)] rounded-full" />
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-[var(--color-coral)] rounded-full" />
                 )}
               </button>
             </div>
@@ -241,5 +289,22 @@ export default function HomePage() {
         onCreated={() => fetchFeed()}
       />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[var(--bg-page)] flex flex-col items-center justify-center space-y-4">
+          <div className="animate-pulse">
+            <Logo size="lg" />
+          </div>
+          <div className="w-5 h-5 border-2 border-[var(--color-coral)] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <MainContent />
+    </Suspense>
   );
 }

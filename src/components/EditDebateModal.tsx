@@ -152,13 +152,13 @@ export function EditDebateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm w-full h-[100dvh] overflow-hidden"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-md w-full h-[100dvh] overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) onClose();
       }}
     >
       <div
-        className="w-full max-w-xl bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[85vh] min-w-0"
+        className="glass-modal w-full max-w-xl rounded-2xl sm:rounded-3xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_40px_rgba(217,138,108,0.04)] overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[85vh] min-w-0 border border-white/[0.09]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -168,7 +168,7 @@ export function EditDebateModal({
               <Edit3 className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[var(--text-primary)]">Edit Opinion</h2>
+              <h2 className="text-sm font-bold font-bodoni text-[var(--text-primary)]">Edit Opinion</h2>
               {authorUsername && (
                 <p className="text-[11px] text-[var(--text-muted)]">Posting as @{authorUsername}</p>
               )}
@@ -177,7 +177,7 @@ export function EditDebateModal({
 
           <div className="flex items-center space-x-2">
             {/* Write / Preview Tab switcher */}
-            <div className="flex items-center bg-[var(--bg-page)] rounded-xl p-0.5 border border-[var(--border-subtle)] text-xs font-semibold">
+            <div className="flex items-center bg-[var(--bg-page-deep)] rounded-xl p-0.5 border border-white/[0.08] text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setActiveTab('write')}
@@ -206,7 +206,7 @@ export function EditDebateModal({
             <button
               onClick={onClose}
               disabled={loading}
-              className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition cursor-pointer"
+              className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -216,14 +216,14 @@ export function EditDebateModal({
         {/* Modal Body */}
         <form onSubmit={handleSave} className="p-4 space-y-4 overflow-y-auto flex-1">
           {errorMsg && (
-            <div className="p-3 bg-[var(--color-danger)]/10 border border-[var(--color-danger)]/30 rounded-xl flex items-start space-x-2 text-xs text-[var(--color-danger)]">
+            <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl flex items-start space-x-2 text-xs text-red-300">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3 bg-[var(--color-lime)]/10 border border-[var(--color-lime)]/30 rounded-xl flex items-center space-x-2 text-xs text-[var(--color-lime)]">
+            <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center space-x-2 text-xs text-emerald-300">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               <span>Opinion updated successfully!</span>
             </div>
@@ -242,7 +242,7 @@ export function EditDebateModal({
                   rows={6}
                   placeholder="Edit your opinion... Use @username to mention others and #hashtags for topics."
                   maxLength={5000}
-                  className="w-full bg-[var(--bg-page)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl p-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition leading-relaxed resize-y font-normal"
+                  className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl p-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition leading-relaxed resize-y font-normal"
                 />
                 <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] mt-1 px-1">
                   <div className="flex items-center space-x-2">
@@ -283,13 +283,13 @@ export function EditDebateModal({
                     value={hashtags}
                     onChange={(e) => setHashtags(e.target.value)}
                     placeholder="#AI #Startups #Markets"
-                    className="w-full bg-[var(--bg-page)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-mono"
+                    className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-mono"
                   />
                 </div>
               </div>
             </div>
           ) : (
-            <div className="space-y-3 p-3.5 rounded-xl bg-[var(--bg-page)] border border-[var(--border-subtle)] min-h-[160px]">
+            <div className="space-y-3 p-3.5 rounded-xl bg-[var(--bg-page-deep)]/70 border border-white/[0.08] min-h-[160px]">
               <div className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-2">
                 Live Formatted Preview
               </div>
@@ -297,7 +297,7 @@ export function EditDebateModal({
                 <FormattedText text={content} />
               </div>
               {hashtags && (
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-[var(--border-subtle)]/60">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-white/[0.06]">
                   {hashtags.split(' ').map((tag, idx) => (
                     <span key={idx} className="text-xs font-mono text-[var(--color-coral)]">
                       {tag.startsWith('#') ? tag : `#${tag}`}
@@ -314,14 +314,14 @@ export function EditDebateModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)] transition cursor-pointer"
+              className="h-11 px-4 rounded-xl text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || content.trim().length < 5}
-              className="px-5 py-2 rounded-xl bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] disabled:opacity-50 text-[#071B21] font-bold text-xs shadow-md transition flex items-center space-x-1.5 cursor-pointer"
+              className="h-11 px-5 rounded-xl bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] disabled:opacity-50 text-[#07171C] font-semibold text-xs shadow-md shadow-[var(--color-coral)]/15 transition flex items-center space-x-1.5 cursor-pointer active:scale-[0.99]"
             >
               {loading ? (
                 <>

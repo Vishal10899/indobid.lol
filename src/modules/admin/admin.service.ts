@@ -232,6 +232,31 @@ export class AdminService {
     return adminRepository.updateDebate(id, dto);
   }
 
+  async deleteDebate(id: string) {
+    const debate = await prisma.debate.findUnique({ where: { id } });
+    if (!debate) {
+      throw new Error('Debate not found');
+    }
+    return adminRepository.deleteDebate(id);
+  }
+
+  async rankDownDebate(id: string, penalty = 50) {
+    const debate = await prisma.debate.findUnique({ where: { id } });
+    if (!debate) {
+      throw new Error('Debate not found');
+    }
+    return adminRepository.rankDownDebate(id, penalty);
+  }
+
+  async resetDebateRank(id: string) {
+    const debate = await prisma.debate.findUnique({ where: { id } });
+    if (!debate) {
+      throw new Error('Debate not found');
+    }
+    return adminRepository.resetDebateRank(id);
+  }
+
+
   async createFounderDebate(data: {
     title: string;
     content: string;

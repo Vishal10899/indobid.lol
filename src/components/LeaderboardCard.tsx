@@ -95,10 +95,10 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
 
   return (
     <div
-      className={`rounded-2xl transition-all duration-150 relative bg-white ${
+      className={`rounded-2xl transition-all duration-150 relative bg-[var(--bg-surface)] text-[var(--text-primary)] ${
         isFirst
-          ? 'border-2 border-[#F59E0B] shadow-md ring-2 ring-[#F59E0B]/30'
-          : 'border border-[#E5DDCC] hover:border-[#087F78]/50 hover:shadow-xs'
+          ? 'border border-[var(--color-amber)]/60 shadow-[0_0_25px_rgba(216,178,87,0.12)]'
+          : 'border border-white/[0.08] hover:border-white/[0.14] shadow-sm'
       }`}
     >
       <div className="p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
@@ -108,11 +108,11 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
           <div
             className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 border ${
               isFirst
-                ? 'bg-[#182126] text-[#F4C343] border-2 border-[#F59E0B] shadow-xs'
-                : 'bg-[#182126] text-[#F4C343] border-[#E5DDCC]'
+                ? 'bg-[var(--bg-page-deep)] text-[var(--color-amber)] border-[var(--color-amber)]/40 shadow-xs'
+                : 'bg-[var(--bg-page-deep)] text-[var(--text-secondary)] border-white/[0.08]'
             }`}
           >
-            {isFirst && <Trophy className="w-4 h-4 text-[#F4C343] mr-0.5" />}
+            {isFirst && <Trophy className="w-4 h-4 text-[var(--color-amber)] mr-0.5" />}
             <span>#{item.rank}</span>
           </div>
 
@@ -122,10 +122,10 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
               <img
                 src={item.logoUrl}
                 alt={item.title}
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-cover border border-[#E5DDCC] group-hover:border-[#087F78] transition"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-cover border border-white/[0.08] group-hover:border-[var(--color-coral)] transition"
               />
             ) : (
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#F5F2E9] border border-[#E5DDCC] flex items-center justify-center text-[#087F78] group-hover:border-[#087F78] transition">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[var(--bg-page-deep)] border border-white/[0.08] flex items-center justify-center text-[var(--color-coral)] group-hover:border-[var(--color-coral)] transition">
                 <PlatformIcon type={item.destinationType} className="w-5 h-5" />
               </div>
             )}
@@ -136,7 +136,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
             <div className="flex flex-wrap items-center gap-1.5 mb-1">
               <Link
                 href={`/listing/${item.id}`}
-                className="font-extrabold text-sm sm:text-base text-[#102536] hover:text-[#087F78] transition truncate"
+                className="font-bold text-sm sm:text-base text-[var(--text-primary)] hover:text-[var(--color-coral)] transition truncate"
               >
                 {item.title}
               </Link>
@@ -147,42 +147,42 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
                 target="_blank"
                 rel="sponsored noopener noreferrer"
                 title={`Visit ${item.destinationUrl}`}
-                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-[#F5F2E9] hover:bg-[#E5DDCC] text-[11px] text-[#405866] hover:text-[#102536] transition max-w-[150px] sm:max-w-[200px]"
+                className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-[var(--bg-page-deep)] hover:bg-[var(--bg-card-hover)] border border-white/[0.06] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition max-w-[150px] sm:max-w-[200px]"
               >
                 <span className="truncate">{item.canonicalUrl}</span>
                 <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-70" />
               </a>
             </div>
 
-            <p className="text-xs sm:text-sm text-[#405866] line-clamp-1 mb-1.5">
+            <p className="text-xs sm:text-sm text-[var(--text-secondary)] line-clamp-1 mb-1.5">
               {item.description}
             </p>
 
             {/* Metadata row */}
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[#71818A]">
-              <span className="inline-flex items-center space-x-1 font-medium text-[#405866]">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--text-muted)]">
+              <span className="inline-flex items-center space-x-1 font-medium text-[var(--text-secondary)]">
                 <span>{getCountryFlag(item.countryCode)}</span>
                 <span>{getCountryName(item.countryCode)}</span>
               </span>
               <span>·</span>
-              <span className="font-semibold text-[#087F78] bg-[#DDF2EF] px-2 py-0.5 rounded-lg border border-[#B9DFDA]">
+              <span className="font-semibold text-[var(--color-coral)] bg-[var(--color-coral)]/10 px-2 py-0.5 rounded-lg border border-[var(--color-coral)]/25">
                 {item.categoryName}
               </span>
               <span>·</span>
               <span className="flex items-center space-x-1">
-                <MousePointerClick className="w-3 h-3 text-[#71818A]" />
+                <MousePointerClick className="w-3 h-3 text-[var(--text-muted)]" />
                 <span>{item.clickCount.toLocaleString()} clicks</span>
               </span>
               <span>·</span>
               <span className="flex items-center space-x-1">
-                <Calendar className="w-3 h-3 text-[#71818A]" />
+                <Calendar className="w-3 h-3 text-[var(--text-muted)]" />
                 <span>{formatDeterministicDate(item.bidReachedAt)}</span>
               </span>
             </div>
 
             {error && (
-              <div className="mt-1 text-xs text-rose-600 flex items-center space-x-1">
-                <AlertCircle className="w-3 h-3" />
+              <div className="mt-1 text-xs text-red-400 flex items-center space-x-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
@@ -190,12 +190,12 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
         </div>
 
         {/* Right: Verified Bid & CTA */}
-        <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-3 sm:pt-0 border-[#E5DDCC] shrink-0 sm:pl-4">
+        <div className="w-full sm:w-auto flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-3 sm:pt-0 border-white/[0.08] shrink-0 sm:pl-4">
           <div className="text-left sm:text-right">
-            <div className="text-[10px] uppercase font-bold text-[#71818A]">
-              Verified Bid
+            <div className="text-[10px] uppercase font-bold text-[var(--text-muted)]">
+              Verified Conviction
             </div>
-            <div className="text-base sm:text-lg font-extrabold text-[#087F78] font-mono">
+            <div className="text-base sm:text-lg font-extrabold text-[var(--color-amber)] font-mono">
               ${dollars.toLocaleString()}
             </div>
           </div>
@@ -204,7 +204,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
             <button
               onClick={handleDirectOutbid}
               disabled={loading}
-              className="px-4 py-1.5 bg-[#DE8063] hover:bg-[#CF6F55] disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center space-x-1 cursor-pointer whitespace-nowrap active:scale-[0.98]"
+              className="px-4 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] disabled:opacity-50 text-[#07171C] font-semibold text-xs rounded-xl shadow-md shadow-[var(--color-coral)]/15 transition flex items-center space-x-1 cursor-pointer whitespace-nowrap active:scale-[0.98]"
             >
               {loading ? (
                 <>
@@ -212,7 +212,7 @@ export function LeaderboardCard({ item }: LeaderboardCardProps) {
                   <span>Loading...</span>
                 </>
               ) : (
-                <span>Bid Now</span>
+                <span>Back Conviction</span>
               )}
             </button>
           </div>

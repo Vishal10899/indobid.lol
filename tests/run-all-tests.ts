@@ -31,8 +31,14 @@ import {
   formatCurrencyAmount,
 } from '../src/lib/money';
 import { paymentService } from '../src/modules/payments/payment.service';
-import { GET as getHealthRoute } from '../src/app/api/health/route';
+import { GET as getHealthRoute, HEAD as headHealthRoute } from '../src/app/api/health/route';
 import { GET as getHealthDbRoute } from '../src/app/api/health/db/route';
+import { DELETE as deleteDebateRoute } from '../src/app/api/debates/[id]/route';
+import { GET as getProfileRoute } from '../src/app/api/profile/[username]/route';
+import { DELETE as deleteAdminDebateRoute, PATCH as patchAdminDebateRoute } from '../src/app/api/admin/debates/route';
+import { DELETE as deleteAdminDebateByIdRoute, PATCH as patchAdminDebateByIdRoute } from '../src/app/api/admin/debates/[id]/route';
+import { ADMIN_SECRET_KEY } from '../src/modules/auth/authorization';
+import { ADMIN_SESSION_COOKIE } from '../src/modules/auth/session.service';
 import { NextRequest } from 'next/server';
 import {
   sanitizePaymentNote,
@@ -49,6 +55,29 @@ import { GET as getTrendingRoute } from '../src/app/api/trending/route';
 import { messageService } from '../src/modules/social/messages/message.service';
 import { followService } from '../src/modules/social/follows/follow.service';
 import { ValidationError, AuthorizationError } from '../src/lib/errors';
+import { GET as getGoogleAuthRoute } from '../src/app/api/auth/google/route';
+import { GET as getGoogleCallbackRoute } from '../src/app/api/auth/callback/google/route';
+import {
+  resolveGoogleRedirectUri,
+  GOOGLE_OAUTH_STATE_COOKIE,
+  GOOGLE_OAUTH_REDIRECT_URI_COOKIE,
+  GOOGLE_OAUTH_DESTINATION_COOKIE,
+} from '../src/modules/auth/google-oauth.service';
+import { sessionService, AUTH_COOKIE_NAME } from '../src/modules/auth/session.service';
+import { isFounder as isFounderCheck } from '../src/modules/auth/authorization';
+import { env } from '../src/config/env';
+import { parseFeedXml, decodeXmlEntities } from '../src/services/indobid-daily/providers/rss.provider';
+import { cleanArticleUrl, normalizeTitle, extractKeywords, decodeHtmlEntities } from '../src/services/indobid-daily/normalizer';
+import { calculateFingerprint, deduplicateBatch, filterAgainstDatabase } from '../src/services/indobid-daily/deduplicator';
+import { clusterArticles, selectCanonicalTitle } from '../src/services/indobid-daily/clusterer';
+import { scoreCluster, calculateFreshnessScore, calculateVelocityScore } from '../src/services/indobid-daily/trend-scorer';
+import { validateClusterQuality } from '../src/services/indobid-daily/quality-checker';
+import { generatePostContent, mapCategoryToIndoBidSlug } from '../src/services/indobid-daily/content-generator';
+import { getOrCreateSystemBot, publishStoryCluster, INDOBID_DAILY_BOT_USERNAME } from '../src/services/indobid-daily/publisher';
+import { runDailyPipeline } from '../src/services/indobid-daily/daily-runner';
+import { POST as postCronRoute } from '../src/app/api/cron/indobid-daily/route';
+import { NewsSource, NewsCandidate, StoryClusterData } from '../src/services/indobid-daily/types';
+import { safeDb } from '../src/infrastructure/database/transactions';
 
 let passed = 0;
 let failed = 0;
@@ -112,28 +141,61 @@ async function runTestSuite() {
     }
   };
 
-  // Clean previous test data safely
-  await safeExecute(() => prisma.notification.deleteMany({}));
-  await safeExecute(() => prisma.directMessage.deleteMany({}));
-  await safeExecute(() => prisma.conversation.deleteMany({}));
-  await safeExecute(() => prisma.follow.deleteMany({}));
-  await safeExecute(() => prisma.debateBookmark.deleteMany({}));
-  await safeExecute(() => prisma.debateLike.deleteMany({}));
-  await safeExecute(() => prisma.debateActivityEvent.deleteMany({}));
-  await safeExecute(() => prisma.debateReport.deleteMany({}));
-  await safeExecute(() => prisma.creatorEarningsLedger.deleteMany({}));
-  await safeExecute(() => prisma.payment.deleteMany({}));
-  await safeExecute(() => prisma.contribution.deleteMany({}));
-  await safeExecute(() => prisma.debate.deleteMany({}));
-  await safeExecute(() => prisma.usernameChangeHistory.deleteMany({}));
+  // Clean previous test data safely (strictly scoped to test records to preserve real user content)
+  const testDebateCondition = {
+    OR: [
+      { title: { startsWith: 'Test Debate' } },
+      { title: { startsWith: 'TEST_' } },
+      { title: { startsWith: 'Founder Free Post: The Future of IndoBid' } },
+      { title: { startsWith: 'Admin Console: Official Announcement' } },
+      { title: { startsWith: 'Original Title Before Author Edit' } },
+      { title: { startsWith: 'Debate to be hidden' } },
+      { title: { startsWith: '🚀 Welcome to IndoBid' } },
+      { authorUsername: { startsWith: 'test' } },
+      { authorUsername: { startsWith: 'p17_' } },
+      { authorUsername: { startsWith: 'canonical_' } },
+      { authorUsername: { startsWith: 'ghost_' } },
+      { authorUsername: { startsWith: 'unicode_' } },
+      { authorUsername: { in: ['debater_p17a', 'debater_p17b', 'ghost_writer'] } },
+    ],
+  };
+
+  const testUserCondition = {
+    OR: [
+      { email: { endsWith: '@example.com' } },
+      { email: { startsWith: 'test' } },
+      { email: { startsWith: 'p17_' } },
+      { email: { startsWith: 'canonical_' } },
+      { email: { startsWith: 'ghost_' } },
+      { email: { startsWith: 'unicode_' } },
+      { email: { startsWith: 'us_' } },
+      { email: { startsWith: 'gb_' } },
+      { email: { startsWith: 'consumer_' } },
+      { email: { startsWith: 'regular_' } },
+      { email: { startsWith: 'spoof_' } },
+      { email: { startsWith: 'admin_test_' } },
+      { email: { startsWith: 'resetuser_' } },
+      { email: { startsWith: 'direct_otp_' } },
+      { email: { startsWith: 'unverified_' } },
+      { username: { startsWith: 'test' } },
+      { username: { startsWith: 'p17_' } },
+    ],
+  };
+
+  await safeExecute(() => prisma.debateActivityEvent.deleteMany({ where: { debate: testDebateCondition } }));
+  await safeExecute(() => prisma.debateReport.deleteMany({ where: { debate: testDebateCondition } }));
+  await safeExecute(() => prisma.debateBookmark.deleteMany({ where: { debate: testDebateCondition } }));
+  await safeExecute(() => prisma.debateLike.deleteMany({ where: { debate: testDebateCondition } }));
+  await safeExecute(() => prisma.creatorEarningsLedger.deleteMany({ where: { debate: testDebateCondition } }));
+  await safeExecute(() => prisma.payment.deleteMany({ where: { OR: [{ debate: testDebateCondition }, { providerPaymentId: { startsWith: 'test_' } }] } }));
+  await safeExecute(() => prisma.contribution.deleteMany({ where: { debate: testDebateCondition } }));
+  await safeExecute(() => prisma.debate.deleteMany({ where: testDebateCondition }));
+  await safeExecute(() => prisma.notification.deleteMany({ where: { user: testUserCondition } }));
+  await safeExecute(() => prisma.directMessage.deleteMany({ where: { sender: testUserCondition } }));
+  await safeExecute(() => prisma.follow.deleteMany({ where: { follower: testUserCondition } }));
+  await safeExecute(() => prisma.usernameChangeHistory.deleteMany({ where: { user: testUserCondition } }));
   await safeExecute(() => prisma.category.deleteMany({ where: { slug: { in: ['tech', 'finance', 'cooking', 'test_category'] } } }));
-  await safeExecute(() =>
-    prisma.user.deleteMany({
-      where: {
-        email: { not: ADMIN_EMAIL },
-      },
-    })
-  );
+  await safeExecute(() => prisma.user.deleteMany({ where: testUserCondition }));
 
   await safeExecute(() =>
     prisma.user.upsert({
@@ -2023,7 +2085,7 @@ async function runTestSuite() {
   });
   const authHideRes = await deleteDebateRoute(authHideReq, { params: Promise.resolve({ id: debateToHide.id }) });
   const authHideData = await authHideRes.json();
-  const hiddenDebateInDb = await prisma.debate.findUnique({ where: { id: debateToHide.id } });
+  const hiddenDebateInDb = await safeDb(() => prisma.debate.findUnique({ where: { id: debateToHide.id } }));
 
   assert(
     unauthHideRes.status === 403 &&
@@ -4035,6 +4097,19 @@ async function runTestSuite() {
   // -------------------------------------------------------------------------------------------------
   console.log('\n--- PART 16: GLOBAL IDENTITY, PROFILE CUSTOMIZATION, GHOST MODE & SOCIAL PRIVACY (Tests 228 - 242) ---');
 
+  // Idempotent pre-cleanup for Part 16 test users
+  const part16Emails = ['canonical_test@indobid.lol', 'username_limiter@indobid.lol', 'ghost_tester@indobid.lol', 'private_user@indobid.lol'];
+  const existingP16Users = await prisma.user.findMany({ where: { email: { in: part16Emails } }, select: { id: true } });
+  const existingP16Ids = existingP16Users.map((u) => u.id);
+  if (existingP16Ids.length > 0) {
+    await prisma.follow.deleteMany({ where: { OR: [{ followerId: { in: existingP16Ids } }, { followingId: { in: existingP16Ids } }] } });
+    await prisma.usernameChangeHistory.deleteMany({ where: { userId: { in: existingP16Ids } } });
+    await prisma.contribution.deleteMany({ where: { authorId: { in: existingP16Ids } } });
+    await prisma.debate.deleteMany({ where: { authorId: { in: existingP16Ids } } });
+    await prisma.notification.deleteMany({ where: { OR: [{ userId: { in: existingP16Ids } }, { actorId: { in: existingP16Ids } }] } });
+    await prisma.user.deleteMany({ where: { id: { in: existingP16Ids } } });
+  }
+
   // Test 228: Canonical Identity - Creating debate with initial display name
   const canonicalUser = await prisma.user.create({
     data: {
@@ -4330,7 +4405,20 @@ async function runTestSuite() {
     create: { name: 'Cooking P17', slug: 'cooking-part17', icon: 'Utensils', sortOrder: 103 },
   });
 
-  // 2. Setup Part 17 Test Users
+  // 2. Setup Part 17 Test Users (with idempotent pre-cleanup)
+  const part17Emails = ['p17_author_a@test.lol', 'p17_author_b@test.lol', 'p17_ghost@test.lol', 'p17_consumer@test.lol', 'p17_cold@test.lol'];
+  const existingP17Users = await prisma.user.findMany({ where: { email: { in: part17Emails } }, select: { id: true } });
+  const existingP17Ids = existingP17Users.map((u) => u.id);
+  if (existingP17Ids.length > 0) {
+    await prisma.debateLike.deleteMany({ where: { userId: { in: existingP17Ids } } });
+    await prisma.debateBookmark.deleteMany({ where: { userId: { in: existingP17Ids } } });
+    await prisma.follow.deleteMany({ where: { OR: [{ followerId: { in: existingP17Ids } }, { followingId: { in: existingP17Ids } }] } });
+    await prisma.payment.deleteMany({ where: { debate: { authorId: { in: existingP17Ids } } } });
+    await prisma.contribution.deleteMany({ where: { authorId: { in: existingP17Ids } } });
+    await prisma.debate.deleteMany({ where: { authorId: { in: existingP17Ids } } });
+    await prisma.user.deleteMany({ where: { id: { in: existingP17Ids } } });
+  }
+
   const p17AuthorA = await prisma.user.create({
     data: {
       email: 'p17_author_a@test.lol',
@@ -4900,6 +4988,1165 @@ async function runTestSuite() {
     'Test 265: Feed pagination smoothly traverses database results without duplicates across page boundaries'
   );
 
+  // =========================================================================
+  // PART 18 — GOOGLE OAUTH AUTHENTICATION SUITE
+  // =========================================================================
+  const originalOAuthClientId = (env as any).GOOGLE_CLIENT_ID;
+  const originalOAuthClientSecret = (env as any).GOOGLE_CLIENT_SECRET;
+  (env as any).GOOGLE_CLIENT_ID = 'test-google-client-id-12345.apps.googleusercontent.com';
+  (env as any).GOOGLE_CLIENT_SECRET = 'test-google-client-secret-abcde';
+
+  let createdGoogleOAuthUser: any = null;
+
+  try {
+    // Test 266: Resolve localhost callback URI
+    const localReq = new NextRequest('http://localhost:3000/api/auth/google', {
+      headers: { host: 'localhost:3000' },
+    });
+    const localUri = resolveGoogleRedirectUri(localReq);
+    assert(
+      localUri === 'http://localhost:3000/api/auth/callback/google',
+      'Test 266: resolveGoogleRedirectUri resolves localhost:3000 callback URI'
+    );
+
+    // Test 267: Resolve production indobid.lol callback URI
+    const prodReq = new NextRequest('https://indobid.lol/api/auth/google', {
+      headers: {
+        'x-forwarded-host': 'indobid.lol',
+        'x-forwarded-proto': 'https',
+      },
+    });
+    const prodUri = resolveGoogleRedirectUri(prodReq);
+    assert(
+      prodUri === 'https://indobid.lol/api/auth/callback/google',
+      'Test 267: resolveGoogleRedirectUri resolves production indobid.lol callback URI'
+    );
+
+    // Test 268: GET /api/auth/google redirects to Google accounts authorization URL
+    const authReq = new NextRequest('http://localhost:3000/api/auth/google');
+    const authRes = await getGoogleAuthRoute(authReq);
+    const redirectLocation = authRes.headers.get('location');
+    assert(
+      redirectLocation !== null && redirectLocation.startsWith('https://accounts.google.com/o/oauth2/v2/auth'),
+      'Test 268: GET /api/auth/google redirects to Google accounts authorization URL'
+    );
+
+    // Test 269: Auth URL query parameters
+    const authUrl = new URL(redirectLocation!);
+    assert(
+      authUrl.searchParams.get('client_id') === 'test-google-client-id-12345.apps.googleusercontent.com' &&
+        authUrl.searchParams.get('redirect_uri') === 'http://localhost:3000/api/auth/callback/google' &&
+        authUrl.searchParams.get('scope') === 'openid email profile' &&
+        authUrl.searchParams.get('response_type') === 'code' &&
+        Boolean(authUrl.searchParams.get('state')),
+      'Test 269: Google auth URL includes valid client_id, redirect_uri, scope, response_type, and state'
+    );
+
+    // Test 270: Secure state and redirect cookies
+    const stateCookie = authRes.cookies.get(GOOGLE_OAUTH_STATE_COOKIE);
+    const redirectCookie = authRes.cookies.get(GOOGLE_OAUTH_REDIRECT_URI_COOKIE);
+    assert(
+      stateCookie !== undefined &&
+        stateCookie.value === authUrl.searchParams.get('state') &&
+        redirectCookie !== undefined &&
+        redirectCookie.value === 'http://localhost:3000/api/auth/callback/google',
+      'Test 270: GET /api/auth/google sets secure state and redirect_uri HTTP-only cookies'
+    );
+
+    // Test 271: Target destination preservation in cookie
+    const authWithDestReq = new NextRequest('http://localhost:3000/api/auth/google?redirect=/debate/special-topic');
+    const authWithDestRes = await getGoogleAuthRoute(authWithDestReq);
+    const destCookie = authWithDestRes.cookies.get(GOOGLE_OAUTH_DESTINATION_COOKIE);
+    assert(
+      destCookie !== undefined && destCookie.value === '/debate/special-topic',
+      'Test 271: GET /api/auth/google stores valid destination redirect in cookie'
+    );
+
+    // Test 272: Google provider error handling (access_denied)
+    const errorReq = new NextRequest('http://localhost:3000/api/auth/callback/google?error=access_denied');
+    const errorRes = await getGoogleCallbackRoute(errorReq);
+    assert(
+      errorRes.headers.get('location')?.includes('error=google_oauth_denied') === true,
+      'Test 272: Callback redirects to landing page with google_oauth_denied when user cancels'
+    );
+
+    // Test 273: State mismatch handling
+    const mismatchReq = new NextRequest('http://localhost:3000/api/auth/callback/google?state=tampered&code=authcode123');
+    mismatchReq.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, 'original_state_value');
+    const mismatchRes = await getGoogleCallbackRoute(mismatchReq);
+    assert(
+      mismatchRes.headers.get('location')?.includes('error=google_oauth_state_mismatch') === true,
+      'Test 273: Callback rejects request when state token is mismatched or absent'
+    );
+
+    // Test 274: Missing authorization code handling
+    const validOAuthState = 'secure_random_state_token_123';
+    const missingCodeReq = new NextRequest(`http://localhost:3000/api/auth/callback/google?state=${validOAuthState}`);
+    missingCodeReq.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, validOAuthState);
+    const missingCodeRes = await getGoogleCallbackRoute(missingCodeReq);
+    assert(
+      missingCodeRes.headers.get('location')?.includes('error=google_oauth_missing_code') === true,
+      'Test 274: Callback rejects request when authorization code is missing'
+    );
+
+    // Test 275: Successful Google user login & automated provisioning
+    const testGoogleEmail = `test_google_user_${Date.now()}@gmail.com`;
+    const testGoogleSub = `google_sub_${Date.now()}`;
+    const originalFetch = global.fetch;
+
+    global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input.toString();
+      if (urlStr.includes('oauth2.googleapis.com/token')) {
+        return new Response(
+          JSON.stringify({
+            access_token: 'mock_access_token_xyz',
+            id_token: 'mock_id_token_xyz',
+            token_type: 'Bearer',
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (urlStr.includes('openidconnect.googleapis.com/v1/userinfo')) {
+        return new Response(
+          JSON.stringify({
+            sub: testGoogleSub,
+            email: testGoogleEmail,
+            email_verified: true,
+            name: 'Google Test User',
+            picture: 'https://lh3.googleusercontent.com/a/test-avatar',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetch(input, init);
+    };
+
+    const successReq = new NextRequest(
+      `http://localhost:3000/api/auth/callback/google?code=valid_test_code&state=${validOAuthState}`
+    );
+    successReq.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, validOAuthState);
+    successReq.cookies.set(GOOGLE_OAUTH_REDIRECT_URI_COOKIE, 'http://localhost:3000/api/auth/callback/google');
+    successReq.cookies.set(GOOGLE_OAUTH_DESTINATION_COOKIE, '/debate/test-target-post');
+
+    const successRes = await getGoogleCallbackRoute(successReq);
+    global.fetch = originalFetch;
+
+    const successLocation = successRes.headers.get('location');
+    assert(
+      successLocation !== null && new URL(successLocation).pathname === '/debate/test-target-post',
+      'Test 275: Callback redirects authenticated user to target destination from cookie'
+    );
+
+    // Test 276: Session cookie setting
+    const sessionCookie = successRes.cookies.get(AUTH_COOKIE_NAME);
+    assert(
+      sessionCookie !== undefined && Boolean(sessionCookie.value),
+      'Test 276: Callback sets indobid_session authentication cookie'
+    );
+
+    // Test 277: Session token verification
+    const verifiedSession = sessionService.verifySessionToken(sessionCookie!.value);
+    assert(
+      verifiedSession !== null && verifiedSession.email === testGoogleEmail,
+      'Test 277: indobid_session token verifies and contains authenticated user email'
+    );
+
+    // Test 278: Database user provisioning
+    createdGoogleOAuthUser = await prisma.user.findUnique({
+      where: { email: testGoogleEmail },
+    });
+    assert(
+      createdGoogleOAuthUser !== null &&
+        createdGoogleOAuthUser.isVerified === true &&
+        createdGoogleOAuthUser.emailVerifiedAt !== null &&
+        createdGoogleOAuthUser.avatarUrl === 'https://lh3.googleusercontent.com/a/test-avatar' &&
+        createdGoogleOAuthUser.displayName === 'Google Test User',
+      'Test 278: Callback provisions user in DB with verified email, display name, and avatar'
+    );
+
+    // Test 279: Founder Google login assigns Founder role authoritatively
+    global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const urlStr = typeof input === 'string' ? input : input.toString();
+      if (urlStr.includes('oauth2.googleapis.com/token')) {
+        return new Response(
+          JSON.stringify({
+            access_token: 'mock_founder_access_token',
+            id_token: 'mock_founder_id_token',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (urlStr.includes('openidconnect.googleapis.com/v1/userinfo')) {
+        return new Response(
+          JSON.stringify({
+            sub: 'google_founder_sub',
+            email: ADMIN_EMAIL,
+            email_verified: true,
+            name: 'Vishal Kumar',
+            picture: 'https://lh3.googleusercontent.com/a/founder-avatar',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return originalFetch(input, init);
+    };
+
+    const founderReq = new NextRequest(
+      `http://localhost:3000/api/auth/callback/google?code=founder_code&state=${validOAuthState}`
+    );
+    founderReq.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, validOAuthState);
+    founderReq.cookies.set(GOOGLE_OAUTH_REDIRECT_URI_COOKIE, 'http://localhost:3000/api/auth/callback/google');
+
+    const founderRes = await getGoogleCallbackRoute(founderReq);
+    global.fetch = originalFetch;
+
+    const founderSessionCookie = founderRes.cookies.get(AUTH_COOKIE_NAME);
+    const verifiedFounderSession = sessionService.verifySessionToken(founderSessionCookie!.value);
+    assert(
+      verifiedFounderSession !== null &&
+        verifiedFounderSession.role === 'founder' &&
+        isFounderCheck(verifiedFounderSession),
+      'Test 279: Founder Google login automatically bestows authoritative Founder role'
+    );
+  } finally {
+    (env as any).GOOGLE_CLIENT_ID = originalOAuthClientId;
+    (env as any).GOOGLE_CLIENT_SECRET = originalOAuthClientSecret;
+    if (createdGoogleOAuthUser) {
+      await prisma.user.deleteMany({ where: { id: createdGoogleOAuthUser.id } });
+    }
+  }
+
+  // ==========================================
+  // PART 18: PERMANENT POST PERSISTENCE & SYSTEM AVAILABILITY
+  // ==========================================
+  console.log('\n--- PART 18: Permanent Post Persistence & System Availability ---');
+
+  // Create dedicated persistence test author
+  const p18Author = await prisma.user.create({
+    data: {
+      email: 'test_p18_persistence_author@example.com',
+      username: 'test_persist_author',
+      displayName: 'Persistence Test Author',
+      emailVerifiedAt: new Date(),
+      role: 'user',
+    },
+  });
+  const p18AuthorToken = sessionService.createSessionToken({
+    userId: p18Author.id,
+    username: p18Author.username!,
+    displayName: p18Author.displayName || 'Persistence Test Author',
+    email: p18Author.email,
+    role: p18Author.role,
+  });
+
+  // Ensure category exists
+  let p18Category = await prisma.category.findFirst({ where: { slug: 'tech' } });
+  if (!p18Category) {
+    p18Category = await prisma.category.create({
+      data: { name: 'Technology', slug: 'tech', icon: 'Cpu', sortOrder: 1 },
+    });
+  }
+
+  // Test 280: Post creation and verification in PostgreSQL
+  const p18Debate = await prisma.debate.create({
+    data: {
+      authorId: p18Author.id,
+      authorUsername: p18Author.username!,
+      authorDisplayName: p18Author.displayName!,
+      title: 'Persistent Immutable Opinion on Distributed Architecture 2026',
+      content: 'This post must persist permanently in PostgreSQL without disappearing.',
+      categoryId: p18Category.id,
+      status: 'active',
+      totalVerifiedContribution: 0,
+      originalContribution: 0,
+      trendingScore: 100,
+    },
+  });
+  await prisma.contribution.create({
+    data: {
+      debateId: p18Debate.id,
+      authorId: p18Author.id,
+      authorUsername: p18Author.username!,
+      authorDisplayName: p18Author.displayName!,
+      content: p18Debate.content,
+      amount: 0,
+      sequence: 1,
+      status: 'verified',
+    },
+  });
+  const p18DbRecord = await prisma.debate.findUnique({ where: { id: p18Debate.id } });
+  assert(
+    p18DbRecord !== null && p18DbRecord.status === 'active' && p18DbRecord.title === p18Debate.title,
+    'Test 280: Post created and immediately verified in PostgreSQL database'
+  );
+
+  // Test 281: Immediate retrieval via getDebateById -> 200 OK, full content returned
+  const p18RetrievedImmediate = await getDebateById(p18Debate.id);
+  assert(
+    p18RetrievedImmediate !== null &&
+      p18RetrievedImmediate.id === p18Debate.id &&
+      p18RetrievedImmediate.content === p18Debate.content &&
+      p18RetrievedImmediate.authorUsername === p18Author.username,
+    'Test 281: Immediate retrieval via getDebateById returns full content'
+  );
+
+  // Test 282: Post age > 2 hours (simulate via createdAt = now - 2.5 hours) -> still in DB, still returned by getDebateById
+  const twoAndHalfHoursAgo = new Date(Date.now() - 2.5 * 60 * 60 * 1000);
+  await prisma.debate.update({
+    where: { id: p18Debate.id },
+    data: { createdAt: twoAndHalfHoursAgo },
+  });
+  const p18PostAged2hDb = await prisma.debate.findUnique({ where: { id: p18Debate.id } });
+  const p18PostAged2hApi = await getDebateById(p18Debate.id);
+  assert(
+    p18PostAged2hDb !== null &&
+      p18PostAged2hDb.createdAt.getTime() === twoAndHalfHoursAgo.getTime() &&
+      p18PostAged2hApi !== null &&
+      p18PostAged2hApi.id === p18Debate.id,
+    'Test 282: Post aged > 2 hours persists in DB and is returned by getDebateById'
+  );
+
+  // Test 283: Post age > 2 hours -> returned by feed query (getDebates)
+  const p18Feed2h = await debateService.getDebates({ category: p18Category.slug, sort: 'new' });
+  const inFeed2h = p18Feed2h.items.some((item) => item.id === p18Debate.id);
+  assert(
+    inFeed2h,
+    'Test 283: Post aged > 2 hours is returned in feed query (getDebates)'
+  );
+
+  // Test 284: Post age > 24 hours (simulate via createdAt = now - 25 hours) -> still returned by feed query, detail query, user profile query
+  const twentyFiveHoursAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  await prisma.debate.update({
+    where: { id: p18Debate.id },
+    data: { createdAt: twentyFiveHoursAgo },
+  });
+  const p18Feed24h = await debateService.getDebates({ category: p18Category.slug, sort: 'new' });
+  const inFeed24h = p18Feed24h.items.some((item) => item.id === p18Debate.id);
+  const p18Detail24h = await getDebateById(p18Debate.id);
+  const profileReq24h = new NextRequest(`http://localhost:3000/api/profile/${p18Author.username}`);
+  const profileRes24h = await getProfileRoute(profileReq24h, { params: Promise.resolve({ username: p18Author.username! }) });
+  const profileData24h = await profileRes24h.json();
+  const inProfile24h = profileData24h.profile?.debates?.some((d: any) => d.id === p18Debate.id);
+  assert(
+    inFeed24h && p18Detail24h !== null && inProfile24h,
+    'Test 284: Post aged > 24 hours persists across feed, detail query, and profile query'
+  );
+
+  // Test 285: Post age > 7 days (simulate via createdAt = now - 8 days) -> still returned by feed, detail, and profile
+  const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  await prisma.debate.update({
+    where: { id: p18Debate.id },
+    data: { createdAt: eightDaysAgo },
+  });
+  const p18Feed7d = await debateService.getDebates({ category: p18Category.slug, sort: 'new' });
+  const inFeed7d = p18Feed7d.items.some((item) => item.id === p18Debate.id);
+  const p18Detail7d = await getDebateById(p18Debate.id);
+  const profileRes7d = await getProfileRoute(profileReq24h, { params: Promise.resolve({ username: p18Author.username! }) });
+  const profileData7d = await profileRes7d.json();
+  const inProfile7d = profileData7d.profile?.debates?.some((d: any) => d.id === p18Debate.id);
+  assert(
+    inFeed7d && p18Detail7d !== null && inProfile7d,
+    'Test 285: Post aged > 7 days persists across feed, detail query, and profile query'
+  );
+
+  // Test 286: Post age > 30 days (simulate via createdAt = now - 35 days) -> still returned by feed, detail, and profile
+  const thirtyFiveDaysAgo = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000);
+  await prisma.debate.update({
+    where: { id: p18Debate.id },
+    data: { createdAt: thirtyFiveDaysAgo },
+  });
+  const p18Feed30d = await debateService.getDebates({ category: p18Category.slug, sort: 'new' });
+  const inFeed30d = p18Feed30d.items.some((item) => item.id === p18Debate.id);
+  const p18Detail30d = await getDebateById(p18Debate.id);
+  const profileRes30d = await getProfileRoute(profileReq24h, { params: Promise.resolve({ username: p18Author.username! }) });
+  const profileData30d = await profileRes30d.json();
+  const inProfile30d = profileData30d.profile?.debates?.some((d: any) => d.id === p18Debate.id);
+  assert(
+    inFeed30d && p18Detail30d !== null && inProfile30d,
+    'Test 286: Post aged > 30 days persists across feed, detail query, and profile query'
+  );
+
+  // Test 287: Search query finds post regardless of age
+  const p18Search = await debateService.getDebates({ search: 'Distributed Architecture 2026' });
+  const foundInSearch = p18Search.items.some((item) => item.id === p18Debate.id);
+  assert(
+    foundInSearch,
+    'Test 287: Search query finds post regardless of age'
+  );
+
+  // Test 288: Post ONLY disappears if explicitly deleted by author or admin (DELETE /api/debates/[id])
+  const deleteReq = new NextRequest(`http://localhost:3000/api/debates/${p18Debate.id}`, {
+    method: 'DELETE',
+  });
+  deleteReq.cookies.set(AUTH_COOKIE_NAME, p18AuthorToken);
+  const deleteRes = await deleteDebateRoute(deleteReq, { params: Promise.resolve({ id: p18Debate.id }) });
+  const deleteData = await deleteRes.json();
+  const debateAfterDelete = await getDebateById(p18Debate.id);
+  const dbAfterDelete = await prisma.debate.findUnique({ where: { id: p18Debate.id } });
+  assert(
+    deleteRes.status === 200 &&
+      deleteData.success === true &&
+      debateAfterDelete === null &&
+      dbAfterDelete !== null &&
+      dbAfterDelete.status === 'hidden',
+    'Test 288: Post disappears from feed/detail ONLY when author/admin explicitly calls DELETE /api/debates/[id]'
+  );
+
+  // Test 289: /api/health endpoint returns 200 OK with status: "ok", service: "indobid", database: "connected"
+  const healthStart = Date.now();
+  const p18HealthRes = await getHealthRoute();
+  const healthDuration = Date.now() - healthStart;
+  const p18HealthData = await p18HealthRes.json();
+  assert(
+    p18HealthRes.status === 200 &&
+      p18HealthData.status === 'ok' &&
+      p18HealthData.service === 'indobid' &&
+      p18HealthData.database === 'connected',
+    'Test 289: /api/health returns 200 OK with database: "connected"'
+  );
+
+  // Test 290: /api/health responds quickly (< 500ms) and exposes no secrets
+  const healthDataStr = JSON.stringify(p18HealthData);
+  const exposesSecrets =
+    healthDataStr.includes('postgres') ||
+    healthDataStr.includes('DATABASE_URL') ||
+    healthDataStr.includes('password') ||
+    healthDataStr.includes('secret') ||
+    healthDataStr.includes('render.com');
+  assert(
+    healthDuration < 3000 && !exposesSecrets,
+    'Test 290: /api/health responds quickly and exposes no secrets'
+  );
+
+  // Test 291: /api/health supports HEAD method returning 200 OK
+  const headRes = await headHealthRoute();
+  assert(
+    headRes.status === 200,
+    'Test 291: /api/health HEAD method returns 200 OK for lightweight load balancer pings'
+  );
+
+  // Test 292: Prisma safety check throws SAFETY_VIOLATION error if unconditional deleteMany is attempted
+  let safetyViolationTriggered = false;
+  try {
+    await (prisma.debate as any).deleteMany({});
+  } catch (err: any) {
+    if (err.message && err.message.includes('SAFETY_VIOLATION')) {
+      safetyViolationTriggered = true;
+    }
+  }
+  assert(
+    safetyViolationTriggered,
+    'Test 292: Prisma safety extension strictly forbids unconditional deleteMany on debate table'
+  );
+
+  // Cleanup Part 18 test records
+  await prisma.contribution.deleteMany({ where: { debateId: p18Debate.id } });
+  await prisma.debate.deleteMany({ where: { id: p18Debate.id } });
+  await prisma.user.deleteMany({ where: { id: p18Author.id } });
+
+  // ==========================================
+  // PART 19: ADMIN POST DELETION & RANKDOWN RIGHTS
+  // ==========================================
+  console.log('\n--- PART 19: Admin Post Deletion & Rankdown Rights ---');
+
+  // Setup test author and test debates for Part 19
+  const p19Author = await prisma.user.create({
+    data: {
+      email: 'test_p19_author@example.com',
+      username: 'test_p19_author',
+      displayName: 'P19 Test Author',
+      emailVerifiedAt: new Date(),
+      role: 'user',
+    },
+  });
+
+  const p19DebateA = await prisma.debate.create({
+    data: {
+      authorId: p19Author.id,
+      authorUsername: p19Author.username!,
+      authorDisplayName: p19Author.displayName!,
+      title: 'Debate A: High Potential Opinion to be Ranked Down',
+      content: 'This post is initially trending high but violates editorial tone.',
+      categoryId: p18Category.id,
+      status: 'active',
+      totalVerifiedContribution: 2000,
+      originalContribution: 1000,
+      trendingScore: 120.0,
+    },
+  });
+
+  const p19DebateB = await prisma.debate.create({
+    data: {
+      authorId: p19Author.id,
+      authorUsername: p19Author.username!,
+      authorDisplayName: p19Author.displayName!,
+      title: 'Debate B: Organic Standard Quality Opinion',
+      content: 'Standard post with medium trending score.',
+      categoryId: p18Category.id,
+      status: 'active',
+      totalVerifiedContribution: 1000,
+      originalContribution: 1000,
+      trendingScore: 80.0,
+    },
+  });
+
+  const p19DebateToDelete = await prisma.debate.create({
+    data: {
+      authorId: p19Author.id,
+      authorUsername: p19Author.username!,
+      authorDisplayName: p19Author.displayName!,
+      title: 'Debate to be Deleted by Admin via Query Param',
+      content: 'This spam or malicious post must be deleted by admin.',
+      categoryId: p18Category.id,
+      status: 'active',
+      totalVerifiedContribution: 0,
+      originalContribution: 0,
+      trendingScore: 10.0,
+    },
+  });
+  await prisma.contribution.create({
+    data: {
+      debateId: p19DebateToDelete.id,
+      authorId: p19Author.id,
+      authorUsername: p19Author.username!,
+      authorDisplayName: p19Author.displayName!,
+      content: 'First spam argument',
+      amount: 0,
+      sequence: 1,
+      status: 'verified',
+    },
+  });
+
+  const p19DebateToDeleteById = await prisma.debate.create({
+    data: {
+      authorId: p19Author.id,
+      authorUsername: p19Author.username!,
+      authorDisplayName: p19Author.displayName!,
+      title: 'Debate to be Deleted by Admin via Path Param',
+      content: 'This debate will be deleted via DELETE /api/admin/debates/[id].',
+      categoryId: p18Category.id,
+      status: 'active',
+      totalVerifiedContribution: 0,
+      originalContribution: 0,
+      trendingScore: 10.0,
+    },
+  });
+
+  // Test 293: Unauthorized request to DELETE /api/admin/debates is rejected with 401
+  const p19UnauthDeleteReq = new NextRequest('http://localhost:3000/api/admin/debates?id=' + p19DebateToDelete.id, {
+    method: 'DELETE',
+  });
+  const p19UnauthDeleteRes = await deleteAdminDebateRoute(p19UnauthDeleteReq);
+  assert(
+    p19UnauthDeleteRes.status === 401,
+    'Test 293: Unauthorized request to DELETE /api/admin/debates is rejected with 401'
+  );
+
+  // Test 294: Unauthorized request to PATCH /api/admin/debates (rankdown) is rejected with 401
+  const p19UnauthPatchReq = new NextRequest('http://localhost:3000/api/admin/debates', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: p19DebateA.id, action: 'rankdown', penalty: 50 }),
+  });
+  const p19UnauthPatchRes = await patchAdminDebateRoute(p19UnauthPatchReq);
+  assert(
+    p19UnauthPatchRes.status === 401,
+    'Test 294: Unauthorized request to rank down post is rejected with 401'
+  );
+
+  // Test 295: Admin ranks down a post by 50 points via PATCH /api/admin/debates
+  const adminRankDownReq = new NextRequest('http://localhost:3000/api/admin/debates', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-key': ADMIN_SECRET_KEY,
+    },
+    body: JSON.stringify({ id: p19DebateA.id, action: 'rankdown', penalty: 50 }),
+  });
+  const adminRankDownRes = await patchAdminDebateRoute(adminRankDownReq);
+  const rankDownData = await adminRankDownRes.json();
+  const dbDebateAAfterRankDown = await prisma.debate.findUnique({ where: { id: p19DebateA.id } });
+  assert(
+    adminRankDownRes.status === 200 &&
+      rankDownData.success === true &&
+      dbDebateAAfterRankDown !== null &&
+      dbDebateAAfterRankDown.trendingScore === 70.0,
+    'Test 295: Admin ranks down post by 50 points via PATCH /api/admin/debates and score updates in DB'
+  );
+
+  // Test 296: Ranked down post is demoted below Debate B in feed
+  const feedAfterRankDown = await debateService.getDebates({ sort: 'trending', limit: 50 });
+  const indexA = feedAfterRankDown.items.findIndex((item) => item.id === p19DebateA.id);
+  const indexB = feedAfterRankDown.items.findIndex((item) => item.id === p19DebateB.id);
+  assert(
+    indexB !== -1 && indexA !== -1 && indexB < indexA,
+    'Test 296: Ranked down post is demoted below Debate B in trending feed'
+  );
+
+  // Test 297: Admin resets debate rank via PATCH /api/admin/debates action: 'reset_rank'
+  const adminResetRankReq = new NextRequest('http://localhost:3000/api/admin/debates', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-key': ADMIN_SECRET_KEY,
+    },
+    body: JSON.stringify({ id: p19DebateA.id, action: 'reset_rank' }),
+  });
+  const adminResetRankRes = await patchAdminDebateRoute(adminResetRankReq);
+  const resetRankData = await adminResetRankRes.json();
+  const dbDebateAAfterReset = await prisma.debate.findUnique({ where: { id: p19DebateA.id } });
+  assert(
+    adminResetRankRes.status === 200 &&
+      resetRankData.success === true &&
+      dbDebateAAfterReset !== null &&
+      dbDebateAAfterReset.reportCount === 0 &&
+      dbDebateAAfterReset.trendingScore > 70.0,
+    'Test 297: Admin resets debate rank and natural score is restored'
+  );
+
+  // Test 298: Admin permanently deletes post via DELETE /api/admin/debates?id=...
+  const adminDeleteReq = new NextRequest(`http://localhost:3000/api/admin/debates?id=${p19DebateToDelete.id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-key': ADMIN_SECRET_KEY },
+  });
+  const adminDeleteRes = await deleteAdminDebateRoute(adminDeleteReq);
+  const adminDeleteData = await adminDeleteRes.json();
+  const postInDbAfterDelete = await prisma.debate.findUnique({ where: { id: p19DebateToDelete.id } });
+  const postInApiAfterDelete = await getDebateById(p19DebateToDelete.id);
+  const contribInDbAfterDelete = await prisma.contribution.findMany({ where: { debateId: p19DebateToDelete.id } });
+  assert(
+    adminDeleteRes.status === 200 &&
+      adminDeleteData.success === true &&
+      postInDbAfterDelete === null &&
+      postInApiAfterDelete === null &&
+      contribInDbAfterDelete.length === 0,
+    'Test 298: Admin permanently deletes post and contributions via DELETE /api/admin/debates'
+  );
+
+  // Test 299: Admin deletes post via DELETE /api/admin/debates/[id] route
+  const adminDeleteByIdReq = new NextRequest(`http://localhost:3000/api/admin/debates/${p19DebateToDeleteById.id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-key': ADMIN_SECRET_KEY },
+  });
+  const adminDeleteByIdRes = await deleteAdminDebateByIdRoute(adminDeleteByIdReq, {
+    params: Promise.resolve({ id: p19DebateToDeleteById.id }),
+  });
+  const adminDeleteByIdData = await adminDeleteByIdRes.json();
+  const postInDbAfterDeleteById = await prisma.debate.findUnique({ where: { id: p19DebateToDeleteById.id } });
+  assert(
+    adminDeleteByIdRes.status === 200 &&
+      adminDeleteByIdData.success === true &&
+      postInDbAfterDeleteById === null,
+    'Test 299: Admin deletes post via DELETE /api/admin/debates/[id] route'
+  );
+
+  // Test 300: Admin ranks down post by custom penalty via PATCH /api/admin/debates/[id]
+  const adminRankDownByIdReq = new NextRequest(`http://localhost:3000/api/admin/debates/${p19DebateB.id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-admin-key': ADMIN_SECRET_KEY,
+    },
+    body: JSON.stringify({ action: 'rankdown', penalty: 100 }),
+  });
+  const adminRankDownByIdRes = await patchAdminDebateByIdRoute(adminRankDownByIdReq, {
+    params: Promise.resolve({ id: p19DebateB.id }),
+  });
+  const rankDownByIdData = await adminRankDownByIdRes.json();
+  const dbDebateBAfterRankDown = await prisma.debate.findUnique({ where: { id: p19DebateB.id } });
+  assert(
+    adminRankDownByIdRes.status === 200 &&
+      rankDownByIdData.success === true &&
+      dbDebateBAfterRankDown !== null &&
+      dbDebateBAfterRankDown.trendingScore === -20.0,
+    'Test 300: Admin ranks down post by custom penalty via PATCH /api/admin/debates/[id]'
+  );
+
+  // Cleanup Part 19
+  await prisma.debate.deleteMany({ where: { id: { in: [p19DebateA.id, p19DebateB.id] } } });
+  await prisma.user.deleteMany({ where: { id: p19Author.id } });
+
+  // =========================================================================
+  // PART 20: INDOBID DAILY — AUTOMATED WORLD TREND ENGINE (Tests 301-322)
+  // =========================================================================
+  console.log('\n--- Part 20: IndoBid Daily Trend Engine Tests ---');
+
+  // Test 301: Public RSS/Atom feed parser extracts items cleanly
+  const sampleRssXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sample Tech News</title>
+    <link>https://technews.example.com</link>
+    <item>
+      <title><![CDATA[ISRO Launches Advanced Navigation Satellite NVS-02]]></title>
+      <link>https://technews.example.com/articles/isro-launch-2026?utm_source=rss</link>
+      <description>India's space agency successfully deployed the next-generation navigation constellation satellite into orbit.</description>
+      <pubDate>Fri, 05 Sep 2026 01:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Global Semiconductor Foundry Alliance Formed in Bengaluru</title>
+      <link>https://technews.example.com/articles/foundry-alliance-2026</link>
+      <description>Leading chip manufacturers unite to expand 2nm chip fabrication capabilities.</description>
+      <pubDate>Fri, 05 Sep 2026 01:30:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>`;
+  const mockSource: NewsSource = {
+    id: 'test-rss',
+    name: 'Sample Tech News',
+    url: 'https://technews.example.com/rss',
+    category: 'TECHNOLOGY',
+    region: 'INDIA',
+    enabled: true,
+  };
+  const parsedItems = parseFeedXml(sampleRssXml, mockSource);
+  assert(
+    parsedItems.length === 2 &&
+      parsedItems[0].title === 'ISRO Launches Advanced Navigation Satellite NVS-02' &&
+      parsedItems[0].articleUrl.includes('isro-launch-2026') &&
+      Boolean(parsedItems[1].description?.includes('chip manufacturers')),
+    'Test 301: Public RSS/Atom feed parser extracts items cleanly'
+  );
+
+  // Test 302: HTML entities and CDATA wrappers are decoded properly
+  const decodedXml = decodeXmlEntities('<![CDATA[India &amp; Global AI &quot;Breakthrough&quot; &ndash; 2026]]>');
+  assert(
+    decodedXml === 'India & Global AI "Breakthrough" – 2026',
+    'Test 302: HTML entities and CDATA wrappers are decoded properly'
+  );
+
+  // Test 303: Tracking parameters (utm_*, ref, etc.) and hash fragments are stripped from URLs
+  const rawTestUrl =
+    'https://www.reuters.com/technology/article-quantum-2026?utm_source=twitter&utm_medium=social&utm_campaign=feed&ref=newsletter&fbclid=xyz123#discussion-section';
+  const cleanedUrl = cleanArticleUrl(rawTestUrl);
+  assert(
+    cleanedUrl === 'https://www.reuters.com/technology/article-quantum-2026',
+    'Test 303: Tracking parameters (utm_*, ref, etc.) and hash fragments are stripped from URLs'
+  );
+
+  // Test 304: Publisher suffixes (e.g., "- BBC News", "| Reuters") are stripped from titles
+  const headlineA = normalizeTitle('Quantum Computing Chip Achieves Quantum Supremacy - BBC News');
+  const headlineB = normalizeTitle('NVIDIA Reveals Next-Gen Blackwell Ultra Architecture | Reuters');
+  const headlineC = normalizeTitle('[Breaking] India Advances Clean Hydrogen Storage Hubs (Live)');
+  assert(
+    headlineA === 'Quantum Computing Chip Achieves Quantum Supremacy' &&
+      headlineB === 'NVIDIA Reveals Next-Gen Blackwell Ultra Architecture' &&
+      headlineC === 'India Advances Clean Hydrogen Storage Hubs',
+    'Test 304: Publisher suffixes and tags are stripped from titles'
+  );
+
+  // Test 305: Deterministic fingerprint generates identical hash for same event within time window
+  const fpTime1 = new Date('2026-09-05T01:00:00Z');
+  const fpTime2 = new Date('2026-09-05T03:30:00Z'); // within same 12h window
+  const fp1 = calculateFingerprint('Quantum Computing Chip Achieves Supremacy', fpTime1, 'TECHNOLOGY');
+  const fp2 = calculateFingerprint('Quantum Computing Chip Achieves Supremacy', fpTime2, 'TECHNOLOGY');
+  const fpTime3 = new Date('2026-09-10T01:00:00Z'); // 5 days later
+  const fp3 = calculateFingerprint('Quantum Computing Chip Achieves Supremacy', fpTime3, 'TECHNOLOGY');
+  assert(
+    fp1 === fp2 && fp1 !== fp3 && typeof fp1 === 'string' && fp1.length > 10,
+    'Test 305: Deterministic fingerprint generates identical hash for same event within time window'
+  );
+
+  // Test 306: Batch deduplication suppresses duplicates within the same batch
+  const batchCandidate1: NewsCandidate = {
+    sourceId: 'src-1',
+    sourceName: 'Source One',
+    title: 'SpaceX Polar Starlink Launch',
+    normalizedTitle: 'SpaceX Polar Starlink Launch',
+    articleUrl: 'https://space.example.com/launch-1',
+    publishedAt: new Date(),
+    category: 'TECHNOLOGY',
+    region: 'GLOBAL',
+    fingerprint: 'fp-spacex-1',
+  };
+  const batchCandidate2: NewsCandidate = {
+    ...batchCandidate1,
+    sourceId: 'src-2',
+  };
+  const batchCandidate3: NewsCandidate = {
+    sourceId: 'src-3',
+    sourceName: 'Source Three',
+    title: 'Totally Different Topic Mars Rover',
+    normalizedTitle: 'Totally Different Topic Mars Rover',
+    articleUrl: 'https://space.example.com/mars-rover',
+    publishedAt: new Date(),
+    category: 'SCIENCE',
+    region: 'GLOBAL',
+    fingerprint: 'fp-mars-rover',
+  };
+  const dedupResult = deduplicateBatch([batchCandidate1, batchCandidate2, batchCandidate3]);
+  assert(
+    dedupResult.unique.length === 2 && dedupResult.duplicatesCount === 1,
+    'Test 306: Batch deduplication suppresses duplicates within the same batch'
+  );
+
+  // Test 307: Database deduplication avoids duplicate article URLs and fingerprints
+  const testDbArticle = await prisma.newsArticle.create({
+    data: {
+      sourceId: 'src-db-test',
+      sourceName: 'DB Source',
+      title: 'Pre-existing Article In DB',
+      normalizedTitle: 'Pre-existing Article In DB',
+      articleUrl: 'https://news.example.com/pre-existing-db-article',
+      fingerprint: 'fp-db-existing-unique-xyz',
+      category: 'BUSINESS',
+      region: 'INDIA',
+      publishedAt: new Date(),
+    },
+  });
+  const testCandidates: NewsCandidate[] = [
+    {
+      sourceId: 'src-db-test',
+      sourceName: 'DB Source',
+      title: 'Pre-existing Article In DB',
+      normalizedTitle: 'Pre-existing Article In DB',
+      articleUrl: 'https://news.example.com/pre-existing-db-article',
+      publishedAt: new Date(),
+      category: 'BUSINESS',
+      region: 'INDIA',
+      fingerprint: 'fp-db-existing-unique-xyz',
+    },
+    {
+      sourceId: 'src-db-test-2',
+      sourceName: 'DB Source 2',
+      title: 'Genuinely Fresh Unseen Article',
+      normalizedTitle: 'Genuinely Fresh Unseen Article',
+      articleUrl: 'https://news.example.com/genuinely-fresh-article',
+      publishedAt: new Date(),
+      category: 'BUSINESS',
+      region: 'INDIA',
+      fingerprint: 'fp-db-fresh-abc',
+    },
+  ];
+  const filterDbResult = await filterAgainstDatabase(testCandidates);
+  assert(
+    filterDbResult.freshCandidates.length === 1 &&
+      filterDbResult.freshCandidates[0].articleUrl === 'https://news.example.com/genuinely-fresh-article' &&
+      filterDbResult.alreadyExistsCount === 1,
+    'Test 307: Database deduplication avoids duplicate article URLs and fingerprints'
+  );
+  await prisma.newsArticle.delete({ where: { id: testDbArticle.id } });
+
+  // Test 308: Clustering groups related articles by keyword overlap and time delta
+  const nowTime = new Date();
+  const clusterArt1: NewsCandidate = {
+    sourceId: 'bbc',
+    sourceName: 'BBC News',
+    title: 'Global Semiconductor Foundry Alliance Formed in Bengaluru',
+    normalizedTitle: 'Global Semiconductor Foundry Alliance Formed in Bengaluru',
+    description: 'International semiconductor consortium announces multibillion silicon fab initiative in India.',
+    articleUrl: 'https://bbc.com/tech-fab',
+    publishedAt: nowTime,
+    category: 'TECHNOLOGY',
+    region: 'INDIA',
+    fingerprint: 'fp-semi-1',
+  };
+  const clusterArt2: NewsCandidate = {
+    sourceId: 'reuters',
+    sourceName: 'Reuters',
+    title: 'Semiconductor Foundry Alliance Unveils Bengaluru Silicon Fab Hub',
+    normalizedTitle: 'Semiconductor Foundry Alliance Unveils Bengaluru Silicon Fab Hub',
+    description: 'Global tech leaders form major semiconductor alliance to accelerate sub-2nm chip manufacturing.',
+    articleUrl: 'https://reuters.com/tech-fab',
+    publishedAt: new Date(nowTime.getTime() + 1000 * 60 * 30),
+    category: 'TECHNOLOGY',
+    region: 'INDIA',
+    fingerprint: 'fp-semi-2',
+  };
+  const formedClusters = clusterArticles([clusterArt1, clusterArt2]);
+  assert(
+    formedClusters.length === 1 &&
+      formedClusters[0].sourceCount === 2 &&
+      formedClusters[0].independentSources.length === 2 &&
+      formedClusters[0].independentSources.includes('BBC News') &&
+      formedClusters[0].independentSources.includes('Reuters'),
+    'Test 308: Clustering groups related articles by keyword overlap and time delta'
+  );
+
+  // Test 309: Canonical title selection prefers optimal length and high-reputation source
+  const candidateReuters: NewsCandidate = {
+    sourceId: 'reuters',
+    sourceName: 'Reuters',
+    title: 'Global Semiconductor Foundry Alliance Unveils Bengaluru Silicon Fab Hub',
+    normalizedTitle: 'Global Semiconductor Foundry Alliance Unveils Bengaluru Silicon Fab Hub',
+    articleUrl: 'https://reuters.com/fab',
+    publishedAt: nowTime,
+    category: 'TECHNOLOGY',
+    region: 'INDIA',
+    fingerprint: 'fp-can-1',
+  };
+  const candidateClickbait: NewsCandidate = {
+    sourceId: 'random-blog',
+    sourceName: 'Tech Blog',
+    title: 'BIG CHIP NEWS! WOW!',
+    normalizedTitle: 'BIG CHIP NEWS! WOW!',
+    articleUrl: 'https://blog.com/fab',
+    publishedAt: nowTime,
+    category: 'TECHNOLOGY',
+    region: 'INDIA',
+    fingerprint: 'fp-can-2',
+  };
+  const canonicalChoice = selectCanonicalTitle([candidateClickbait, candidateReuters]);
+  assert(
+    canonicalChoice === 'Global Semiconductor Foundry Alliance Unveils Bengaluru Silicon Fab Hub',
+    'Test 309: Canonical title selection prefers optimal length and high-reputation source'
+  );
+
+  // Test 310: Trend score calculation factors in source count, freshness, velocity, category, geography
+  const testClusterData: StoryClusterData = {
+    fingerprint: 'fp-score-test',
+    canonicalTitle: 'Autonomous Robotics Breakthrough Revolutionizes Factory Automation',
+    category: 'AI',
+    region: 'INDIA',
+    articles: [clusterArt1, clusterArt2],
+    sourceCount: 3,
+    independentSources: ['Reuters', 'BBC News', 'The Hindu'],
+    firstSeenAt: new Date(Date.now() - 1000 * 60 * 30),
+    lastSeenAt: new Date(),
+    trendScore: 0,
+    status: 'NEW',
+  };
+  const scoreFactors = scoreCluster(testClusterData);
+  assert(
+    scoreFactors.finalScore >= 70 &&
+      scoreFactors.finalScore <= 100 &&
+      scoreFactors.independentSourcesCount === 3 &&
+      scoreFactors.freshnessScore === 25 &&
+      scoreFactors.categoryImportanceScore === 15 &&
+      scoreFactors.geographicScore === 10,
+    'Test 310: Trend score calculation factors in source count, freshness, velocity, category, geography'
+  );
+
+  // Test 311: Freshness score decays gracefully over 36 hours
+  const now = new Date();
+  const fresh1h = calculateFreshnessScore(new Date(now.getTime() - 1000 * 60 * 60), now); // 1h ago
+  const fresh5h = calculateFreshnessScore(new Date(now.getTime() - 1000 * 60 * 60 * 5), now); // 5h ago
+  const fresh10h = calculateFreshnessScore(new Date(now.getTime() - 1000 * 60 * 60 * 10), now); // 10h ago
+  const fresh20h = calculateFreshnessScore(new Date(now.getTime() - 1000 * 60 * 60 * 20), now); // 20h ago
+  const fresh30h = calculateFreshnessScore(new Date(now.getTime() - 1000 * 60 * 60 * 30), now); // 30h ago
+  assert(
+    fresh1h === 25 &&
+      fresh5h === 20 &&
+      fresh10h === 15 &&
+      fresh20h === 10 &&
+      fresh30h === 5,
+    'Test 311: Freshness score decays gracefully over 36 hours'
+  );
+
+  // Test 312: Velocity score rewards rapid multi-source reporting
+  const fastCluster: StoryClusterData = {
+    ...testClusterData,
+    firstSeenAt: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
+    lastSeenAt: new Date(),
+    independentSources: ['Source A', 'Source B', 'Source C'], // 3 sources in 1 hr = rate 3/hr
+  };
+  const singleSourceCluster: StoryClusterData = {
+    ...testClusterData,
+    independentSources: ['Source A'],
+  };
+  const fastVel = calculateVelocityScore(fastCluster);
+  const singleVel = calculateVelocityScore(singleSourceCluster);
+  assert(
+    fastVel === 20 && singleVel === 5,
+    'Test 312: Velocity score rewards rapid multi-source reporting'
+  );
+
+  // Test 313: Quality gate rejects short/invalid titles, stale articles, or low scores
+  const shortTitleCluster: StoryClusterData = {
+    ...testClusterData,
+    canonicalTitle: 'Too short',
+    trendScore: 80,
+  };
+  const staleCluster: StoryClusterData = {
+    ...testClusterData,
+    canonicalTitle: 'Sufficiently Long Title For Editorial Review and Acceptance',
+    lastSeenAt: new Date(Date.now() - 1000 * 60 * 60 * 48), // 48h old
+    trendScore: 80,
+  };
+  const lowScoreCluster: StoryClusterData = {
+    ...testClusterData,
+    canonicalTitle: 'Sufficiently Long Title For Editorial Review and Acceptance',
+    trendScore: 30, // below 50
+  };
+  const shortRes = await validateClusterQuality(shortTitleCluster, { minScoreThreshold: 50 });
+  const staleRes = await validateClusterQuality(staleCluster, { minScoreThreshold: 50 });
+  const lowRes = await validateClusterQuality(lowScoreCluster, { minScoreThreshold: 50 });
+  assert(
+    !shortRes.valid &&
+      Boolean(shortRes.reason?.includes('too short')) &&
+      !staleRes.valid &&
+      Boolean(staleRes.reason?.includes('stale')) &&
+      !lowRes.valid &&
+      Boolean(lowRes.reason?.includes('threshold')),
+    'Test 313: Quality gate rejects short/invalid titles, stale articles, or low scores'
+  );
+
+  // Test 314: Quality gate enforces topic cooldown and daily post limits
+  const cooldownDbCluster = await prisma.storyCluster.create({
+    data: {
+      fingerprint: 'fp-cooldown-test-cluster-999',
+      canonicalTitle: 'Cooldown Simulation Test Story Headline 2026',
+      category: 'AI',
+      region: 'GLOBAL',
+      sourceCount: 2,
+      trendScore: 85,
+      status: 'PUBLISHED',
+      publishedAt: new Date(),
+    },
+  });
+  const testCooldownCandidate: StoryClusterData = {
+    ...testClusterData,
+    fingerprint: 'fp-cooldown-test-cluster-999',
+    canonicalTitle: 'Cooldown Simulation Test Story Headline 2026',
+    trendScore: 85,
+  };
+  const cooldownCheck = await validateClusterQuality(testCooldownCandidate, { cooldownHours: 24 });
+  assert(
+    !cooldownCheck.valid && Boolean(cooldownCheck.reason?.includes('recently')),
+    'Test 314: Quality gate enforces topic cooldown and daily post limits'
+  );
+  await prisma.storyCluster.delete({ where: { id: cooldownDbCluster.id } });
+
+  // Test 315: Non-AI fallback content generator produces zero hallucinated facts, thoughtful question, valid sources
+  const generatedContent = generatePostContent(testClusterData);
+  assert(
+    generatedContent.title === testClusterData.canonicalTitle &&
+      generatedContent.content.includes('⚡ **INDOBID DAILY**') &&
+      generatedContent.content.includes('💬 **The IndoBid Question:**') &&
+      generatedContent.content.includes('📰 **Verified Sources:**') &&
+      generatedContent.sourcesList.length >= 1 &&
+      generatedContent.generationMethod === 'editorial_deterministic' &&
+      generatedContent.hashtags.includes('#IndoBidDaily'),
+    'Test 315: Non-AI fallback content generator produces zero hallucinated facts, thoughtful question, valid sources'
+  );
+
+  // Test 316: Category mapping routes correctly to IndoBid category taxonomy
+  assert(
+    mapCategoryToIndoBidSlug('AI') === 'ai' &&
+      mapCategoryToIndoBidSlug('TECHNOLOGY') === 'technology' &&
+      mapCategoryToIndoBidSlug('BUSINESS') === 'business' &&
+      mapCategoryToIndoBidSlug('SCIENCE') === 'science' &&
+      mapCategoryToIndoBidSlug('CLIMATE') === 'science' &&
+      mapCategoryToIndoBidSlug('INDIA') === 'society' &&
+      mapCategoryToIndoBidSlug('WORLD') === 'society' &&
+      mapCategoryToIndoBidSlug('CULTURE') === 'culture',
+    'Test 316: Category mapping routes correctly to IndoBid category taxonomy'
+  );
+
+  // Test 317: System author @indobiddaily is created/retrieved with verified badge
+  const botUser = await getOrCreateSystemBot();
+  assert(
+    botUser.username === INDOBID_DAILY_BOT_USERNAME &&
+      botUser.isVerified === true &&
+      botUser.role === 'user',
+    'Test 317: System author @indobiddaily is created/retrieved with verified badge'
+  );
+
+  // Test 318: Posts are created with permanent persistence (never auto-delete)
+  const publishCandidateCluster: StoryClusterData = {
+    ...testClusterData,
+    fingerprint: 'fp-publish-perm-test-unique',
+    canonicalTitle: 'India Launches High-Throughput Satellite Network For Universal Coverage',
+    trendScore: 88,
+    articles: [
+      {
+        sourceId: 'isro-press',
+        sourceName: 'ISRO Press',
+        title: 'Universal Coverage Satellite Constellation Operational',
+        normalizedTitle: 'Universal Coverage Satellite Constellation Operational',
+        description: 'National space communications network achieves commercial operational readiness.',
+        articleUrl: 'https://isro.example.com/universal-coverage-2026',
+        publishedAt: new Date(),
+        category: 'TECHNOLOGY',
+        region: 'INDIA',
+        fingerprint: 'fp-perm-art-1',
+      },
+    ],
+  };
+  const publishResult = await publishStoryCluster(publishCandidateCluster);
+  const permanentDebateInDb = await prisma.debate.findUnique({
+    where: { id: publishResult.debateId },
+    include: { automatedPost: true },
+  });
+  assert(
+    permanentDebateInDb !== null &&
+      permanentDebateInDb.isAutomated === true &&
+      permanentDebateInDb.status === 'active' &&
+      permanentDebateInDb.authorUsername === INDOBID_DAILY_BOT_USERNAME &&
+      permanentDebateInDb.automatedPost !== null &&
+      permanentDebateInDb.automatedPost.trendScore === 88,
+    'Test 318: Posts are created with permanent persistence (never auto-delete)'
+  );
+  // Cleanup test permanent post
+  await prisma.automatedPost.deleteMany({ where: { debateId: publishResult.debateId } });
+  await prisma.contribution.deleteMany({ where: { debateId: publishResult.debateId } });
+  await prisma.debate.deleteMany({ where: { id: publishResult.debateId } });
+  await prisma.newsArticle.deleteMany({ where: { articleUrl: 'https://isro.example.com/universal-coverage-2026' } });
+  await prisma.storyCluster.deleteMany({ where: { fingerprint: 'fp-publish-perm-test-unique' } });
+
+  // Test 319: Dry run mode simulates execution without creating DB debates
+  const initialDebateCount = await prisma.debate.count({ where: { isAutomated: true } });
+  const dryRunResult = await runDailyPipeline({
+    dryRun: true,
+    force: true,
+    limit: 2,
+    minScore: 10,
+  });
+  const afterDebateCount = await prisma.debate.count({ where: { isAutomated: true } });
+  assert(
+    dryRunResult.isDryRun === true &&
+      dryRunResult.postsPublished === 0 &&
+      afterDebateCount === initialDebateCount,
+    'Test 319: Dry run mode simulates execution without creating DB debates'
+  );
+
+  // Test 320: Cron API endpoint enforces CRON_SECRET authorization
+  const unauthCronReq = new NextRequest('http://localhost:3000/api/cron/indobid-daily', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer wrong_invalid_secret_xyz',
+    },
+  });
+  const unauthCronRes = await postCronRoute(unauthCronReq);
+  const unauthCronData = await unauthCronRes.json();
+  assert(
+    unauthCronRes.status === 401 && unauthCronData.success === false,
+    'Test 320: Cron API endpoint enforces CRON_SECRET authorization'
+  );
+
+  // Test 321: Cron API endpoint accepts query parameters (dryRun, force, limit)
+  const authCronReq = new NextRequest(
+    'http://localhost:3000/api/cron/indobid-daily?dryRun=true&force=true&limit=1&minScore=10',
+    {
+      method: 'POST',
+      headers: {
+        'x-cron-secret': env.CRON_SECRET,
+      },
+    }
+  );
+  const authCronRes = await postCronRoute(authCronReq);
+  const authCronData = await authCronRes.json();
+  assert(
+    authCronRes.status === 200 &&
+      authCronData.success === true &&
+      authCronData.result.isDryRun === true,
+    'Test 321: Cron API endpoint accepts query parameters (dryRun, force, limit)'
+  );
+
+  // Test 322: End-to-end IndoBid Daily pipeline execution updates AutomationRun status
+  const latestRun = await prisma.automationRun.findFirst({
+    orderBy: { startedAt: 'desc' },
+  });
+  assert(
+    latestRun !== null &&
+      ['success', 'dry_run'].includes(latestRun.status) &&
+      latestRun.completedAt !== null &&
+      latestRun.sourcesAttempted >= 0,
+    'Test 322: End-to-end IndoBid Daily pipeline execution updates AutomationRun status'
+  );
+
+
   // Cleanup Part 17 test data
   await prisma.debateLike.deleteMany({ where: { userId: p17Consumer.id } });
   await prisma.debateBookmark.deleteMany({ where: { userId: p17Consumer.id } });
@@ -4995,27 +6242,23 @@ async function runTestSuite() {
     },
   });
 
-  // Clean up all test and temporary data completely, returning DB to pristine launch state
-  await prisma.debateActivityEvent.deleteMany({});
-  await prisma.debateReport.deleteMany({});
-  await prisma.debateBookmark.deleteMany({});
-  await prisma.debateLike.deleteMany({});
-  await prisma.notification.deleteMany({});
-  await prisma.directMessage.deleteMany({});
-  await prisma.conversation.deleteMany({});
-  await prisma.creatorEarningsLedger.deleteMany({});
-  await prisma.contribution.deleteMany({});
-  await prisma.payment.deleteMany({});
-  await prisma.payoutAccount.deleteMany({});
-  await prisma.visitorSession.deleteMany({});
-  await prisma.emailOtp.deleteMany({});
-  await (prisma as any).passwordResetToken.deleteMany({});
-  await prisma.follow.deleteMany({});
-  await prisma.usernameChangeHistory.deleteMany({});
-  await prisma.debate.deleteMany({});
-  await prisma.user.deleteMany({
-    where: { email: { not: ADMIN_EMAIL } },
-  });
+  // Clean up test-specific data only, strictly preserving all real user posts and accounts
+  await prisma.debateActivityEvent.deleteMany({ where: { debate: testDebateCondition } });
+  await prisma.debateReport.deleteMany({ where: { debate: testDebateCondition } });
+  await prisma.debateBookmark.deleteMany({ where: { debate: testDebateCondition } });
+  await prisma.debateLike.deleteMany({ where: { debate: testDebateCondition } });
+  await prisma.creatorEarningsLedger.deleteMany({ where: { debate: testDebateCondition } });
+  await prisma.payment.deleteMany({ where: { OR: [{ debate: testDebateCondition }, { providerPaymentId: { startsWith: 'test_' } }] } });
+  await prisma.contribution.deleteMany({ where: { debate: testDebateCondition } });
+  await prisma.debate.deleteMany({ where: testDebateCondition });
+  await prisma.notification.deleteMany({ where: { user: testUserCondition } });
+  await prisma.directMessage.deleteMany({ where: { sender: testUserCondition } });
+  await prisma.follow.deleteMany({ where: { follower: testUserCondition } });
+  await prisma.usernameChangeHistory.deleteMany({ where: { user: testUserCondition } });
+  await prisma.emailOtp.deleteMany({ where: { OR: [{ email: { endsWith: '@example.com' } }, { email: { startsWith: 'test' } }] } });
+  await (prisma as any).passwordResetToken.deleteMany({ where: { OR: [{ email: { endsWith: '@example.com' } }, { email: { startsWith: 'test' } }] } });
+  await prisma.category.deleteMany({ where: { slug: { in: ['tech', 'finance', 'cooking', 'test_category'] } } });
+  await prisma.user.deleteMany({ where: testUserCondition });
 
   // Ensure Founder is in verified canonical state
   await prisma.user.upsert({

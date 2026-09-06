@@ -333,7 +333,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm w-full h-[100dvh] overflow-hidden"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-md w-full h-[100dvh] overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading && !verifying) {
           onClose();
@@ -341,7 +341,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
       }}
     >
       <div
-        className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-lg w-full rounded-t-3xl sm:rounded-3xl shadow-2xl relative overflow-hidden transition-all flex flex-col max-h-[90dvh] sm:max-h-[85vh] h-auto my-0 sm:my-auto min-w-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        className="glass-modal max-w-lg w-full rounded-t-3xl sm:rounded-3xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_40px_rgba(217,138,108,0.04)] relative overflow-hidden transition-all flex flex-col max-h-[90dvh] sm:max-h-[85vh] h-auto my-0 sm:my-auto min-w-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -519,7 +519,7 @@ function UserProfileContent() {
 
                 {/* 2. CREATOR ECONOMY SUMMARY CARD (Owner Control Center) */}
                 {isOwner && profile.creatorEconomics && (
-                  <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 space-y-4 shadow-lg">
+                  <div className="glass-panel rounded-2xl p-5 space-y-4 shadow-lg">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <div className="p-1.5 rounded-lg bg-[var(--bg-page-deep)] text-[var(--color-amber)]">
@@ -611,7 +611,7 @@ function UserProfileContent() {
               ) : (
                 <>
                   {/* 3. PROFILE TABS */}
-                  <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-page)] overflow-x-auto scrollbar-none">
+                  <div className="flex border-b border-[var(--border-subtle)] bg-[var(--bg-page)]/80 backdrop-blur-xl overflow-x-auto scrollbar-none">
                     <button
                       onClick={() => setActiveTab('debates')}
                       className={`flex-1 min-w-[100px] py-3.5 text-xs font-bold text-center transition cursor-pointer relative whitespace-nowrap ${
@@ -899,8 +899,8 @@ function UserProfileContent() {
 
       {/* 5. EDIT PROFILE MODAL */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto w-full">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-md w-full rounded-t-3xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl relative my-0 sm:my-auto max-h-[92vh] overflow-y-auto min-w-0">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-md overflow-y-auto w-full">
+          <div className="glass-modal max-w-md w-full rounded-t-3xl sm:rounded-2xl p-5 sm:p-7 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_40px_rgba(217,138,108,0.04)] relative my-0 sm:my-auto max-h-[92vh] overflow-y-auto min-w-0 border border-white/[0.09]">
             <button
               onClick={() => setIsEditModalOpen(false)}
               className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
@@ -909,7 +909,7 @@ function UserProfileContent() {
               <X className="w-4 h-4" />
             </button>
 
-            <h3 className="text-lg font-bold text-[var(--text-primary)] mb-1">Edit Profile</h3>
+            <h3 className="text-lg font-bold font-bodoni text-[var(--text-primary)] mb-1">Edit Profile</h3>
             <p className="text-xs text-[var(--text-secondary)] mb-4">
               Update your public debater photo, display name, and bio.
             </p>
@@ -1151,11 +1151,11 @@ function UserProfileContent() {
 
       {/* 6. PAYOUT ACCOUNT MODAL */}
       {isPayoutModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto w-full">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-md w-full rounded-t-3xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl relative my-0 sm:my-auto max-h-[92vh] overflow-y-auto min-w-0">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-md overflow-y-auto w-full">
+          <div className="glass-modal max-w-md w-full rounded-t-3xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl relative my-0 sm:my-auto max-h-[92vh] overflow-y-auto min-w-0 border border-white/[0.09]">
             <button
               onClick={() => setIsPayoutModalOpen(false)}
-              className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg hover:bg-[var(--bg-page-deep)] transition cursor-pointer"
+              className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-xl hover:bg-white/[0.05] transition cursor-pointer"
               aria-label="Close dialog"
             >
               <X className="w-4 h-4" />
@@ -1185,13 +1185,13 @@ function UserProfileContent() {
 
             <form onSubmit={handleSavePayoutAccount} className="space-y-4">
               {/* Type Switcher */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-[var(--bg-page-deep)] rounded-xl border border-[var(--border-subtle)]">
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-[var(--bg-page-deep)]/90 rounded-xl border border-white/[0.08]">
                 <button
                   type="button"
                   onClick={() => setPayoutType('bank_account')}
-                  className={`py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                  className={`py-2 text-xs font-bold rounded-lg transition cursor-pointer ${
                     payoutType === 'bank_account'
-                      ? 'bg-[var(--color-coral)] text-[#071B21]'
+                      ? 'bg-[var(--color-coral)] text-[#071B21] shadow-sm'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -1200,9 +1200,9 @@ function UserProfileContent() {
                 <button
                   type="button"
                   onClick={() => setPayoutType('upi')}
-                  className={`py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
+                  className={`py-2 text-xs font-bold rounded-lg transition cursor-pointer ${
                     payoutType === 'upi'
-                      ? 'bg-[var(--color-coral)] text-[#071B21]'
+                      ? 'bg-[var(--color-coral)] text-[#071B21] shadow-sm'
                       : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
@@ -1211,7 +1211,7 @@ function UserProfileContent() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1.5">
                   Account Holder Name
                 </label>
                 <input
@@ -1220,14 +1220,14 @@ function UserProfileContent() {
                   placeholder="Full name as on bank records"
                   value={holderName}
                   onChange={(e) => setHolderName(e.target.value)}
-                  className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none"
+                  className="w-full h-11 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)]/60 rounded-xl px-3.5 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-coral)]/20 transition"
                 />
               </div>
 
               {payoutType === 'bank_account' ? (
                 <>
                   <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1.5">
                       Account Number
                     </label>
                     <input
@@ -1236,12 +1236,12 @@ function UserProfileContent() {
                       placeholder="e.g. 1234567890"
                       value={accountNumber}
                       onChange={(e) => setAccountNumber(e.target.value)}
-                      className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none font-mono"
+                      className="w-full h-11 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)]/60 rounded-xl px-3.5 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-coral)]/20 font-mono transition"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                    <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1.5">
                       IFSC Code
                     </label>
                     <input
@@ -1250,13 +1250,13 @@ function UserProfileContent() {
                       placeholder="e.g. HDFC0001234"
                       value={ifscCode}
                       onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
-                      className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none font-mono uppercase"
+                      className="w-full h-11 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)]/60 rounded-xl px-3.5 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-coral)]/20 font-mono uppercase transition"
                     />
                   </div>
                 </>
               ) : (
                 <div>
-                  <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                  <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1.5">
                     UPI ID (VPA)
                   </label>
                   <input
@@ -1265,15 +1265,15 @@ function UserProfileContent() {
                     placeholder="e.g. name@okhdfcbank"
                     value={upiId}
                     onChange={(e) => setUpiId(e.target.value)}
-                    className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3.5 py-2 text-xs text-[var(--text-primary)] focus:outline-none font-mono"
+                    className="w-full h-11 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)]/60 rounded-xl px-3.5 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-coral)]/20 font-mono transition"
                   />
                 </div>
               )}
 
-              <div className="p-3 bg-[var(--bg-page-deep)] rounded-xl border border-[var(--border-subtle)] flex items-start space-x-2 text-[11px] text-[var(--text-muted)]">
+              <div className="p-3 bg-[var(--bg-page-deep)]/80 rounded-xl border border-white/[0.08] flex items-start space-x-2 text-[11px] text-[var(--text-muted)]">
                 <Lock className="w-3.5 h-3.5 text-[var(--color-coral)] shrink-0 mt-0.5" />
                 <p>
-                  <strong>Security Guarantee:</strong> Credentials are encrypted and masked before saving. IndoBid never stores raw bank passwords or sensitive PINs.
+                  <strong className="text-[var(--text-secondary)]">Security Guarantee:</strong> Credentials are encrypted and masked before saving. IndoBid never stores raw bank passwords or sensitive PINs.
                 </p>
               </div>
 
@@ -1281,7 +1281,7 @@ function UserProfileContent() {
                 <button
                   type="submit"
                   disabled={savingPayout}
-                  className="w-full py-2.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                  className="w-full h-11 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-lg shadow-[var(--color-coral)]/20 transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {savingPayout ? (
                     <>
@@ -1318,10 +1318,14 @@ function UserProfileContent() {
   );
 }
 
+import { AuthGate } from '@/components/AuthGate';
+
 export default function UserProfilePage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[var(--bg-page)]" />}>
-      <UserProfileContent />
+      <AuthGate>
+        <UserProfileContent />
+      </AuthGate>
     </Suspense>
   );
 }

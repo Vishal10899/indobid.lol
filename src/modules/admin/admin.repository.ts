@@ -71,9 +71,73 @@ export class AdminRepository {
     return { total, debates };
   }
 
-  async updateDebate(id: string, data: { status?: string }) {
+  async updateDebate(id: string, data: { status?: string; trendingScore?: number }) {
     return safeDb(() => prisma.debate.update({ where: { id }, data }));
   }
+
+  async deleteDebate(id: string) {
+    return safeDb(() => prisma.debate.delete({ where: { id } }));
+  }
+
+  async rankDownDebate(id: string, penalty = 50) {
+    const debate = await safeDb(() => prisma.debate.findUnique({ where: { id } }));
+    if (!debate) throw new Error('Debate not found');
+    const newScore = Math.round(((debate.trendingScore || 0) - penalty) * 100) / 100;
+    const additionalReports = Math.max(1, Math.ceil(penalty / 30));
+    return safeDb(() =>
+      prisma.debate.update({
+        where: { id },
+        data: {
+          trendingScore: newScore,
+          reportCount: { increment: additionalReports },
+        },
+      })
+    );
+  }
+
+  async resetDebateRank(id: string) {
+    const debate = await safeDb(() =>
+      prisma.debate.findUnique({
+        where: { id },
+        include: {
+          contributions: {
+            where: { status: 'verified' },
+            select: { amount: true, authorUsername: true, createdAt: true },
+          },
+        },
+      })
+    );
+    if (!debate) throw new Error('Debate not found');
+    const { calculateTrendingScore } = await import('../feed/trending/trending.service');
+    const totalVerifiedPaise = debate.totalVerifiedContribution || 0;
+    const participants = new Set<string>();
+    if (debate.authorUsername) participants.add(debate.authorUsername.toLowerCase());
+    for (const c of debate.contributions) {
+      if (c.authorUsername) participants.add(c.authorUsername.toLowerCase());
+    }
+
+    const naturalScore = calculateTrendingScore({
+      totalVerifiedPaise,
+      likeCount: debate.likeCount,
+      impressionCount: debate.impressionCount,
+      contributionCount: debate.contributionCount,
+      uniqueParticipants: participants.size,
+      lastContributionAt: debate.lastContributionAt,
+      createdAt: debate.createdAt,
+      reportCount: 0,
+    });
+
+    return safeDb(() =>
+      prisma.debate.update({
+        where: { id },
+        data: {
+          trendingScore: naturalScore,
+          reportCount: 0,
+        },
+      })
+    );
+  }
+
 
   async listPayments(skip = 0, take = 50, status?: string) {
     const where: any = {};

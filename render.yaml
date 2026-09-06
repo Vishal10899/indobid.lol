@@ -2,24 +2,25 @@ services:
   - type: web
     name: indobid
     runtime: node
-    plan: starter
-    buildCommand: npm install && npx prisma db push && npm run db:seed && npm run build
-    startCommand: npm start
+    plan: starter # Paid plan recommended in production to prevent 15-min inactivity sleep
+    region: ohio
+    buildCommand: npm ci && npx prisma generate && npm run build
+    startCommand: npx prisma migrate deploy && npm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NEXT_PUBLIC_APP_URL
-        sync: false
       - key: DATABASE_URL
         sync: false
+      - key: AUTH_SECRET
+        generateValue: true
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_SECRET_KEY
         sync: false
-      - key: RAZORPAY_KEY_ID
+      - key: GOOGLE_CLIENT_ID
         sync: false
-      - key: RAZORPAY_KEY_SECRET
+      - key: GOOGLE_CLIENT_SECRET
         sync: false
-      - key: RAZORPAY_WEBHOOK_SECRET
+      - key: NEXT_PUBLIC_APP_URL
         sync: false

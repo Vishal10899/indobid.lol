@@ -416,7 +416,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
         {/* Center Main Thread */}
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between min-w-0">
             <Link
               href="/"
               className="inline-flex items-center space-x-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
@@ -719,7 +719,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
             </section>
 
             {/* 3. Continue / Back This Debate Composer */}
-            <section className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 sm:p-6 space-y-4 shadow-md">
+            <section className="glass-panel rounded-2xl p-5 sm:p-6 space-y-4 shadow-lg">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-[var(--text-primary)]">Support & Continue Debate</h3>
@@ -763,13 +763,13 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Write your counter-argument, reasoning, or additional facts..."
                     maxLength={3000}
-                    className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl p-3 text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition resize-none"
+                    className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl p-3 text-xs sm:text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition resize-none font-normal leading-relaxed"
                   />
 
                   {/* Anonymous Mode Toggle */}
-                  <div className="flex items-center justify-between p-2.5 bg-[var(--bg-page-deep)] rounded-xl border border-[var(--border-subtle)]">
+                  <div className="flex items-center justify-between p-3 bg-[var(--bg-page-deep)]/80 rounded-xl border border-white/[0.08]">
                     <div>
-                      <span className="text-xs font-bold text-[var(--text-primary)] block">Anonymous</span>
+                      <span className="text-xs font-semibold text-[var(--text-primary)] block">Anonymous</span>
                       <span className="text-[10px] text-[var(--text-muted)]">Hide username on this response</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -784,9 +784,9 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                   </div>
 
                   {/* Amount Presets and Stepper */}
-                  <div className="bg-[var(--bg-page-deep)] p-3 rounded-xl border border-[var(--border-subtle)] space-y-2.5">
+                  <div className="bg-[var(--bg-page-deep)]/80 p-3.5 rounded-xl border border-white/[0.08] space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[var(--text-primary)] text-[11px] uppercase tracking-wider">
+                      <span className="font-semibold text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">
                         Your Support Amount (USD)
                       </span>
                       <span className="font-mono font-bold text-[var(--color-amber)]">
@@ -801,10 +801,10 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                           key={p.label}
                           type="button"
                           onClick={() => setAmountRupees(p.value)}
-                          className={`py-1 rounded-lg text-xs font-bold font-mono transition cursor-pointer ${
+                          className={`py-1.5 rounded-xl text-xs font-bold font-mono transition cursor-pointer ${
                             amountRupees === p.value
-                              ? 'bg-[var(--color-coral)] text-[#071B21]'
-                              : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                              ? 'bg-[var(--color-coral)] text-[#071B21] shadow-xs'
+                              : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-white/[0.07]'
                           }`}
                         >
                           ${p.value}
@@ -818,24 +818,24 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                         type="button"
                         onClick={() => setAmountRupees((prev) => Math.max(minRupees, prev - 1))}
                         disabled={amountRupees <= minRupees}
-                        className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--bg-card-hover)] transition cursor-pointer"
+                        className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-white/[0.08] text-[var(--text-primary)] font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                       >
-                        -
+                        −
                       </button>
                       <div className="flex-1 relative">
-                        <span className="absolute left-3 top-1.5 text-xs font-bold text-[var(--color-coral)]">$</span>
+                        <span className="absolute left-3 top-2 text-xs font-bold text-[var(--color-coral)]">$</span>
                         <input
                           type="number"
                           min={minRupees}
                           value={amountRupees}
                           onChange={(e) => setAmountRupees(Math.max(minRupees, parseInt(e.target.value || '0', 10)))}
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-lg pl-7 pr-3 py-1 text-xs font-bold text-[var(--text-primary)] font-mono focus:outline-none"
+                          className="w-full bg-[var(--bg-surface)] border border-white/[0.08] focus:border-[var(--color-coral)] rounded-xl pl-7 pr-3 py-1.5 text-xs font-bold text-[var(--text-primary)] font-mono focus:outline-none"
                         />
                       </div>
                       <button
                         type="button"
                         onClick={() => setAmountRupees((prev) => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold text-sm hover:bg-[var(--bg-card-hover)] transition cursor-pointer"
+                        className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-white/[0.08] text-[var(--text-primary)] font-bold text-sm hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                       >
                         +
                       </button>
@@ -845,7 +845,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                   <button
                     type="submit"
                     disabled={loading || amountRupees < minRupees}
-                    className="w-full py-3 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-black text-xs sm:text-sm rounded-xl shadow transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                    className="w-full h-12 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#07171C] font-semibold text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 hover:shadow-lg hover:shadow-[var(--color-coral)]/25 transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] mt-2"
                   >
                     {loading ? (
                       <>

@@ -29,7 +29,9 @@ interface ConversationItem {
   lastMessageAt: string;
 }
 
-export function MessagesPage() {
+import { AuthGate } from '@/components/AuthGate';
+
+function MessagesContent() {
   const router = useRouter();
   const { user, openAuthModal } = useAuth();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -105,18 +107,18 @@ export function MessagesPage() {
 
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center justify-between w-full min-w-0">
             <div className="flex items-center space-x-2.5">
               <MessageSquare className="w-5 h-5 text-[var(--color-coral)]" />
-              <h1 className="text-lg font-black text-[var(--text-primary)]">Direct Messages</h1>
+              <h1 className="text-lg font-bold font-bodoni text-[var(--text-primary)]">Direct Messages</h1>
             </div>
 
             {user && (
               <button
                 onClick={() => setNewMsgModalOpen(true)}
-                className="px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl transition flex items-center space-x-1 cursor-pointer"
+                className="px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-semibold text-xs rounded-xl transition flex items-center space-x-1 cursor-pointer shadow-sm shadow-[var(--color-coral)]/20"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>New Message</span>
               </button>
             )}
@@ -124,7 +126,7 @@ export function MessagesPage() {
 
           <div className="p-4 space-y-3">
             {!user ? (
-              <div className="py-20 text-center space-y-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8">
+              <div className="py-20 text-center space-y-3 glass-panel rounded-2xl p-8">
                 <MessageSquare className="w-10 h-10 text-[var(--color-coral)] mx-auto opacity-70" />
                 <h3 className="text-base font-bold text-[var(--text-primary)]">Private Conversations</h3>
                 <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
@@ -205,11 +207,11 @@ export function MessagesPage() {
 
       {/* New Message Modal */}
       {newMsgModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-md w-full rounded-2xl p-6 shadow-2xl relative my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md overflow-y-auto">
+          <div className="glass-modal max-w-md w-full rounded-2xl p-6 shadow-2xl relative my-auto border border-white/[0.09]">
             <button
               onClick={() => setNewMsgModalOpen(false)}
-              className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg"
+              className="absolute top-4 right-4 p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-xl hover:bg-white/[0.05] transition cursor-pointer"
               aria-label="Close dialog"
             >
               <X className="w-5 h-5" />
@@ -228,24 +230,24 @@ export function MessagesPage() {
 
             <form onSubmit={handleStartConversation} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1.5">
                   Recipient (@username)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs text-[var(--text-muted)]">@</span>
+                  <span className="absolute left-3.5 top-3 text-xs text-[var(--text-muted)]">@</span>
                   <input
                     type="text"
                     required
                     value={targetUsername}
                     onChange={(e) => setTargetUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     placeholder="username"
-                    className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none"
+                    className="w-full h-11 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)]/60 rounded-xl pl-8 pr-3 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-coral)]/20 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1">
+                <label className="block text-xs font-bold text-[var(--text-primary)] uppercase tracking-wider mb-1.5">
                   Message
                 </label>
                 <textarea
@@ -254,14 +256,14 @@ export function MessagesPage() {
                   value={messageContent}
                   onChange={(e) => setMessageContent(e.target.value)}
                   placeholder="Type your message..."
-                  className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl p-3 text-xs text-[var(--text-primary)] focus:outline-none resize-none"
+                  className="w-full bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)]/60 rounded-xl p-3 text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-coral)]/20 resize-none transition"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={sending}
-                className="w-full py-2.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                className="w-full h-11 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow-lg shadow-[var(--color-coral)]/20 transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{sending ? 'Sending...' : 'Send Message'}</span>
@@ -277,4 +279,10 @@ export function MessagesPage() {
   );
 }
 
-export default MessagesPage;
+export default function MessagesPage() {
+  return (
+    <AuthGate>
+      <MessagesContent />
+    </AuthGate>
+  );
+}

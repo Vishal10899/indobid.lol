@@ -30,20 +30,27 @@ async function cleanLeftovers() {
   });
   console.log(`Deleted ${deletedContribs.count} test contributions.`);
 
-  // 4. Delete test debates (preserve real founder post cmtin8awf0013na2aphi2b96d)
+  // 4. Delete only test debates (strictly scoped to test prefixes)
   const deletedDebates = await prisma.debate.deleteMany({
     where: {
-      id: { not: 'cmtin8awf0013na2aphi2b96d' },
+      OR: [
+        { title: { startsWith: 'Test Debate' } },
+        { title: { startsWith: 'TEST_' } },
+        { authorUsername: { startsWith: 'test_' } },
+        { authorUsername: { in: ['testuser', 'p17_author_a', 'p17_author_b'] } },
+      ],
     },
   });
   console.log(`Deleted ${deletedDebates.count} test debates.`);
 
-  // 5. Delete test users (preserve founder)
+  // 5. Delete only test users (strictly scoped to test emails and usernames)
   const deletedUsers = await prisma.user.deleteMany({
     where: {
-      AND: [
-        { username: { not: 'vishalchaudhary' } },
-        { email: { not: 'vishalchaudhary74096@gmail.com' } },
+      OR: [
+        { email: { endsWith: '@example.com' } },
+        { email: { startsWith: 'test' } },
+        { username: { startsWith: 'test_' } },
+        { username: { startsWith: 'testuser_' } },
       ],
     },
   });

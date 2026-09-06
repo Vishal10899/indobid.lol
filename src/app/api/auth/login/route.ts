@@ -4,6 +4,7 @@ import { verifyPassword, createSessionToken, AUTH_COOKIE_NAME } from '@/lib/user
 import { requestEmailOtp } from '@/lib/email-otp';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { isFounder } from '@/lib/founder';
+import { detectContactType, normalizePhoneNumber } from '@/modules/auth/auth.validation';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,12 +30,23 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanLogin = login.trim().toLowerCase();
+    const isPhone = detectContactType(cleanLogin) === 'phone';
+    const normalizedPhone = isPhone ? normalizePhoneNumber(cleanLogin) : null;
+    const phoneDigits = isPhone ? cleanLogin.replace(/\D/g, '') : null;
 
     const user = await prisma.user.findFirst({
       where: {
         OR: [
           { username: cleanLogin },
           { email: cleanLogin },
+          ...(normalizedPhone ? [
+            { username: normalizedPhone },
+            { email: normalizedPhone },
+          ] : []),
+          ...(phoneDigits && phoneDigits !== cleanLogin ? [
+            { username: phoneDigits },
+            { email: phoneDigits },
+          ] : []),
         ],
       },
     });

@@ -42,6 +42,7 @@ export function AuthModal() {
   const [loginInput, setLoginInput] = useState('');
   const [forgotEmail, setForgotEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -385,7 +386,7 @@ export function AuthModal() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm w-full h-[100dvh] overflow-hidden"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-md w-full h-[100dvh] overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) {
           closeAuthModal();
@@ -393,7 +394,7 @@ export function AuthModal() {
       }}
     >
       <div
-        className="bg-[var(--bg-surface)] border border-[var(--border-color)] max-w-md w-full rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-2xl relative my-0 sm:my-auto max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto overscroll-contain min-w-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+        className="glass-modal max-w-md w-full rounded-t-3xl sm:rounded-3xl p-6 sm:p-8 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7),0_0_40px_rgba(217,138,108,0.04)] relative my-0 sm:my-auto max-h-[90dvh] sm:max-h-[85vh] overflow-y-auto overscroll-contain min-w-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -483,7 +484,7 @@ export function AuthModal() {
               <button
                 type="submit"
                 disabled={loading || otpDigits.join('').length !== 6}
-                className="w-full py-2.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                className="w-full h-12 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#07171C] font-semibold text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
               >
                 {loading ? (
                   <>
@@ -492,8 +493,8 @@ export function AuthModal() {
                   </>
                 ) : (
                   <>
-                    <span>Verify Email</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Verify &amp; Continue</span>
+                    <ArrowRight className="w-4 h-4" />
                   </>
                 )}
               </button>
@@ -523,11 +524,11 @@ export function AuthModal() {
           <div className="space-y-4">
             <div className="mb-5 space-y-2">
               <Logo size="sm" />
-              <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
-                Reset Your Password
+              <h2 className="text-xl font-bold font-bodoni text-[var(--text-primary)] tracking-tight">
+                Reset your password
               </h2>
               <p className="text-xs text-[var(--text-secondary)]">
-                Enter your email address and we&apos;ll send you a link to reset your password.
+                Enter your email address and we&apos;ll send you a secure link to reset your password.
               </p>
             </div>
 
@@ -545,20 +546,20 @@ export function AuthModal() {
               </div>
             )}
 
-            <form onSubmit={handleForgotPasswordSubmit} className="space-y-3.5">
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-[var(--text-primary)] mb-1">
-                  Email Address <span className="text-[var(--color-coral)]">*</span>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                  Email address <span className="text-[var(--color-coral)]">*</span>
                 </label>
-                <div className="relative">
-                  <Mail className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
+                <div className="relative flex items-center">
+                  <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
                   <input
                     type="email"
                     required
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     placeholder="you@domain.com"
-                    className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
+                    className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl pl-10 pr-3.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
                   />
                 </div>
               </div>
@@ -566,7 +567,7 @@ export function AuthModal() {
               <button
                 type="submit"
                 disabled={loading || !forgotEmail}
-                className="w-full py-2.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 mt-2"
+                className="w-full h-12 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#07171C] font-semibold text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 mt-4 active:scale-[0.99]"
               >
                 {loading ? (
                   <>
@@ -595,38 +596,188 @@ export function AuthModal() {
         ) : (
           /* 3. REGISTRATION / SIGN IN FORM */
           <>
-            <div className="mb-5 space-y-2">
-              <Logo size="sm" />
-              <h2 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">
-                {authModalMode === 'signup' ? 'Create Your Account' : 'Welcome Back'}
+            <div className="mb-6 space-y-2 text-center">
+              <div className="flex justify-center mb-1">
+                <Logo size="md" />
+              </div>
+              <h2 className="text-xl font-bold font-bodoni text-[var(--text-primary)] tracking-tight">
+                {authModalMode === 'signup' ? 'Create your account' : 'Welcome back'}
               </h2>
-              <p className="text-xs text-[var(--text-secondary)]">
+              <p className="text-xs text-[var(--text-secondary)] max-w-xs mx-auto">
                 {authModalMode === 'signup'
                   ? 'Join the high-conviction social community. Back opinions with skin in the game.'
                   : 'Sign in to post opinions, back debates, and track creator earnings.'}
               </p>
             </div>
 
+            {/* Equal-Width Tabs: Log in vs Create account */}
+            <div className="flex border-b border-[var(--border-subtle)] mb-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalMode('login');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`flex-1 pb-3 text-xs sm:text-sm font-semibold text-center transition-colors duration-200 relative cursor-pointer ${
+                  authModalMode === 'login'
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Log in
+                {authModalMode === 'login' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-coral)] rounded-full shadow-[0_0_10px_rgba(217,138,108,0.4)]" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalMode('signup');
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`flex-1 pb-3 text-xs sm:text-sm font-semibold text-center transition-colors duration-200 relative cursor-pointer ${
+                  authModalMode === 'signup'
+                    ? 'text-[var(--text-primary)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Create account
+                {authModalMode === 'signup' && (
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[var(--color-coral)] rounded-full shadow-[0_0_10px_rgba(217,138,108,0.4)]" />
+                )}
+              </button>
+            </div>
+
             {errorMsg && (
               <div className="mb-4 p-3 bg-red-500/15 border border-red-500/30 text-red-300 text-xs rounded-xl flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMsg}</span>
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span className="line-clamp-2">{errorMsg}</span>
               </div>
             )}
 
+            {/* 1. Continue with Google (Primary Social Authentication) */}
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = '/api/auth/google';
+              }}
+              className="w-full h-12 px-4 rounded-xl bg-[var(--bg-page-deep)]/90 hover:bg-[var(--bg-card-hover)] border border-white/[0.09] hover:border-white/[0.18] text-sm font-medium text-[var(--text-primary)] transition-all duration-200 flex items-center justify-center space-x-3 cursor-pointer shadow-sm active:scale-[0.99]"
+            >
+              <svg className="w-4.5 h-4.5 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+
+            {/* 2. Divider: OR */}
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[var(--border-subtle)]" />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-[0.2em] text-[var(--text-muted)]">
+                <span className="bg-[var(--bg-surface)] px-2">OR</span>
+              </div>
+            </div>
+
+            {/* 3. Credential Form */}
             <form onSubmit={handleSubmit} className="space-y-3.5">
               {authModalMode === 'signup' ? (
                 <>
+                  {/* Username */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                      Username <span className="text-[var(--color-coral)]">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3.5 text-xs text-[var(--text-muted)] font-mono pointer-events-none">@</span>
+                      <input
+                        type="text"
+                        required
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                        placeholder="username"
+                        maxLength={25}
+                        className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl pl-9 pr-3.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Display Name */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                      Display Name
+                    </label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Your Name"
+                      maxLength={40}
+                      className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl px-4 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                      Email address <span className="text-[var(--color-coral)]">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <Mail className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@domain.com"
+                        className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl pl-10 pr-3.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                      Password <span className="text-[var(--color-coral)]">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="•••••••• (min 6 characters)"
+                        className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl pl-10 pr-11 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer p-1"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Optional Profile Photo in Signup */}
-                  <div className="flex items-center space-x-3.5 p-3 rounded-xl bg-[var(--bg-page-deep)] border border-[var(--border-subtle)]">
+                  <div className="flex items-center space-x-3 p-2.5 rounded-xl bg-[var(--bg-page-deep)]/60 border border-[var(--border-subtle)]">
                     <Avatar
                       src={avatarPreview}
                       name={displayName || username || 'Debater'}
-                      size="md"
+                      size="sm"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-[var(--text-primary)]">Profile Photo</div>
-                      <div className="text-[11px] text-[var(--text-muted)]">Optional · Max 2MB</div>
+                      <div className="text-[11px] font-bold text-[var(--text-primary)]">Profile Photo</div>
+                      <div className="text-[10px] text-[var(--text-muted)]">Optional · Max 2MB</div>
                     </div>
                     <div className="flex items-center space-x-1.5">
                       <input
@@ -639,7 +790,7 @@ export function AuthModal() {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-2.5 py-1 text-xs font-bold bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-primary)] rounded-lg transition inline-flex items-center space-x-1 cursor-pointer"
+                        className="px-2 py-1 text-[11px] font-semibold bg-[var(--bg-surface)] hover:bg-[var(--bg-card-hover)] border border-[var(--border-subtle)] text-[var(--text-primary)] rounded-lg transition inline-flex items-center space-x-1 cursor-pointer"
                       >
                         <Camera className="w-3 h-3 text-[var(--color-coral)]" />
                         <span>{avatarPreview ? 'Change' : 'Upload'}</span>
@@ -651,110 +802,37 @@ export function AuthModal() {
                           className="p-1 text-[var(--text-muted)] hover:text-red-400 rounded-lg transition cursor-pointer"
                           title="Remove photo"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] mb-1">
-                      Username <span className="text-[var(--color-coral)]">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2 text-xs text-[var(--text-muted)]">@</span>
-                      <input
-                        type="text"
-                        required
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                        placeholder="username"
-                        maxLength={25}
-                        className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-7 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] mb-1">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Your Name (e.g. Rohan Sharma)"
-                      maxLength={40}
-                      className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] mb-1">
-                      Email Address <span className="text-[var(--color-coral)]">*</span>
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@domain.com"
-                        className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] mb-1">
-                      Password <span className="text-[var(--color-coral)]">*</span>
-                    </label>
-                    <div className="relative">
-                      <Lock className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        minLength={6}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="•••••••• (at least 6 characters)"
-                        className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-9 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer p-0.5"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
                     </div>
                   </div>
                 </>
               ) : (
                 <>
+                  {/* Email / Username */}
                   <div>
-                    <label className="block text-xs font-bold text-[var(--text-primary)] mb-1">
-                      Username or Email <span className="text-[var(--color-coral)]">*</span>
+                    <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1.5">
+                      Email / username
                     </label>
-                    <div className="relative">
-                      <User className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
+                    <div className="relative flex items-center">
+                      <User className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
                       <input
                         type="text"
                         required
                         value={loginInput}
                         onChange={(e) => setLoginInput(e.target.value)}
-                        placeholder="username or email"
-                        className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
+                        placeholder="e.g. rohan or you@domain.com"
+                        className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl pl-10 pr-3.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
                       />
                     </div>
                   </div>
 
+                  {/* Password */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-[var(--text-primary)]">
-                        Password <span className="text-[var(--color-coral)]">*</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                        Password
                       </label>
                       <button
                         type="button"
@@ -764,78 +842,72 @@ export function AuthModal() {
                           setErrorMsg(null);
                           setSuccessMsg(null);
                         }}
-                        className="text-[11px] font-semibold text-[var(--color-coral)] hover:underline cursor-pointer"
+                        className="text-[11px] font-semibold text-[var(--color-coral)] hover:underline cursor-pointer transition-colors"
                       >
                         Forgot password?
                       </button>
                     </div>
-                    <div className="relative">
-                      <Lock className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
+                    <div className="relative flex items-center">
+                      <Lock className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 pointer-events-none" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-9 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
+                        className="w-full h-12 bg-[var(--bg-page-deep)]/90 border border-white/[0.09] focus:border-[var(--color-coral)] focus:ring-1 focus:ring-[var(--color-coral)]/25 rounded-xl pl-10 pr-11 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-normal"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer p-0.5"
+                        className="absolute right-3.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer p-1"
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                       >
-                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Keep me signed in */}
+                  <div className="flex items-center text-xs pt-1">
+                    <label className="flex items-center space-x-2 text-[var(--text-secondary)] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={keepSignedIn}
+                        onChange={(e) => setKeepSignedIn(e.target.checked)}
+                        className="rounded bg-[var(--bg-page-deep)] border-white/20 text-[var(--color-coral)] focus:ring-[var(--color-coral)]/30 w-3.5 h-3.5 cursor-pointer accent-[var(--color-coral)]"
+                      />
+                      <span>Keep me signed in</span>
+                    </label>
                   </div>
                 </>
               )}
 
+              {/* Primary CTA */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 mt-2"
+                className="w-full h-12 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#07171C] font-semibold text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 mt-4 active:scale-[0.99]"
               >
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{authModalMode === 'signup' ? 'Sending verification code...' : 'Signing in...'}</span>
+                    <span>{authModalMode === 'signup' ? 'Creating account...' : 'Signing in...'}</span>
                   </>
                 ) : (
-                  <span>{authModalMode === 'signup' ? 'Create Account' : 'Sign In'}</span>
+                  <span>{authModalMode === 'signup' ? 'Create account' : 'Log in'}</span>
                 )}
               </button>
             </form>
 
-            <div className="mt-4 pt-3 border-t border-[var(--border-subtle)] text-center text-xs text-[var(--text-secondary)]">
-              {authModalMode === 'signup' ? (
-                <p>
-                  Already have an account?{' '}
-                  <button
-                    onClick={() => {
-                      setAuthModalMode('login');
-                      setErrorMsg(null);
-                    }}
-                    className="font-bold text-[var(--color-coral)] hover:underline cursor-pointer ml-1"
-                  >
-                    Sign In
-                  </button>
-                </p>
-              ) : (
-                <p>
-                  Don&apos;t have an account?{' '}
-                  <button
-                    onClick={() => {
-                      setAuthModalMode('signup');
-                      setErrorMsg(null);
-                    }}
-                    className="font-bold text-[var(--color-coral)] hover:underline cursor-pointer ml-1"
-                  >
-                    Create Account
-                  </button>
-                </p>
-              )}
+            {/* Legal Notice */}
+            <div className="mt-4 pt-3 border-t border-[var(--border-subtle)] text-center text-[11px] text-[var(--text-muted)] leading-relaxed">
+              By continuing, you agree to IndoBid&apos;s{' '}
+              <a href="/?info=terms" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] underline">Terms</a>
+              ,{' '}
+              <a href="/?info=privacy" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] underline">Privacy</a>
+              {' '}and{' '}
+              <a href="/?info=guidelines" className="text-[var(--text-secondary)] hover:text-[var(--color-coral)] underline">Community Guidelines</a>.
             </div>
           </>
         )}

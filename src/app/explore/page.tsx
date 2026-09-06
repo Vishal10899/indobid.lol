@@ -66,10 +66,10 @@ function ExploreContent() {
 
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header & Search Bar */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 space-y-3 w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 space-y-3 w-full min-w-0">
             <div className="flex items-center space-x-2">
               <Compass className="w-5 h-5 text-[var(--color-coral)]" />
-              <h1 className="text-lg font-black text-[var(--text-primary)]">Explore & Discover</h1>
+              <h1 className="text-lg font-bold font-bodoni text-[var(--text-primary)]">Explore &amp; Discover</h1>
             </div>
 
             {/* Search Input */}
@@ -80,7 +80,7 @@ function ExploreContent() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search opinions, #hashtags, debaters..."
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-4 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
+                className="w-full bg-[var(--bg-page-deep)]/80 border border-white/[0.08] focus:border-[var(--color-coral)]/80 focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl pl-9 pr-4 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
               />
             </div>
 
@@ -152,10 +152,14 @@ function ExploreContent() {
   );
 }
 
+import { AuthGate } from '@/components/AuthGate';
+
 export default function ExplorePage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-[var(--bg-page)]" />}>
-      <ExploreContent />
+      <AuthGate>
+        <ExploreContent />
+      </AuthGate>
     </Suspense>
   );
 }

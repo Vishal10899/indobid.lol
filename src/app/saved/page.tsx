@@ -9,8 +9,9 @@ import { DebateCard } from '@/components/DebateCard';
 import { CreateDebateModal } from '@/components/CreateDebateModal';
 import { useAuth } from '@/context/AuthContext';
 import { Bookmark, RefreshCw, LogIn } from 'lucide-react';
+import { AuthGate } from '@/components/AuthGate';
 
-export default function SavedPage() {
+function SavedContent() {
   const { user, openAuthModal } = useAuth();
   const [debates, setDebates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,15 +50,15 @@ export default function SavedPage() {
 
         <main className="w-full min-w-0 flex-1 max-w-2xl min-h-screen lg:min-h-0 lg:h-full lg:overflow-y-auto border-r-0 lg:border-r border-[var(--border-subtle)] pb-24 lg:pb-12 scrollbar-none">
           {/* Header */}
-          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/95 backdrop-blur-md border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center space-x-2.5 w-full min-w-0">
+          <div className="sticky top-0 z-30 bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)] p-3.5 sm:p-4 flex items-center space-x-2.5 w-full min-w-0">
             <Bookmark className="w-5 h-5 text-[var(--color-coral)]" />
-            <h1 className="text-lg font-black text-[var(--text-primary)]">Saved Opinions</h1>
+            <h1 className="text-lg font-bold font-bodoni text-[var(--text-primary)]">Saved Opinions</h1>
           </div>
 
           <div>
             {!user ? (
               <div className="p-4 sm:p-6">
-                <div className="py-20 text-center space-y-3 bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-8">
+                <div className="py-20 text-center space-y-3 glass-panel rounded-2xl p-8">
                   <Bookmark className="w-10 h-10 text-[var(--color-coral)] mx-auto opacity-70" />
                   <h3 className="text-base font-bold text-[var(--text-primary)]">Save debates for later</h3>
                   <p className="text-xs text-[var(--text-secondary)] max-w-sm mx-auto">
@@ -101,5 +102,13 @@ export default function SavedPage() {
       <BottomNav onOpenCreate={() => setIsCreateModalOpen(true)} />
       <CreateDebateModal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} />
     </div>
+  );
+}
+
+export default function SavedPage() {
+  return (
+    <AuthGate>
+      <SavedContent />
+    </AuthGate>
   );
 }

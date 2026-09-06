@@ -228,7 +228,7 @@ export function DebateCard(props: DebateCardProps) {
   }
 
   return (
-    <article className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-card)]/30 p-3.5 sm:p-5 transition duration-150 space-y-2.5 sm:space-y-3 group w-full max-w-full min-w-0 overflow-hidden box-border">
+    <article className="border-b border-[var(--border-subtle)] hover:bg-white/[0.02] p-4 sm:p-5 transition-colors duration-150 space-y-2.5 sm:space-y-3 group w-full max-w-full min-w-0 overflow-hidden box-border">
       {/* Author Header */}
       <div className="flex items-center justify-between gap-2 min-w-0 w-full">
         <div className="flex items-center space-x-2 sm:space-x-2.5 min-w-0 flex-1 overflow-hidden">
@@ -278,7 +278,7 @@ export function DebateCard(props: DebateCardProps) {
           <Link
             href={`/explore?category=${category.slug}`}
             onClick={(e) => e.stopPropagation()}
-            className="text-[10px] sm:text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--color-coral)] px-2 py-0.5 rounded-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] transition shrink-0"
+            className="text-[10px] sm:text-[11px] font-medium text-[var(--text-secondary)] hover:text-[var(--color-coral)] px-2.5 py-0.5 rounded-lg bg-[var(--bg-page-deep)]/80 border border-white/[0.07] hover:border-[var(--color-coral)]/30 transition shrink-0"
           >
             {category.name}
           </Link>

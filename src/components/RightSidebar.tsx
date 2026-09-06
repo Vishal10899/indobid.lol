@@ -52,7 +52,7 @@ export function RightSidebar() {
   ];
 
   return (
-    <aside className="hidden xl:flex flex-col w-80 h-screen sticky top-0 py-6 px-4 border-l border-[var(--border-subtle)] bg-[var(--bg-page)] shrink-0 space-y-6 overflow-y-auto scrollbar-none select-none">
+    <aside className="hidden xl:flex flex-col w-80 h-screen sticky top-0 py-6 px-4 border-l border-[var(--border-subtle)] bg-[var(--bg-page)]/80 backdrop-blur-xl shrink-0 space-y-6 overflow-y-auto scrollbar-none select-none">
       {/* Search Input */}
       <form onSubmit={handleSearch} className="relative">
         <input
@@ -60,13 +60,13 @@ export function RightSidebar() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search opinions, #topics, users..."
-          className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
+          className="w-full bg-[var(--bg-page-deep)]/80 border border-white/[0.08] focus:border-[var(--color-coral)]/80 focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition font-medium"
         />
         <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-2.5" />
       </form>
 
       {/* HOW INDO BID WORKS (Editorial Guide) */}
-      <div className="bg-[var(--bg-surface)]/80 border border-[var(--border-subtle)] rounded-2xl p-4 space-y-3">
+      <div className="glass-panel rounded-2xl p-4 space-y-3 shadow-xs">
         <div className="flex items-center space-x-1.5 text-[11px] font-black text-[var(--color-coral)] uppercase tracking-wider">
           <Sparkles className="w-3.5 h-3.5" />
           <span>How IndoBid Works</span>

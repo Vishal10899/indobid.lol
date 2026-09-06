@@ -630,6 +630,9 @@ export async function processRefundedPayment(
       newVerifiedContribution: newVerifiedTotal,
       debateId: targetDebateId,
     };
+  }, {
+    maxWait: 20000,
+    timeout: 60000,
   });
 
   // 4. Recalculate trending score outside transaction

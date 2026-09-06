@@ -24,6 +24,15 @@ import {
   Flag,
   UserX,
   UserCheck,
+  TrendingDown,
+  Trash2,
+  RotateCcw,
+  Search,
+  AlertTriangle,
+  X,
+  Play,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { formatINR } from '@/lib/money';
 
@@ -87,9 +96,11 @@ interface AdminDebate {
   totalVerifiedContribution: number;
   contributionCount: number;
   status: string;
+  trendingScore?: number;
+  reportCount?: number;
   createdAt: string;
   category: { name: string };
-  _count: { contributions: number; payments: number; reports: number };
+  _count?: { contributions: number; payments: number; reports: number };
 }
 
 interface AdminReport {
@@ -131,7 +142,7 @@ export default function AdminPage() {
   const [adminKey, setAdminKey] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'debates' | 'users' | 'reports' | 'payments' | 'creators'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'debates' | 'users' | 'reports' | 'payments' | 'creators' | 'indobid-daily'>('overview');
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [debates, setDebates] = useState<AdminDebate[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -141,8 +152,21 @@ export default function AdminPage() {
   const [ledgerSearch, setLedgerSearch] = useState('');
   const [ledgerStatusFilter, setLedgerStatusFilter] = useState('all');
   const [loading, setLoading] = useState(false);
-
   const [userSearch, setUserSearch] = useState('');
+  const [debateSearch, setDebateSearch] = useState('');
+  const [debateStatusFilter, setDebateStatusFilter] = useState('all');
+  const [deleteConfirmDebate, setDeleteConfirmDebate] = useState<AdminDebate | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // IndoBid Daily Engine State
+  const [dailyData, setDailyData] = useState<any>(null);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [dailyRunning, setDailyRunning] = useState(false);
+  const [dailyDryRun, setDailyDryRun] = useState(true);
+  const [dailyForce, setDailyForce] = useState(false);
+  const [dailyRunResult, setDailyRunResult] = useState<any>(null);
+  const [dailyMessage, setDailyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Founder Post Creation State
   const [founderPostTitle, setFounderPostTitle] = useState('');
@@ -315,6 +339,95 @@ export default function AdminPage() {
     }
   };
 
+  const handleRankDownDebate = async (debateId: string, penalty = 50) => {
+    setActionLoadingId(debateId);
+    setActionMessage(null);
+    try {
+      const res = await fetch('/api/admin/debates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: debateId, action: 'rankdown', penalty }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to rank down post');
+      }
+      setDebates((prev) =>
+        prev.map((d) =>
+          d.id === debateId
+            ? { ...d, trendingScore: data.debate?.trendingScore ?? (d.trendingScore || 0) - penalty }
+            : d
+        )
+      );
+      setActionMessage({
+        type: 'success',
+        text: `Post ranked down by ${penalty} points (new score: ${data.debate?.trendingScore})`,
+      });
+      setTimeout(() => setActionMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Rank down error:', err);
+      setActionMessage({ type: 'error', text: err.message || 'Failed to rank down post' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleResetRankDebate = async (debateId: string) => {
+    setActionLoadingId(debateId);
+    setActionMessage(null);
+    try {
+      const res = await fetch('/api/admin/debates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: debateId, action: 'reset_rank' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to reset post ranking');
+      }
+      setDebates((prev) =>
+        prev.map((d) =>
+          d.id === debateId ? { ...d, trendingScore: data.debate?.trendingScore ?? 0 } : d
+        )
+      );
+      setActionMessage({
+        type: 'success',
+        text: `Post ranking restored to natural organic score (${data.debate?.trendingScore})`,
+      });
+      setTimeout(() => setActionMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Reset rank error:', err);
+      setActionMessage({ type: 'error', text: err.message || 'Failed to reset post rank' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeleteDebate = async (debateId: string) => {
+    setActionLoadingId(debateId);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/admin/debates?id=${debateId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete post');
+      }
+      setDebates((prev) => prev.filter((d) => d.id !== debateId));
+      setDeleteConfirmDebate(null);
+      setActionMessage({ type: 'success', text: 'Post permanently deleted from platform.' });
+      loadAdminData();
+      setTimeout(() => setActionMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Delete debate error:', err);
+      setActionMessage({ type: 'error', text: err.message || 'Failed to delete post' });
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+
   const handleToggleUserSuspension = async (userId: string, isSuspended: boolean) => {
     try {
       const res = await fetch('/api/admin/users', {
@@ -366,6 +479,53 @@ export default function AdminPage() {
       }
     } catch (e) {
       console.error('Report status error:', e);
+    }
+  };
+
+  const loadDailyData = async () => {
+    setDailyLoading(true);
+    try {
+      const res = await fetch('/api/admin/indobid-daily');
+      if (res.ok) {
+        const data = await res.json();
+        setDailyData(data);
+      }
+    } catch (err: any) {
+      console.error('Failed to load IndoBid Daily status:', err);
+    } finally {
+      setDailyLoading(false);
+    }
+  };
+
+  const handleTriggerDailyRun = async () => {
+    setDailyRunning(true);
+    setDailyMessage(null);
+    setDailyRunResult(null);
+    try {
+      const res = await fetch('/api/admin/indobid-daily', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dryRun: dailyDryRun,
+          force: dailyForce,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Pipeline run failed');
+      }
+      setDailyRunResult(data.result);
+      setDailyMessage({
+        type: 'success',
+        text: data.message || 'Run completed successfully!',
+      });
+      loadDailyData();
+      loadAdminData();
+    } catch (err: any) {
+      console.error('Daily run error:', err);
+      setDailyMessage({ type: 'error', text: err.message || 'Pipeline execution failed' });
+    } finally {
+      setDailyRunning(false);
     }
   };
 
@@ -556,6 +716,21 @@ export default function AdminPage() {
           >
             <Coins className="w-3.5 h-3.5" />
             <span>Creator Economy</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('indobid-daily');
+              loadDailyData();
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+              activeTab === 'indobid-daily'
+                ? 'bg-[var(--color-coral)] text-[#071B21]'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
+            }`}
+          >
+            <Flame className="w-3.5 h-3.5" />
+            <span>IndoBid Daily Engine</span>
           </button>
         </div>
 
@@ -779,61 +954,277 @@ export default function AdminPage() {
         {/* 2. DEBATES TAB */}
         {activeTab === 'debates' && (
           <div className="space-y-4 w-full min-w-0">
+            {/* Action Feedback Banner */}
+            {actionMessage && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-center justify-between space-x-2 border transition ${
+                  actionMessage.type === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                    : 'bg-red-500/15 border-red-500/30 text-red-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  {actionMessage.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                  )}
+                  <span className="font-medium">{actionMessage.text}</span>
+                </div>
+                <button
+                  onClick={() => setActionMessage(null)}
+                  className="text-xs opacity-70 hover:opacity-100 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Filter and Search Bar */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg w-full min-w-0">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={debateSearch}
+                  onChange={(e) => setDebateSearch(e.target.value)}
+                  placeholder="Search opinions by title, author, or category..."
+                  className="w-full bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
+                <div className="flex items-center space-x-1 bg-[var(--bg-page-deep)] p-1 rounded-xl border border-[var(--border-subtle)] text-xs">
+                  {(['all', 'active', 'hidden', 'removed'] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setDebateStatusFilter(st)}
+                      className={`px-3 py-1 rounded-lg font-bold capitalize transition cursor-pointer text-[11px] ${
+                        debateStatusFilter === st
+                          ? 'bg-[var(--color-coral)] text-[#071B21]'
+                          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => loadAdminData()}
+                  className="p-2 rounded-xl bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                  title="Refresh debates"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Debates Management Table */}
             <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-2xl overflow-x-auto shadow-xl w-full min-w-0">
-              <table className="w-full min-w-[640px] text-left text-xs">
+              <table className="w-full min-w-[760px] text-left text-xs">
                 <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase tracking-wider text-[10px] border-b border-[var(--border-subtle)]">
                   <tr>
                     <th className="py-3 px-4">Debate Opinion</th>
                     <th className="py-3 px-4">Author</th>
                     <th className="py-3 px-4">Category</th>
                     <th className="py-3 px-4">Total Backed</th>
+                    <th className="py-3 px-4">Rank Score</th>
                     <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Moderation Action</th>
+                    <th className="py-3 px-4 text-right">Moderation Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {debates.map((d) => (
-                    <tr key={d.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
-                      <td className="py-3 px-4 font-bold text-[var(--text-primary)] max-w-xs truncate">
-                        {d.title}
-                      </td>
-                      <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">
-                        @{d.authorUsername}
-                      </td>
-                      <td className="py-3 px-4 text-[var(--text-secondary)]">{d.category?.name}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-[var(--color-amber)]">
-                        {formatINR(d.totalVerifiedContribution)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            d.status === 'active'
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-amber-500/20 text-amber-400'
-                          }`}
-                        >
-                          {d.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => handleToggleDebateStatus(d.id, d.status)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            d.status === 'active'
-                              ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30'
-                              : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
-                          }`}
-                        >
-                          {d.status === 'active' ? 'Hide Debate' : 'Unhide Debate'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {debates
+                    .filter((d) => {
+                      if (debateStatusFilter !== 'all' && d.status !== debateStatusFilter) return false;
+                      if (debateSearch.trim()) {
+                        const q = debateSearch.toLowerCase().trim();
+                        const titleMatch = (d.title || '').toLowerCase().includes(q);
+                        const authorMatch = (d.authorUsername || '').toLowerCase().includes(q);
+                        const catMatch = (d.category?.name || '').toLowerCase().includes(q);
+                        return titleMatch || authorMatch || catMatch;
+                      }
+                      return true;
+                    })
+                    .map((d) => {
+                      const score = d.trendingScore ?? 0;
+                      const isPenalized = score < 0 || (d.reportCount && d.reportCount > 0);
+                      const isOperating = actionLoadingId === d.id;
+
+                      return (
+                        <tr key={d.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                          <td className="py-3 px-4 max-w-xs">
+                            <Link
+                              href={`/debate/${d.id}`}
+                              target="_blank"
+                              className="font-bold text-[var(--text-primary)] hover:text-[var(--color-coral)] transition truncate block"
+                              title={d.title}
+                            >
+                              {d.title}
+                            </Link>
+                            <span className="text-[10px] text-[var(--text-muted)] truncate block">
+                              {d.content?.substring(0, 70)}...
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[var(--text-secondary)]">
+                            @{d.authorUsername}
+                          </td>
+                          <td className="py-3 px-4 text-[var(--text-secondary)]">
+                            <span className="px-2 py-0.5 rounded-full bg-[var(--bg-page-deep)] text-[11px] border border-[var(--border-subtle)]">
+                              {d.category?.name || 'General'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-[var(--color-amber)]">
+                            {formatINR(d.totalVerifiedContribution)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center space-x-1.5 font-mono">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                  score < 0
+                                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                                    : score > 50
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                }`}
+                              >
+                                {score < 0 ? `🔻 ${score}` : `🔥 ${score}`}
+                              </span>
+                              {isPenalized && (
+                                <button
+                                  onClick={() => handleResetRankDebate(d.id)}
+                                  disabled={isOperating}
+                                  className="p-1 rounded hover:bg-[var(--bg-page-deep)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+                                  title="Reset rank to organic score"
+                                >
+                                  <RotateCcw className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                                d.status === 'active'
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : d.status === 'removed'
+                                  ? 'bg-red-500/20 text-red-400'
+                                  : 'bg-amber-500/20 text-amber-400'
+                              }`}
+                            >
+                              {d.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end space-x-1.5">
+                              {/* 1. Rank Down Action */}
+                              <button
+                                onClick={() => handleRankDownDebate(d.id, 50)}
+                                disabled={isOperating}
+                                className="px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30 flex items-center space-x-1 disabled:opacity-50"
+                                title="Rank down this post in feeds by 50 points"
+                              >
+                                <TrendingDown className="w-3 h-3 shrink-0" />
+                                <span>Rank Down</span>
+                              </button>
+
+                              {/* 2. Hide / Unhide Action */}
+                              <button
+                                onClick={() => handleToggleDebateStatus(d.id, d.status)}
+                                disabled={isOperating}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50 ${
+                                  d.status === 'active'
+                                    ? 'bg-[var(--bg-page-deep)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
+                                    : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30'
+                                }`}
+                              >
+                                {d.status === 'active' ? 'Hide' : 'Unhide'}
+                              </button>
+
+                              {/* 3. Delete Action */}
+                              <button
+                                onClick={() => setDeleteConfirmDebate(d)}
+                                disabled={isOperating}
+                                className="px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer bg-red-500/15 text-red-300 hover:bg-red-500/25 border border-red-500/30 flex items-center space-x-1 disabled:opacity-50"
+                                title="Permanently delete post and its data"
+                              >
+                                <Trash2 className="w-3 h-3 shrink-0" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
+
+              {debates.length === 0 && (
+                <div className="p-8 text-center text-xs text-[var(--text-muted)]">
+                  No debates found on platform.
+                </div>
+              )}
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirmDebate && (
+              <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150">
+                <div className="bg-[var(--bg-surface)] border border-red-500/30 rounded-2xl max-w-md w-full p-5 sm:p-6 space-y-4 shadow-2xl">
+                  <div className="flex items-start space-x-3">
+                    <div className="p-2 rounded-xl bg-red-500/15 text-red-400 border border-red-500/30 shrink-0">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                        Delete Post Permanently?
+                      </h3>
+                      <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                        Are you sure you want to permanently delete this opinion and all its replies from the database? This action cannot be reversed.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-[var(--bg-page-deep)] rounded-xl border border-[var(--border-subtle)] space-y-1 text-xs">
+                    <div className="font-bold text-[var(--text-primary)] truncate">
+                      "{deleteConfirmDebate.title}"
+                    </div>
+                    <div className="text-[var(--text-muted)] font-mono text-[11px]">
+                      Author: @{deleteConfirmDebate.authorUsername} · Backed: {formatINR(deleteConfirmDebate.totalVerifiedContribution)}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-2">
+                    <button
+                      onClick={() => setDeleteConfirmDebate(null)}
+                      disabled={actionLoadingId === deleteConfirmDebate.id}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDebate(deleteConfirmDebate.id)}
+                      disabled={actionLoadingId === deleteConfirmDebate.id}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-500 text-white shadow-lg transition cursor-pointer flex items-center space-x-1.5 disabled:opacity-50"
+                    >
+                      {actionLoadingId === deleteConfirmDebate.id ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete Post</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
+
 
         {/* 3. USERS TAB */}
         {activeTab === 'users' && (
@@ -1225,6 +1616,390 @@ export default function AdminPage() {
                       <tr>
                         <td colSpan={7} className="py-8 text-center text-xs text-[var(--text-muted)]">
                           No creator earnings ledger entries recorded yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 7. INDOBID DAILY ENGINE TAB */}
+        {activeTab === 'indobid-daily' && (
+          <div className="space-y-6 w-full min-w-0">
+            {/* Action Feedback Message */}
+            {dailyMessage && (
+              <div
+                className={`p-4 rounded-xl border flex items-center justify-between text-xs font-bold ${
+                  dailyMessage.type === 'success'
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                    : 'bg-red-500/15 border-red-500/30 text-red-400'
+                }`}
+              >
+                <span>{dailyMessage.text}</span>
+                <button
+                  onClick={() => setDailyMessage(null)}
+                  className="p-1 hover:bg-white/10 rounded-lg cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Config & Control Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Configuration Status */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-5 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Globe className="w-4 h-4 text-[var(--color-coral)]" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">
+                      Engine Configuration
+                    </h3>
+                  </div>
+                  <button
+                    onClick={loadDailyData}
+                    disabled={dailyLoading}
+                    className="p-1.5 hover:bg-[var(--bg-page-deep)] text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg transition cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${dailyLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between py-1 border-b border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Master Engine State</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        dailyData?.config?.enabled
+                          ? 'bg-emerald-500/20 text-emerald-400'
+                          : 'bg-amber-500/20 text-amber-400'
+                      }`}
+                    >
+                      {dailyData?.config?.enabled ? 'AUTO ENABLED' : 'STANDBY / MANUAL'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Dry Run Mode Default</span>
+                    <span className="font-mono font-bold text-[var(--text-primary)]">
+                      {dailyData?.config?.dryRunDefault ? 'Enabled (Safe)' : 'Disabled (Live Publish)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Trend Score Threshold</span>
+                    <span className="font-mono font-bold text-[var(--color-coral)]">
+                      {dailyData?.config?.trendScoreThreshold ?? 50} / 100
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1 border-b border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-secondary)]">Max Posts Per Day</span>
+                    <span className="font-mono font-bold text-[var(--text-primary)]">
+                      {dailyData?.config?.maxPostsPerDay ?? 10}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-[var(--text-secondary)]">Topic Cooldown</span>
+                    <span className="font-mono font-bold text-[var(--text-primary)]">
+                      {dailyData?.config?.cooldownHours ?? 24} hours
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Engine Metrics */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-5 rounded-2xl space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Flame className="w-4 h-4 text-[var(--color-coral)]" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">
+                    Engine Totals
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <div className="bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] p-3 rounded-xl">
+                    <span className="text-[10px] text-[var(--text-muted)] block uppercase font-bold">
+                      Total Automated Posts
+                    </span>
+                    <span className="text-2xl font-black text-[var(--text-primary)]">
+                      {dailyData?.stats?.totalAutomatedPosts ?? 0}
+                    </span>
+                  </div>
+
+                  <div className="bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] p-3 rounded-xl">
+                    <span className="text-[10px] text-[var(--text-muted)] block uppercase font-bold">
+                      Total Pipeline Runs
+                    </span>
+                    <span className="text-2xl font-black text-[var(--text-primary)]">
+                      {dailyData?.stats?.totalRuns ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-[var(--text-secondary)] pt-2 leading-relaxed">
+                  Posts are published under the verified bot <span className="text-[var(--color-coral)] font-bold">@indobiddaily</span>. They are permanent, authoritative posts that never auto-delete.
+                </div>
+              </div>
+
+              {/* Trigger Pipeline Run */}
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-5 rounded-2xl space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Play className="w-4 h-4 text-[var(--color-coral)]" />
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">
+                    Manual Execution
+                  </h3>
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <label className="flex items-center space-x-2 text-xs cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={dailyDryRun}
+                      onChange={(e) => setDailyDryRun(e.target.checked)}
+                      className="rounded border-[var(--border-color)] text-[var(--color-coral)] focus:ring-0"
+                    />
+                    <span className="text-[var(--text-primary)] font-bold">
+                      Dry Run Mode (Simulate without publishing)
+                    </span>
+                  </label>
+
+                  <label className="flex items-center space-x-2 text-xs cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={dailyForce}
+                      onChange={(e) => setDailyForce(e.target.checked)}
+                      className="rounded border-[var(--border-color)] text-[var(--color-coral)] focus:ring-0"
+                    />
+                    <span className="text-[var(--text-secondary)]">
+                      Force Execution (Bypass disabled state / daily cap)
+                    </span>
+                  </label>
+
+                  <button
+                    onClick={handleTriggerDailyRun}
+                    disabled={dailyRunning}
+                    className="w-full py-2.5 px-4 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-black rounded-xl text-xs transition cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50"
+                  >
+                    {dailyRunning ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Running Discovery Engine...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3.5 h-3.5" />
+                        <span>{dailyDryRun ? 'Simulate Pipeline (Dry Run)' : 'Execute & Publish Live Posts'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Run Result Preview (if recent execution) */}
+            {dailyRunResult && (
+              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] p-5 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)] flex items-center space-x-2">
+                    <span>Latest Run Output Preview</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${dailyRunResult.isDryRun ? 'bg-sky-500/20 text-sky-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                      {dailyRunResult.isDryRun ? 'Dry Run' : 'Live Run'}
+                    </span>
+                  </h3>
+                  <button
+                    onClick={() => setDailyRunResult(null)}
+                    className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-[var(--bg-page-deep)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-muted)] block text-[10px]">Sources Queried</span>
+                    <span className="font-bold text-[var(--text-primary)]">{dailyRunResult.sourcesSuccessful} / {dailyRunResult.sourcesAttempted}</span>
+                  </div>
+                  <div className="bg-[var(--bg-page-deep)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-muted)] block text-[10px]">Articles Fetched</span>
+                    <span className="font-bold text-[var(--text-primary)]">{dailyRunResult.articlesFetched}</span>
+                  </div>
+                  <div className="bg-[var(--bg-page-deep)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-muted)] block text-[10px]">Clusters Formed</span>
+                    <span className="font-bold text-[var(--text-primary)]">{dailyRunResult.clustersCreated}</span>
+                  </div>
+                  <div className="bg-[var(--bg-page-deep)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                    <span className="text-[var(--text-muted)] block text-[10px]">Candidates / Published</span>
+                    <span className="font-bold text-[var(--color-coral)]">{dailyRunResult.candidatesSelected} / {dailyRunResult.postsPublished}</span>
+                  </div>
+                </div>
+
+                {dailyRunResult.publishedPosts?.length > 0 && (
+                  <div className="pt-2 space-y-2">
+                    <span className="text-[11px] font-bold text-[var(--text-secondary)]">
+                      {dailyRunResult.isDryRun ? 'Top Evaluated Candidates:' : 'Published Posts:'}
+                    </span>
+                    <div className="space-y-1.5">
+                      {dailyRunResult.publishedPosts.map((p: any, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between p-2.5 bg-[var(--bg-page-deep)] rounded-xl border border-[var(--border-subtle)] text-xs">
+                          <div className="flex items-center space-x-2 min-w-0 pr-2">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[var(--color-coral)]/20 text-[var(--color-coral)] shrink-0">
+                              {p.category}
+                            </span>
+                            <span className="font-bold text-[var(--text-primary)] truncate">{p.title}</span>
+                          </div>
+                          <div className="flex items-center space-x-2 shrink-0">
+                            <span className="text-[11px] font-mono font-bold text-[var(--color-coral)]">Score {Math.round(p.trendScore)}</span>
+                            {p.debateId && (
+                              <Link
+                                href={`/debate/${p.debateId}`}
+                                target="_blank"
+                                className="p-1 hover:bg-white/10 rounded text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Link>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recent Automation Runs Table */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-[var(--border-subtle)]">
+                <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">
+                  Execution History (Recent Pipeline Runs)
+                </h3>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-[var(--text-secondary)]">
+                  <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase text-[10px] tracking-wider font-bold">
+                    <tr>
+                      <th className="py-3 px-4">Run Time</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Sources</th>
+                      <th className="py-3 px-4">Fetched</th>
+                      <th className="py-3 px-4">Deduped</th>
+                      <th className="py-3 px-4">Clusters</th>
+                      <th className="py-3 px-4">Published</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                    {dailyData?.recentRuns?.length > 0 ? (
+                      dailyData.recentRuns.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                          <td className="py-3 px-4 text-[var(--text-primary)] font-mono text-[11px]">
+                            {new Date(r.startedAt).toLocaleString('en-IN', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                r.status === 'success'
+                                  ? 'bg-emerald-500/20 text-emerald-400'
+                                  : r.status === 'dry_run'
+                                  ? 'bg-sky-500/20 text-sky-400'
+                                  : r.status === 'running'
+                                  ? 'bg-amber-500/20 text-amber-400'
+                                  : 'bg-red-500/20 text-red-400'
+                              }`}
+                            >
+                              {r.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">{r.sourcesSuccessful}/{r.sourcesAttempted}</td>
+                          <td className="py-3 px-4">{r.articlesFetched}</td>
+                          <td className="py-3 px-4">{r.duplicatesRemoved}</td>
+                          <td className="py-3 px-4">{r.clustersCreated}</td>
+                          <td className="py-3 px-4 font-bold text-[var(--text-primary)]">
+                            {r.postsPublished}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="py-8 text-center text-xs text-[var(--text-muted)]">
+                          No pipeline runs executed yet. Trigger a run above to test.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Recent Automated Posts */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl overflow-hidden">
+              <div className="p-4 border-b border-[var(--border-subtle)]">
+                <h3 className="text-xs font-black uppercase tracking-wider text-[var(--text-primary)]">
+                  Published Automated Posts ({dailyData?.stats?.totalAutomatedPosts ?? 0})
+                </h3>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-[var(--text-secondary)]">
+                  <thead className="bg-[var(--bg-page-deep)] text-[var(--text-muted)] uppercase text-[10px] tracking-wider font-bold">
+                    <tr>
+                      <th className="py-3 px-4">Published At</th>
+                      <th className="py-3 px-4">Post Title</th>
+                      <th className="py-3 px-4">Category</th>
+                      <th className="py-3 px-4">Trend Score</th>
+                      <th className="py-3 px-4">Sources</th>
+                      <th className="py-3 px-4 text-right">View</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                    {dailyData?.recentPosts?.length > 0 ? (
+                      dailyData.recentPosts.map((p: any) => (
+                        <tr key={p.id} className="hover:bg-[var(--bg-page-deep)]/50 transition">
+                          <td className="py-3 px-4 text-[var(--text-muted)] whitespace-nowrap text-[11px]">
+                            {new Date(p.createdAt).toLocaleString('en-IN', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-3 px-4 font-bold text-[var(--text-primary)] max-w-md truncate">
+                            {p.debate?.title || 'Untitled Post'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-coral)]/15 text-[var(--color-coral)] border border-[var(--color-coral)]/30">
+                              {p.debate?.category?.name || 'General'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-[var(--color-coral)]">
+                            {Math.round(p.trendScore)}
+                          </td>
+                          <td className="py-3 px-4">{p.sourceCount} sources</td>
+                          <td className="py-3 px-4 text-right">
+                            {p.debateId && (
+                              <Link
+                                href={`/debate/${p.debateId}`}
+                                target="_blank"
+                                className="inline-flex items-center space-x-1 text-xs text-[var(--color-coral)] hover:underline"
+                              >
+                                <span>Open</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </Link>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-xs text-[var(--text-muted)]">
+                          No automated posts published yet.
                         </td>
                       </tr>
                     )}

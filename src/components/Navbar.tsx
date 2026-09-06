@@ -41,7 +41,7 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[var(--bg-page)]/90 backdrop-blur-md border-b border-[var(--border-subtle)]">
+    <header className="sticky top-0 z-40 w-full bg-[var(--bg-page)]/80 backdrop-blur-xl border-b border-[var(--border-subtle)]">
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2 sm:gap-4 min-w-0">
         {/* Brand Logo */}
         <div className="shrink-0">
@@ -55,7 +55,7 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search opinions, debaters..."
-            className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition"
+            className="w-full bg-[var(--bg-page-deep)]/80 border border-white/[0.08] focus:border-[var(--color-coral)]/80 focus:ring-1 focus:ring-[var(--color-coral)]/20 rounded-xl pl-8 pr-3 py-1.5 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none transition"
           />
           <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-2.5 top-2.5" />
         </form>
@@ -102,24 +102,22 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
             )}
           </Link>
 
-          {/* + Post Button */}
+          {/* + Post Button (Desktop/Tablet Only — on mobile, use central bottom nav + button) */}
           {onOpenCreate ? (
             <button
               onClick={onOpenCreate}
-              className="px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center space-x-1 cursor-pointer shrink-0"
+              className="hidden sm:flex px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition items-center space-x-1 cursor-pointer shrink-0"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span className="hidden sm:inline">Post Opinion</span>
-              <span className="sm:hidden font-bold">Post</span>
+              <span>Post Opinion</span>
             </button>
           ) : (
             <Link
               href="/?create=true"
-              className="px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition flex items-center space-x-1 shrink-0"
+              className="hidden sm:flex px-2.5 sm:px-3 py-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs rounded-xl shadow transition items-center space-x-1 shrink-0"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span className="hidden sm:inline">Post Opinion</span>
-              <span className="sm:hidden font-bold">Post</span>
+              <span>Post Opinion</span>
             </Link>
           )}
 
@@ -140,10 +138,17 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
               </button>
 
               {profileDropdownOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-48 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl shadow-xl py-1.5 z-50 text-xs"
-                  onClick={() => setProfileDropdownOpen(false)}
-                >
+                <>
+                  {/* Backdrop to close dropdown on tap outside */}
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setProfileDropdownOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="glass-modal absolute right-0 mt-2 w-52 rounded-2xl shadow-2xl py-1.5 z-50 text-xs border border-white/[0.09]"
+                    onClick={() => setProfileDropdownOpen(false)}
+                  >
                   <div className="px-3 py-2 border-b border-[var(--border-subtle)]">
                     <p className="font-bold text-[var(--text-primary)] truncate">{user.displayName}</p>
                     <p className="text-[11px] text-[var(--text-muted)] truncate">@{user.username}</p>
@@ -191,7 +196,8 @@ export function Navbar({ onOpenCreate }: NavbarProps) {
                     <span>Sign Out</span>
                   </button>
                 </div>
-              )}
+              </>
+            )}
             </div>
           ) : (
             <button

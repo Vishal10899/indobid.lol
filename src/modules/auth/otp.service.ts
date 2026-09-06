@@ -9,6 +9,12 @@ import { userRepository } from '../../infrastructure/database/repositories/user.
 import { passwordService } from './password.service';
 import { sessionService } from './session.service';
 import { env } from '../../config/env';
+import {
+  detectContactType,
+  isValidEmail,
+  normalizePhoneNumber,
+  isValidPhoneNumber,
+} from './auth.validation';
 
 export const OTP_EXPIRY_MINUTES = 10;
 export const RESEND_COOLDOWN_SECONDS = 60;
@@ -86,81 +92,159 @@ export class OtpService {
   async requestEmailOtp(
     email: string
   ): Promise<{ success: boolean; message?: string; cooldownRemaining?: number; error?: string }> {
-    const cleanEmail = (email || '').toLowerCase().trim();
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    const clean = (email || '').trim();
+    if (detectContactType(clean) === 'phone') {
+      return this.requestOtp(clean, 'phone');
+    }
 
-    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+    const cleanEmail = clean.toLowerCase();
+    if (!isValidEmail(cleanEmail)) {
       return { success: false, error: 'Please enter a valid email address.' };
     }
 
-    // 1. Check 60-second resend cooldown on most recent OTP
-    const latestOtp = await otpRepository.findLatestByEmail(cleanEmail);
-    if (latestOtp) {
-      const secondsSinceLastSent = (Date.now() - new Date(latestOtp.lastSentAt).getTime()) / 1000;
-      if (secondsSinceLastSent < RESEND_COOLDOWN_SECONDS) {
-        const remaining = Math.ceil(RESEND_COOLDOWN_SECONDS - secondsSinceLastSent);
-        return {
-          success: false,
-          error: `Please wait ${remaining}s before requesting a new code.`,
-          cooldownRemaining: remaining,
-        };
-      }
-    }
-
-    // 2. Invalidate existing unused OTPs
-    await otpRepository.invalidatePreviousOtps(cleanEmail);
-
-    // 3. Generate new OTP & cryptographic salt
-    const code = this.generateOtpCode();
-    const salt = crypto.randomBytes(16).toString('hex');
-    const codeHash = this.hashOtpCode(code, salt);
-    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-
-    // 4. Persist OTP record via repository
-    await otpRepository.create({
-      email: cleanEmail,
-      codeHash,
-      salt,
-      expiresAt,
-      attempts: 0,
-      used: false,
-      lastSentAt: new Date(),
-    });
-
-    // 5. Send verification email
-    const emailSent = await this.sendOtpEmail(cleanEmail, code);
-    if (!emailSent && env.isProduction) {
-      return {
-        success: false,
-        error: 'Failed to dispatch verification email. Please try again later.',
-      };
-    }
-
-    return {
-      success: true,
-      message: `A 6-digit verification code has been sent to ${cleanEmail}.`,
-      cooldownRemaining: RESEND_COOLDOWN_SECONDS,
-    };
+    return this.requestOtp(cleanEmail, 'email');
   }
 
-  async verifyEmailOtp(
-    email: string,
+  async requestOtp(
+    target: string,
+    explicitType?: 'email' | 'phone'
+  ): Promise<{ success: boolean; message?: string; cooldownRemaining?: number; error?: string }> {
+    const cleanTarget = (target || '').trim();
+    if (!cleanTarget) {
+      return { success: false, error: 'Please enter your email or phone number.' };
+    }
+
+    const detectedType = explicitType || detectContactType(cleanTarget);
+
+    if (detectedType === 'phone') {
+      if (!isValidPhoneNumber(cleanTarget)) {
+        return { success: false, error: 'Please enter a valid phone number.' };
+      }
+      const normalizedPhone = normalizePhoneNumber(cleanTarget);
+
+      // 1. Check 60-second resend cooldown
+      const latestOtp = await otpRepository.findLatestByEmail(normalizedPhone);
+      if (latestOtp) {
+        const secondsSinceLastSent = (Date.now() - new Date(latestOtp.lastSentAt).getTime()) / 1000;
+        if (secondsSinceLastSent < RESEND_COOLDOWN_SECONDS) {
+          const remaining = Math.ceil(RESEND_COOLDOWN_SECONDS - secondsSinceLastSent);
+          return {
+            success: false,
+            error: `Please wait ${remaining}s before requesting a new code.`,
+            cooldownRemaining: remaining,
+          };
+        }
+      }
+
+      // 2. Invalidate previous OTPs
+      await otpRepository.invalidatePreviousOtps(normalizedPhone);
+
+      // 3. Generate cryptographic 6-digit code
+      const code = this.generateOtpCode();
+      const salt = crypto.randomBytes(16).toString('hex');
+      const codeHash = this.hashOtpCode(code, salt);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      // 4. Persist OTP record in database
+      await otpRepository.create({
+        email: normalizedPhone,
+        codeHash,
+        salt,
+        expiresAt,
+        attempts: 0,
+        used: false,
+        lastSentAt: new Date(),
+      });
+
+      // 5. Send/Log SMS in development/testing
+      console.log(`[IndoBid OTP] Verification code for ${normalizedPhone}: ${code}`);
+
+      return {
+        success: true,
+        message: `A 6-digit verification code has been sent to ${normalizedPhone}.`,
+        cooldownRemaining: RESEND_COOLDOWN_SECONDS,
+      };
+    } else {
+      // Email validation
+      const cleanEmail = cleanTarget.toLowerCase();
+      if (!isValidEmail(cleanEmail)) {
+        return { success: false, error: 'Please enter a valid email address.' };
+      }
+
+      // 1. Check 60-second resend cooldown on most recent OTP
+      const latestOtp = await otpRepository.findLatestByEmail(cleanEmail);
+      if (latestOtp) {
+        const secondsSinceLastSent = (Date.now() - new Date(latestOtp.lastSentAt).getTime()) / 1000;
+        if (secondsSinceLastSent < RESEND_COOLDOWN_SECONDS) {
+          const remaining = Math.ceil(RESEND_COOLDOWN_SECONDS - secondsSinceLastSent);
+          return {
+            success: false,
+            error: `Please wait ${remaining}s before requesting a new code.`,
+            cooldownRemaining: remaining,
+          };
+        }
+      }
+
+      // 2. Invalidate existing unused OTPs
+      await otpRepository.invalidatePreviousOtps(cleanEmail);
+
+      // 3. Generate new OTP & cryptographic salt
+      const code = this.generateOtpCode();
+      const salt = crypto.randomBytes(16).toString('hex');
+      const codeHash = this.hashOtpCode(code, salt);
+      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      // 4. Persist OTP record via repository
+      await otpRepository.create({
+        email: cleanEmail,
+        codeHash,
+        salt,
+        expiresAt,
+        attempts: 0,
+        used: false,
+        lastSentAt: new Date(),
+      });
+
+      // 5. Send verification email
+      const emailSent = await this.sendOtpEmail(cleanEmail, code);
+      if (!emailSent && env.isProduction) {
+        return {
+          success: false,
+          error: 'Failed to dispatch verification email. Please try again later.',
+        };
+      }
+
+      return {
+        success: true,
+        message: `A 6-digit verification code has been sent to ${cleanEmail}.`,
+        cooldownRemaining: RESEND_COOLDOWN_SECONDS,
+      };
+    }
+  }
+
+  async verifyOtp(
+    target: string,
     code: string,
     options?: { username?: string; displayName?: string }
   ): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
-    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanTarget = (target || '').trim();
     const cleanCode = (code || '').trim();
 
-    if (!cleanEmail || !cleanCode) {
-      return { success: false, error: 'Email and verification code are required.' };
+    if (!cleanTarget || !cleanCode) {
+      return { success: false, error: 'Target and verification code are required.' };
     }
 
     if (!/^\d{6}$/.test(cleanCode)) {
       return { success: false, error: 'Verification code must be 6 digits.' };
     }
 
+    const detectedType = detectContactType(cleanTarget);
+    const lookupTarget = detectedType === 'phone'
+      ? normalizePhoneNumber(cleanTarget)
+      : cleanTarget.toLowerCase();
+
     // 1. Fetch latest unused OTP record
-    const otpRecord = await otpRepository.findLatestByEmail(cleanEmail);
+    const otpRecord = await otpRepository.findLatestByEmail(lookupTarget);
 
     if (!otpRecord) {
       return { success: false, error: 'No active verification code found. Please request a new one.' };
@@ -206,11 +290,19 @@ export class OtpService {
     await otpRepository.markAsUsed(otpRecord.id);
 
     // 6. Authoritative User Provisioning / Verification
-    let user = await userRepository.findByEmail(cleanEmail);
-    const isFounderEmail = cleanEmail === env.ADMIN_EMAIL;
+    let user = await userRepository.findByEmail(lookupTarget);
+    if (!user && detectedType === 'phone') {
+      const digits = lookupTarget.replace(/\D/g, '');
+      user = (await userRepository.findByUsername(lookupTarget)) ||
+             (await userRepository.findByUsername(digits));
+    }
+
+    const isFounderEmail = lookupTarget === env.ADMIN_EMAIL;
 
     if (!user) {
-      const emailPrefix = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().substring(0, 15);
+      const emailPrefix = detectedType === 'phone'
+        ? `user_${lookupTarget.replace(/\D/g, '').slice(-6)}`
+        : lookupTarget.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').toLowerCase().substring(0, 15);
       const baseUsername = options?.username?.trim().toLowerCase().replace(/[^a-zA-Z0-9_]/g, '').substring(0, 20) || emailPrefix || 'debater';
       let candidateUsername = isFounderEmail ? 'vishalkumar' : baseUsername;
 
@@ -224,7 +316,7 @@ export class OtpService {
       const passwordHash = passwordService.hashPassword(randomPassword);
 
       user = await userRepository.create({
-        email: cleanEmail,
+        email: lookupTarget,
         username: candidateUsername,
         displayName: options?.displayName?.trim() || (isFounderEmail ? 'Vishal Kumar' : candidateUsername),
         passwordHash,
@@ -257,13 +349,27 @@ export class OtpService {
       token: sessionToken,
     };
   }
+
+  async verifyEmailOtp(
+    email: string,
+    code: string,
+    options?: { username?: string; displayName?: string }
+  ): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
+    return this.verifyOtp(email, code, options);
+  }
 }
 
 export const otpService = new OtpService();
 export const generateOtpCode = () => otpService.generateOtpCode();
 export const hashOtpCode = (code: string, salt: string) => otpService.hashOtpCode(code, salt);
 export const sendOtpEmail = (email: string, code: string) => otpService.sendOtpEmail(email, code);
+export const requestOtp = (target: string, explicitType?: 'email' | 'phone') => otpService.requestOtp(target, explicitType);
 export const requestEmailOtp = (email: string) => otpService.requestEmailOtp(email);
+export const verifyOtp = (
+  target: string,
+  code: string,
+  options?: { username?: string; displayName?: string }
+) => otpService.verifyOtp(target, code, options);
 export const verifyEmailOtp = (
   email: string,
   code: string,

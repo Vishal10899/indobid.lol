@@ -58,4 +58,8 @@ export interface AdminUserUpdateDTO {
 
 export interface AdminDebateUpdateDTO {
   status?: string;
+  trendingScore?: number;
+  action?: 'rankdown' | 'reset_rank' | 'delete';
+  penalty?: number;
 }
+
