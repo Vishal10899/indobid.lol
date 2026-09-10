@@ -12,6 +12,12 @@ export class ResendEmailProvider implements IEmailProvider {
     const sender = from || env.EMAIL_FROM;
 
     if (!apiKey) {
+      if (env.isProduction) {
+        return {
+          success: false,
+          error: 'Transactional email service is not configured on server',
+        };
+      }
       // In local dev/test fallback to console log
       console.log(`[Email Dispatch Mock] To: ${to} | Subject: ${subject}`);
       return { success: true, messageId: `mock_${Date.now()}` };

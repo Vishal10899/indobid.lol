@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { razorpayProvider } from '@/lib/payments/razorpay-provider';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
-import { calculateNextMinimumPaise, formatINR, MINIMUM_INCREMENT_PAISE } from '@/lib/money';
+import {
+  calculateNextMinimumPaise,
+  formatINR,
+  MINIMUM_INCREMENT_PAISE,
+  exchangeRateService,
+  getCurrencyConfig,
+  formatCurrencyAmount,
+} from '@/lib/money';
 import { getCurrentUser } from '@/lib/user-auth';
 import { getOrAssignGhostDisplayName } from '@/lib/ghost/ghost-identity';
 import { z } from 'zod';
@@ -13,6 +20,10 @@ export const continueDebateSchema = z.object({
   content: z.string().min(5, 'Your response must be at least 5 characters').max(3000, 'Response cannot exceed 3000 characters'),
   amountPaise: z.number().int().optional(),
   amountRupees: z.number().optional(),
+  amount: z.number().optional(),
+  currency: z.string().optional(),
+  currencyCode: z.string().optional(),
+  countryCode: z.string().optional(),
   authorUsername: z.string().max(30).optional(),
   authorDisplayName: z.string().max(50).optional(),
   isAnonymous: z.boolean().optional(),
@@ -67,15 +78,90 @@ export async function POST(
     }
 
     // 4. Authoritative Minimum Contribution Calculation
-    // Rule: nextContribution >= latestVerifiedContribution + ₹1 (100 paise)
+    // Rule: nextContribution >= latestVerifiedContribution + ₹1 (100 paise), min ₹10 (1000 paise)
     const latestVerifiedPaise = debate.lastContributionAmount;
     const minRequiredPaise = calculateNextMinimumPaise(latestVerifiedPaise);
 
+    // 5. Resolve user from session if authenticated
+    const session = await getCurrentUser();
+    let authorId = session?.userId || null;
+    let authorUsername = session?.username;
+    let authorDisplayName = session?.displayName;
+    let isGhost = false;
+    let isAnonymous = Boolean(data.isAnonymous);
+
+    let userCurrency: string | undefined;
+    if (session?.userId) {
+      const u = await prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { currencyCode: true },
+      });
+      userCurrency = u?.currencyCode || undefined;
+    }
+
+    const selectedCurrency = (
+      data.currency ||
+      data.currencyCode ||
+      userCurrency ||
+      'INR'
+    ).toUpperCase().trim();
+
+    const currencyConfig = getCurrencyConfig(selectedCurrency);
+    const minRequiredMinor = exchangeRateService.convertFromBase(minRequiredPaise, selectedCurrency);
+    const minRequiredFormatted = formatCurrencyAmount(minRequiredMinor, selectedCurrency);
+
     let contributionPaise = minRequiredPaise;
-    if (data.amountPaise !== undefined && data.amountPaise !== null) {
-      contributionPaise = Math.floor(data.amountPaise);
+    let targetMinorUnits = minRequiredMinor;
+
+    if (data.amount !== undefined && data.amount !== null) {
+      targetMinorUnits = Math.round(data.amount * Math.pow(10, currencyConfig.decimals));
+      if (targetMinorUnits < minRequiredMinor) {
+        return NextResponse.json(
+          {
+            error: `Your contribution must be at least ${minRequiredFormatted} (${selectedCurrency}).`,
+            minimumRequiredPaise: minRequiredPaise,
+            latestContributionPaise: latestVerifiedPaise,
+          },
+          { status: 400 }
+        );
+      }
+      contributionPaise = exchangeRateService.convertToBase(targetMinorUnits, selectedCurrency);
     } else if (data.amountRupees !== undefined && data.amountRupees !== null) {
-      contributionPaise = Math.round(data.amountRupees * 100);
+      if (selectedCurrency === 'INR') {
+        contributionPaise = Math.round(data.amountRupees * 100);
+        targetMinorUnits = contributionPaise;
+      } else {
+        targetMinorUnits = Math.round(data.amountRupees * Math.pow(10, currencyConfig.decimals));
+        if (targetMinorUnits < minRequiredMinor) {
+          return NextResponse.json(
+            {
+              error: `Your contribution must be at least ${minRequiredFormatted} (${selectedCurrency}).`,
+              minimumRequiredPaise: minRequiredPaise,
+              latestContributionPaise: latestVerifiedPaise,
+            },
+            { status: 400 }
+          );
+        }
+        contributionPaise = exchangeRateService.convertToBase(targetMinorUnits, selectedCurrency);
+      }
+    } else if (data.amountPaise !== undefined && data.amountPaise !== null) {
+      if (selectedCurrency === 'INR') {
+        contributionPaise = Math.floor(data.amountPaise);
+        targetMinorUnits = contributionPaise;
+      } else {
+        targetMinorUnits = Math.floor(data.amountPaise);
+        if (targetMinorUnits < minRequiredMinor) {
+          return NextResponse.json(
+            {
+              error: `Your contribution must be at least ${minRequiredFormatted} (${selectedCurrency}).`,
+              minimumRequiredPaise: minRequiredPaise,
+              latestContributionPaise: latestVerifiedPaise,
+            },
+            { status: 400 }
+          );
+        }
+        contributionPaise = exchangeRateService.convertToBase(targetMinorUnits, selectedCurrency);
+      }
     }
 
     if (contributionPaise < minRequiredPaise) {
@@ -88,14 +174,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    // 5. Resolve user from session if authenticated
-    const session = await getCurrentUser();
-    let authorId = session?.userId || null;
-    let authorUsername = session?.username;
-    let authorDisplayName = session?.displayName;
-    let isGhost = false;
-    let isAnonymous = Boolean(data.isAnonymous);
 
     if (session?.userId) {
       const user = await prisma.user.findUnique({
@@ -163,6 +241,8 @@ export async function POST(
       amount: contributionPaise,
       amountRupees: contributionPaise / 100,
       currency: 'INR',
+      selectedCurrency,
+      selectedAmount: targetMinorUnits / Math.pow(10, currencyConfig.decimals),
       debateId: debate.id,
       contributionId: pendingContribution.id,
       debateTitle: debate.title,

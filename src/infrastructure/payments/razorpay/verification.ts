@@ -11,8 +11,8 @@ export function verifyRazorpaySignature(params: VerifySignatureParams): boolean 
   const { keySecret } = getRazorpayConfig();
 
   if (!keySecret || !orderId || !paymentId || !signature) {
-    // In mock/test environments
-    if (orderId.startsWith('order_mock_')) return true;
+    // In local non-production development/test environments without credentials
+    if (process.env.NODE_ENV !== 'production' && orderId?.startsWith('order_mock_')) return true;
     return false;
   }
 

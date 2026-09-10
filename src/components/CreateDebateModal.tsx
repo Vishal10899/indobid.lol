@@ -16,7 +16,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar } from '@/components/Avatar';
-import { formatINR } from '@/lib/money';
+import {
+  formatINR,
+  getMinimumSupport,
+  getCurrencyConfig,
+  exchangeRateService,
+  formatCurrencyAmount,
+  BASE_INR_PRESETS,
+} from '@/lib/money';
 
 interface Category {
   id: string;
@@ -44,7 +51,13 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
   
   // Publishing Mode: 'free' (Default) or 'backed' (Optional Conviction)
   const [publishMode, setPublishMode] = useState<'free' | 'backed'>('free');
-  const [amountRupees, setAmountRupees] = useState(2);
+  const [currency, setCurrency] = useState<string>('INR');
+  const currencyConfig = getCurrencyConfig(currency);
+  const minSupport = getMinimumSupport(currency);
+  const minMajor = minSupport.minimumMinorUnits / Math.pow(10, currencyConfig.decimals);
+
+  const [amount, setAmount] = useState<number>(minMajor);
+  const [amountRupees, setAmountRupees] = useState<number>(10);
   const [email, setEmail] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -58,11 +71,18 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
     if (user) {
       setUsername(user.username);
       if (user.email) setEmail(user.email);
+      if (user.currencyCode) {
+        handleCurrencyChange(user.currencyCode);
+      }
     } else if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('indobid_username');
       if (savedUser) setUsername(savedUser);
       const savedEmail = localStorage.getItem('indobid_email');
       if (savedEmail) setEmail(savedEmail);
+      const savedCurrency = localStorage.getItem('indobid_currency');
+      if (savedCurrency) {
+        handleCurrencyChange(savedCurrency);
+      }
     }
   }, [user]);
 
@@ -104,7 +124,12 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
               if (draft.categorySlug) setCategorySlug(draft.categorySlug);
               if (typeof draft.isAnonymous === 'boolean') setIsAnonymous(draft.isAnonymous);
               if (draft.publishMode) setPublishMode(draft.publishMode);
-              if (draft.amountRupees) setAmountRupees(draft.amountRupees);
+              if (draft.currency) handleCurrencyChange(draft.currency);
+              if (typeof draft.amount === 'number') setAmount(draft.amount);
+              else if (draft.amountRupees) {
+                setAmountRupees(draft.amountRupees);
+                setAmount(draft.amountRupees);
+              }
               if (draft.imagePreview) setImagePreview(draft.imagePreview);
             }
           }
@@ -125,6 +150,8 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
             categorySlug,
             isAnonymous,
             publishMode,
+            currency,
+            amount,
             amountRupees,
             imagePreview,
             updatedAt: new Date().toISOString(),
@@ -132,15 +159,60 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
         );
       } catch {}
     }
-  }, [postText, hashtags, categorySlug, isAnonymous, publishMode, amountRupees, imagePreview]);
+  }, [postText, hashtags, categorySlug, isAnonymous, publishMode, currency, amount, amountRupees, imagePreview]);
 
-  if (!isOpen) return null;
-
-  const presetAmounts = [2, 5, 10, 25, 50, 100];
+  const handleCurrencyChange = (newCurrency: string) => {
+    const cleanCurr = newCurrency.toUpperCase().trim();
+    setCurrency(cleanCurr);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('indobid_currency', cleanCurr);
+    }
+    const newConfig = getCurrencyConfig(cleanCurr);
+    const newMinSupport = getMinimumSupport(cleanCurr);
+    const newMinMajor = newMinSupport.minimumMinorUnits / Math.pow(10, newConfig.decimals);
+    setAmount(newMinMajor);
+    setAmountRupees(cleanCurr === 'INR' ? newMinMajor : 10);
+  };
 
   const handleAmountChange = (newVal: number) => {
-    setAmountRupees(Math.max(2, newVal));
+    if (isNaN(newVal)) return;
+    const clamped = Math.max(minMajor, newVal);
+    const precision = Math.pow(10, currencyConfig.decimals);
+    const rounded = Math.round(clamped * precision) / precision;
+    setAmount(rounded);
+    if (currency === 'INR') {
+      setAmountRupees(rounded);
+    }
   };
+
+  const handleDecrement = () => {
+    const step = currencyConfig.decimals === 0 ? 1 : amount > 2 ? 1 : 0.10;
+    const nextVal = Math.max(minMajor, Math.round((amount - step) * 100) / 100);
+    setAmount(nextVal);
+    if (currency === 'INR') {
+      setAmountRupees(nextVal);
+    }
+  };
+
+  const handleIncrement = () => {
+    const step = currencyConfig.decimals === 0 ? 1 : amount < 1 ? 0.10 : 1;
+    const nextVal = Math.round((amount + step) * 100) / 100;
+    setAmount(nextVal);
+    if (currency === 'INR') {
+      setAmountRupees(nextVal);
+    }
+  };
+
+  const presetAmounts = React.useMemo(() => {
+    if (currency === 'INR') return [10, 20, 50, 100, 250, 500];
+    if (currency === 'USD') return [0.12, 0.50, 1, 2, 5, 10];
+    return BASE_INR_PRESETS.map((baseInr) => {
+      const minor = exchangeRateService.convertFromBase(baseInr * 100, currency);
+      return Number((minor / Math.pow(10, currencyConfig.decimals)).toFixed(currencyConfig.decimals));
+    });
+  }, [currency, currencyConfig.decimals]);
+
+  if (!isOpen) return null;
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -196,7 +268,8 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
 
       const content = trimmedText.length >= 10 ? trimmedText : `${trimmedText} (opinion)`;
       const isFree = publishMode === 'free';
-      const amountPaise = isFree ? 0 : amountRupees * 100;
+      const targetMinorUnits = Math.round(amount * Math.pow(10, currencyConfig.decimals));
+      const amountPaise = isFree ? 0 : exchangeRateService.convertToBase(targetMinorUnits, currency);
 
       // Combine hashtags
       let combinedHashtags = hashtags.trim();
@@ -217,6 +290,9 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
           authorUsername: isAnonymous ? undefined : username || undefined,
           isAnonymous,
           isFree,
+          amount: isFree ? 0 : amount,
+          currency,
+          currencyCode: currency,
           amountPaise: isFree ? 0 : amountPaise,
           email: email || undefined,
         }),
@@ -239,12 +315,13 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
       }
 
       const { orderId, keyId, debateId, contributionId } = data;
+      const checkoutPaise = data.amount || amountPaise;
 
       // 2. Open Razorpay Checkout for Optional Backed Post
       if (typeof window !== 'undefined' && (window as any).Razorpay && keyId && keyId !== 'rzp_test_placeholder') {
         const options = {
           key: keyId,
-          amount: amountPaise,
+          amount: checkoutPaise,
           currency: 'INR',
           name: 'IndoBid',
           description: `Support Opinion: ${title.substring(0, 30)}`,
@@ -268,7 +345,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                   razorpay_signature: response.razorpay_signature,
                   debateId,
                   contributionId,
-                  amountPaise,
+                  amountPaise: checkoutPaise,
                 }),
               });
 
@@ -299,30 +376,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
         const rzp = new (window as any).Razorpay(options);
         rzp.open();
       } else {
-        // Dev / Test Simulation Fallback
-        setVerifying(true);
-        const mockPayId = `rzp_mock_${Date.now()}`;
-        const verifyRes = await fetch('/api/payments/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            razorpay_payment_id: mockPayId,
-            razorpay_order_id: orderId,
-            razorpay_signature: 'dev_mock_signature',
-            debateId,
-            contributionId,
-            amountPaise,
-          }),
-        });
-
-        const verifyData = await verifyRes.json();
-        if (verifyRes.ok && verifyData.success) {
-          onCreated?.();
-          onClose();
-          router.push(`/debate/${debateId}`);
-        } else {
-          throw new Error(verifyData.error || 'Failed to verify simulated payment');
-        }
+        throw new Error('Payment gateway is currently initializing or unavailable. Please refresh or try again.');
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error creating opinion');
@@ -551,11 +605,29 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                 {publishMode === 'backed' && (
                   <div className="p-3.5 rounded-2xl bg-[var(--bg-page-deep)] border border-[var(--border-subtle)] space-y-3 animate-in fade-in slide-in-from-top-2 duration-150">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-[var(--text-primary)]">
-                        Select Amount (USD)
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-[var(--text-primary)]">
+                          Select Amount ({currency})
+                        </span>
+                        <select
+                          value={currency}
+                          onChange={(e) => handleCurrencyChange(e.target.value)}
+                          className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-md px-1.5 py-0.5 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none cursor-pointer"
+                          aria-label="Select currency"
+                        >
+                          <option value="INR">₹ INR</option>
+                          <option value="USD">$ USD</option>
+                          <option value="EUR">€ EUR</option>
+                          <option value="GBP">£ GBP</option>
+                          <option value="CAD">CA$ CAD</option>
+                          <option value="AUD">A$ AUD</option>
+                          <option value="JPY">¥ JPY</option>
+                          <option value="SGD">S$ SGD</option>
+                          <option value="AED">AED</option>
+                        </select>
+                      </div>
                       <span className="text-[11px] text-[var(--color-amber)] font-mono font-bold">
-                        $2 minimum
+                        {minSupport.formatted} minimum
                       </span>
                     </div>
 
@@ -567,12 +639,12 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                           type="button"
                           onClick={() => handleAmountChange(amt)}
                           className={`py-1.5 rounded-xl text-xs font-bold font-mono transition cursor-pointer text-center ${
-                            amountRupees === amt
+                            amount === amt
                               ? 'bg-[var(--color-coral)] text-[#071B21] shadow-xs'
                               : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-subtle)]'
                           }`}
                         >
-                          ${amt}
+                          {currencyConfig.symbol}{amt}
                         </button>
                       ))}
                     </div>
@@ -581,26 +653,30 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                     <div className="flex items-center space-x-2 w-full min-w-0">
                       <button
                         type="button"
-                        onClick={() => handleAmountChange(amountRupees - 1)}
-                        disabled={amountRupees <= 2}
+                        onClick={handleDecrement}
+                        disabled={amount <= minMajor}
                         className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold text-xs disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                         aria-label="Decrease amount"
                       >
                         −
                       </button>
                       <div className="flex-1 relative min-w-0">
-                        <span className="absolute left-3 top-1.5 text-xs font-bold text-[var(--color-coral)]">$</span>
+                        <span className="absolute left-3 top-1.5 text-xs font-bold text-[var(--color-coral)]">
+                          {currencyConfig.symbol}
+                        </span>
                         <input
                           type="number"
-                          min={2}
-                          value={amountRupees}
-                          onChange={(e) => handleAmountChange(parseInt(e.target.value || '2', 10))}
+                          min={minMajor}
+                          step={currencyConfig.decimals > 0 ? '0.01' : '1'}
+                          value={amount}
+                          onChange={(e) => handleAmountChange(parseFloat(e.target.value || String(minMajor)))}
+                          onBlur={() => { if (!amount || amount < minMajor) setAmount(minMajor); }}
                           className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] focus:border-[var(--color-coral)] rounded-xl pl-7 pr-3 py-1 text-xs font-bold text-[var(--text-primary)] font-mono focus:outline-none"
                         />
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleAmountChange(amountRupees + 1)}
+                        onClick={handleIncrement}
                         className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-primary)] font-bold text-xs hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                         aria-label="Increase amount"
                       >
@@ -618,7 +694,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={loading || (publishMode === 'backed' && amountRupees < 2) || postText.trim().length < 5}
+                disabled={loading || (publishMode === 'backed' && amount < minMajor) || postText.trim().length < 5}
                 className="w-full py-3 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#071B21] font-bold text-xs sm:text-sm rounded-xl sm:rounded-2xl shadow-md transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] h-11 sm:h-12"
               >
                 {loading ? (
@@ -629,7 +705,7 @@ export function CreateDebateModal({ isOpen, onClose, onCreated }: CreateDebateMo
                 ) : publishMode === 'free' ? (
                   <span>Post</span>
                 ) : (
-                  <span>Continue to payment · ${amountRupees}</span>
+                  <span>Continue to payment · {currencyConfig.symbol}{amount}</span>
                 )}
               </button>
             </form>

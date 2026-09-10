@@ -22,11 +22,11 @@ async function main() {
   const adminEmail = process.env.ADMIN_EMAIL || 'vishalkumar75912@gmail.com';
   await prisma.user.upsert({
     where: { email: adminEmail },
-    update: { role: 'founder', username: 'vishalChaudhary', displayName: 'Vishal Chaudhary', isVerified: true },
+    update: { role: 'founder', username: 'vishalkumar', displayName: 'Vishal Kumar', isVerified: true },
     create: {
       email: adminEmail,
-      username: 'vishalChaudhary',
-      displayName: 'Vishal Chaudhary',
+      username: 'vishalkumar',
+      displayName: 'Vishal Kumar',
       role: 'founder',
       isVerified: true,
     },

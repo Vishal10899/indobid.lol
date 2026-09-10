@@ -12,6 +12,9 @@ export async function createRazorpayOrder(params: CreateOrderParams): Promise<Pa
   const { keyId, keySecret } = getRazorpayConfig();
 
   if (!keyId || !keySecret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new PaymentError('Payment gateway is not configured on server');
+    }
     // In local dev/test without credentials, return mock order
     return {
       id: `order_mock_${Date.now()}`,

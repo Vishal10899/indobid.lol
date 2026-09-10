@@ -65,8 +65,12 @@ export interface CreateDebateDTO {
   authorUsername?: string;
   authorDisplayName?: string;
   isFree?: boolean;
+  amount?: number | null;
   amountPaise?: number | null;
   amountRupees?: number | null;
+  currency?: string | null;
+  currencyCode?: string | null;
+  countryCode?: string | null;
   isAnonymous?: boolean;
   isGhost?: boolean;
   hashtags?: string | null;

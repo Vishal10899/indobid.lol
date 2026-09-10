@@ -8,7 +8,15 @@ import { safeDb } from '../../infrastructure/database/transactions';
 import { debateRepository } from '../../infrastructure/database/repositories/debate.repository';
 import { userRepository } from '../../infrastructure/database/repositories/user.repository';
 import { categoryRepository } from '../../infrastructure/database/repositories/category.repository';
-import { calculateNextMinimumPaise, MINIMUM_DEBATE_PAISE, formatINR } from '../../lib/money';
+import {
+  calculateNextMinimumPaise,
+  MINIMUM_DEBATE_PAISE,
+  BASE_MINIMUM_SUPPORT_PAISE,
+  getMinimumSupport,
+  getCurrencyConfig,
+  exchangeRateService,
+  formatINR,
+} from '../../lib/money';
 import { calculateTrendingScore } from '../feed/trending/trending.service';
 import { calculateRankingScore } from '../feed/ranking/ranking.service';
 import { isFounder, getOrCreateFounderUser } from '../auth/authorization';
@@ -579,24 +587,77 @@ export class DebateService {
       authorDisplayName = (data.authorDisplayName || authorUsername).trim().substring(0, 40);
     }
 
+    // 1. Resolve currency and country
+    const selectedCurrency = (
+      data.currency ||
+      data.currencyCode ||
+      (session?.userId
+        ? (await safeDb(() =>
+            prisma.user.findUnique({
+              where: { id: session.userId },
+              select: { currencyCode: true },
+            })
+          ))?.currencyCode
+        : null) ||
+      'INR'
+    ).toUpperCase().trim();
+
+    const selectedCountry = (
+      data.countryCode ||
+      (session?.userId
+        ? (await safeDb(() =>
+            prisma.user.findUnique({
+              where: { id: session.userId },
+              select: { countryCode: true },
+            })
+          ))?.countryCode
+        : null) ||
+      'IN'
+    ).toUpperCase().trim();
+
+    const minSupport = getMinimumSupport(selectedCurrency);
+    const currencyConfig = getCurrencyConfig(selectedCurrency);
+
     // Determine Publishing Mode: Free vs Optional Financial Backing
     let isFreePost =
       data.isFree === true ||
-      data.amountPaise === 0 ||
-      data.amountRupees === 0 ||
-      (!data.amountPaise && !data.amountRupees);
+      (data.amountPaise === 0 && !data.amount && !data.amountRupees) ||
+      (data.amount === 0 && !data.amountPaise && !data.amountRupees) ||
+      (data.amountRupees === 0 && !data.amount && !data.amountPaise) ||
+      (!data.isFree &&
+        data.amountPaise === undefined &&
+        data.amount === undefined &&
+        data.amountRupees === undefined);
     let backingPaise = 0;
+    let targetMinorUnits = 0;
 
-    if (!isFreePost && (data.amountPaise || data.amountRupees)) {
-      if (data.amountPaise !== undefined && data.amountPaise !== null) {
-        backingPaise = Math.floor(data.amountPaise);
+    if (!isFreePost && (data.amountPaise !== undefined || data.amountRupees !== undefined || data.amount !== undefined)) {
+      if (data.amount !== undefined && data.amount !== null) {
+        targetMinorUnits = Math.round(data.amount * Math.pow(10, currencyConfig.decimals));
       } else if (data.amountRupees !== undefined && data.amountRupees !== null) {
-        backingPaise = Math.round(data.amountRupees * 100);
+        if (selectedCurrency === 'INR') {
+          targetMinorUnits = Math.round(data.amountRupees * 100);
+        } else {
+          targetMinorUnits = Math.round(data.amountRupees * Math.pow(10, currencyConfig.decimals));
+        }
+      } else if (data.amountPaise !== undefined && data.amountPaise !== null) {
+        targetMinorUnits = Math.floor(data.amountPaise);
       }
 
-      if (backingPaise < MINIMUM_DEBATE_PAISE) {
+      // Check minor units against currency minimum
+      if (targetMinorUnits < minSupport.minimumMinorUnits) {
         throw new ValidationError(
-          `Backing an opinion requires a minimum contribution of ${formatINR(MINIMUM_DEBATE_PAISE)}.`
+          `Backing an opinion requires a minimum contribution of ${minSupport.formatted} (${selectedCurrency}).`
+        );
+      }
+
+      // Convert to canonical base INR paise
+      backingPaise = exchangeRateService.convertToBase(targetMinorUnits, selectedCurrency);
+
+      // Enforce ₹10 INR canonical floor (1000 paise)
+      if (backingPaise < BASE_MINIMUM_SUPPORT_PAISE) {
+        throw new ValidationError(
+          `Backing an opinion requires a minimum contribution of ${formatINR(BASE_MINIMUM_SUPPORT_PAISE)}.`
         );
       }
     } else {
@@ -798,19 +859,15 @@ export class DebateService {
     );
 
     const { paymentService } = await import('../payments/payment.service');
-    const userMeta = session?.userId
-      ? await safeDb(() => prisma.user.findUnique({ where: { id: session.userId }, select: { countryCode: true, currencyCode: true } }))
-      : null;
-    const userCountry = userMeta?.countryCode || 'IN';
-    const userCurrency = userMeta?.currencyCode || 'INR';
 
     const checkoutSession = await paymentService.createCheckoutSession({
       debateId: debate.id,
       contributionId: contribution.id,
       title: debate.title,
       amountPaise: backingPaise,
-      currency: userCurrency,
-      countryCode: userCountry,
+      currency: 'INR',
+      countryCode: selectedCountry,
+      baseAmountPaise: backingPaise,
       authorUsername: isAnonymous ? 'anonymous' : authorUsername,
       customerEmail: data.email || session?.email || undefined,
     });
@@ -825,8 +882,10 @@ export class DebateService {
       keyId: checkoutSession.keyId,
       amount: backingPaise,
       amountRupees: backingPaise / 100,
-      currency: userCurrency,
-      countryCode: userCountry,
+      currency: 'INR',
+      selectedCurrency,
+      selectedAmount: targetMinorUnits / Math.pow(10, currencyConfig.decimals),
+      countryCode: selectedCountry,
       debateId: debate.id,
       contributionId: contribution.id,
       debateTitle: debate.title,

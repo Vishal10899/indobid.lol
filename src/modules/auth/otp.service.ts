@@ -157,7 +157,9 @@ export class OtpService {
       });
 
       // 5. Send/Log SMS in development/testing
-      console.log(`[IndoBid OTP] Verification code for ${normalizedPhone}: ${code}`);
+      if (env.isDevelopment || env.isTest) {
+        console.log(`[IndoBid OTP] Verification code for ${normalizedPhone}: ${code}`);
+      }
 
       return {
         success: true,

@@ -9,10 +9,10 @@ export const appConfig = {
   domain: 'indobid.lol',
   supportEmail: 'support@indobid.lol',
   
-  // Economics Constants (Paise: $1 = 100 paise)
+  // Economics Constants (Paise: 100 paise = ₹1 INR)
   money: {
-    MINIMUM_DEBATE_PAISE: 200,      // $2.00 USD
-    MINIMUM_INCREMENT_PAISE: 100,   // $1.00 USD
+    MINIMUM_DEBATE_PAISE: 1000,     // ₹10.00 INR canonical minimum conviction
+    MINIMUM_INCREMENT_PAISE: 100,   // ₹1.00 INR increment
     CREATOR_SHARE_BPS: 5000,        // 50.00%
     PLATFORM_FEE_BPS: 5000,         // 50.00%
     DEFAULT_CURRENCY: 'INR',

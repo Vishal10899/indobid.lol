@@ -151,12 +151,18 @@ async function runTestSuite() {
       { title: { startsWith: 'Original Title Before Author Edit' } },
       { title: { startsWith: 'Debate to be hidden' } },
       { title: { startsWith: '🚀 Welcome to IndoBid' } },
+      { title: { startsWith: 'Free Post: Open Market Ideas' } },
+      { title: { startsWith: 'Backed Post: High Conviction Thesis' } },
+      { title: { startsWith: 'Official Founder Debate' } },
+      { title: { startsWith: 'Admin Created Debate' } },
+      { title: { startsWith: 'Part 13' } },
       { authorUsername: { startsWith: 'test' } },
+      { authorUsername: { startsWith: 'p13_' } },
       { authorUsername: { startsWith: 'p17_' } },
       { authorUsername: { startsWith: 'canonical_' } },
       { authorUsername: { startsWith: 'ghost_' } },
       { authorUsername: { startsWith: 'unicode_' } },
-      { authorUsername: { in: ['debater_p17a', 'debater_p17b', 'ghost_writer'] } },
+      { authorUsername: { in: ['debater', 'debater_p17a', 'debater_p17b', 'ghost_writer'] } },
     ],
   };
 
@@ -222,7 +228,7 @@ async function runTestSuite() {
   // -------------------------------------------------------------------------------------------------
   console.log('\n--- PART 1: ECONOMIC & MONETARY VALIDATION (Tests 1 - 24) ---');
 
-  // Test 1: New debate with $2 USD (200 paise) payment succeeds
+  // Test 1: New debate with ₹10 INR (1000 paise) payment succeeds
   const payId1 = `test_pay_001_${Date.now()}`;
   const debate1 = await prisma.debate.create({
     data: {
@@ -231,7 +237,7 @@ async function runTestSuite() {
       categoryId: testCategory.id,
       authorUsername: 'test_aman',
       authorDisplayName: 'Aman',
-      originalContribution: 200, // $2 USD
+      originalContribution: 1000, // ₹10 INR
       totalVerifiedContribution: 0,
       contributionCount: 0,
       status: 'pending_payment',
@@ -241,17 +247,17 @@ async function runTestSuite() {
   const res1 = await processSuccessfulPayment({
     providerPaymentId: payId1,
     debateId: debate1.id,
-    amountPaise: 200, // $2 USD (200 paise)
+    amountPaise: 1000, // ₹10 INR (1000 paise)
     currency: 'INR',
   });
 
   const d1Check = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res1.success && d1Check?.status === 'active' && d1Check.totalVerifiedContribution === 200 && d1Check.contributionCount === 1,
-    'Test 1: New debate with $2 USD (200 paise) payment succeeds and activates with 1 contribution'
+    res1.success && d1Check?.status === 'active' && d1Check.totalVerifiedContribution === 1000 && d1Check.contributionCount === 1,
+    'Test 1: New debate with ₹10 INR (1000 paise) payment succeeds and activates with 1 contribution'
   );
 
-  // Test 2: New debate with less than $2 USD (< 200 paise) is rejected
+  // Test 2: New debate with less than ₹10 INR (< 1000 paise) is rejected
   let test2FailedProperly = false;
   let debate2: any = null;
   try {
@@ -261,7 +267,7 @@ async function runTestSuite() {
         content: 'Testing rejection of under-minimum starting amount.',
         categoryId: testCategory.id,
         authorUsername: 'test_rohit',
-        originalContribution: 100, // $1 < $2
+        originalContribution: 500, // ₹5 < ₹10
         totalVerifiedContribution: 0,
         contributionCount: 0,
         status: 'pending_payment',
@@ -271,13 +277,13 @@ async function runTestSuite() {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_002_${Date.now()}`,
       debateId: debate2.id,
-      amountPaise: 100, // $1 < $2 (100 paise < 200 paise)
+      amountPaise: 500, // ₹5 < ₹10 (500 paise < 1000 paise)
       currency: 'INR',
     });
   } catch (err: any) {
     test2FailedProperly = err.message.includes('New debate requires at least');
   }
-  assert(test2FailedProperly, 'Test 2: New debate with less than $2 USD (100 paise) is rejected by backend monetary validation');
+  assert(test2FailedProperly, 'Test 2: New debate with less than ₹10 INR (500 paise) is rejected by backend monetary validation');
 
   // Test 3: Failed payment does NOT publish debate
   const debate3 = await prisma.debate.create({
@@ -286,7 +292,7 @@ async function runTestSuite() {
       content: 'This debate has a failed payment record and must remain unpublished.',
       categoryId: testCategory.id,
       authorUsername: 'test_failed_user',
-      originalContribution: 200,
+      originalContribution: 1000,
       totalVerifiedContribution: 0,
       status: 'pending_payment',
     },
@@ -295,7 +301,7 @@ async function runTestSuite() {
     data: {
       providerPaymentId: `test_pay_failed_${Date.now()}`,
       debateId: debate3.id,
-      amount: 200,
+      amount: 1000,
       currency: 'INR',
       status: 'failed',
     },
@@ -310,7 +316,7 @@ async function runTestSuite() {
       content: 'Cancelled checkout session must not appear publicly.',
       categoryId: testCategory.id,
       authorUsername: 'test_cancelled_user',
-      originalContribution: 200,
+      originalContribution: 1000,
       totalVerifiedContribution: 0,
       status: 'pending_payment',
     },
@@ -319,7 +325,7 @@ async function runTestSuite() {
     data: {
       providerPaymentId: `test_pay_cancelled_${Date.now()}`,
       debateId: debate4.id,
-      amount: 200,
+      amount: 1000,
       currency: 'INR',
       status: 'canceled',
     },
@@ -334,7 +340,7 @@ async function runTestSuite() {
   // Test 6: Successful payment publishes debate
   const d1Public = await getDebateById(debate1.id);
   assert(
-    d1Public !== null && d1Public.totalVerifiedContribution === 200 && d1Public.status === 'active',
+    d1Public !== null && d1Public.totalVerifiedContribution === 1000 && d1Public.status === 'active',
     'Test 6: Successful payment publishes debate to public view with verified totals'
   );
 
@@ -342,114 +348,114 @@ async function runTestSuite() {
   const res1Dup = await processSuccessfulPayment({
     providerPaymentId: payId1,
     debateId: debate1.id,
-    amountPaise: 200,
+    amountPaise: 1000,
     currency: 'INR',
   });
   const d1AfterDup = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1AfterDup?.totalVerifiedContribution === 200 && d1AfterDup.contributionCount === 1,
+    d1AfterDup?.totalVerifiedContribution === 1000 && d1AfterDup.contributionCount === 1,
     'Test 7: Duplicate webhook processed idempotently without doubling contribution or count'
   );
 
-  // Test 8: First continuation after $2 (200 paise) requires minimum $3 (300 paise)
-  const minAfter2 = calculateNextMinimumPaise(200);
-  assert(minAfter2 === 300, 'Test 8: First continuation after $2 calculated to require exactly minimum $3 (300 paise)');
+  // Test 8: First continuation after ₹10 (1000 paise) requires minimum ₹11 (1100 paise)
+  const minAfter10 = calculateNextMinimumPaise(1000);
+  assert(minAfter10 === 1100, 'Test 8: First continuation after ₹10 calculated to require exactly minimum ₹11 (1100 paise)');
 
-  // Test 9: Continuation with $2 (200 paise) is rejected
+  // Test 9: Continuation with ₹10 (1000 paise) is rejected
   let test9FailedProperly = false;
   try {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_c1_${Date.now()}`,
       debateId: debate1.id,
-      amountPaise: 200, // $2 < minimum $3 (200 < 300)
+      amountPaise: 1000, // ₹10 < minimum ₹11 (1000 < 1100)
       currency: 'INR',
       metadata: { authorUsername: 'test_priya', content: 'Argument with insufficient amount' },
     });
   } catch (err: any) {
     test9FailedProperly = err.message.includes('Insufficient contribution: must be at least');
   }
-  assert(test9FailedProperly, 'Test 9: Continuation with $2 is strictly rejected when previous was $2');
+  assert(test9FailedProperly, 'Test 9: Continuation with ₹10 is strictly rejected when previous was ₹10');
 
-  // Test 10: Continuation with $3 (300 paise) succeeds
+  // Test 10: Continuation with ₹11 (1100 paise) succeeds
   const res10 = await processSuccessfulPayment({
     providerPaymentId: `test_pay_c2_${Date.now()}`,
     debateId: debate1.id,
-    amountPaise: 300, // $3
+    amountPaise: 1100, // ₹11
     currency: 'INR',
     metadata: { authorUsername: 'test_priya', authorDisplayName: 'Priya', content: 'Counter argument #1' },
   });
   const d1AfterC2 = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res10.success && d1AfterC2?.totalVerifiedContribution === 500 && d1AfterC2.lastContributionAmount === 300 && d1AfterC2.contributionCount === 2,
-    'Test 10: Continuation with $3 succeeds and updates last contribution to 300 and sequence to 2'
+    res10.success && d1AfterC2?.totalVerifiedContribution === 2100 && d1AfterC2.lastContributionAmount === 1100 && d1AfterC2.contributionCount === 2,
+    'Test 10: Continuation with ₹11 succeeds and updates last contribution to 1100 and sequence to 2'
   );
 
-  // Test 11: After $3, next minimum is $4 (400 paise)
-  const minAfter3 = calculateNextMinimumPaise(300);
-  assert(minAfter3 === 400, 'Test 11: After $3, next minimum is strictly calculated as $4 (400 paise)');
+  // Test 11: After ₹11, next minimum is ₹12 (1200 paise)
+  const minAfter11 = calculateNextMinimumPaise(1100);
+  assert(minAfter11 === 1200, 'Test 11: After ₹11, next minimum is strictly calculated as ₹12 (1200 paise)');
 
-  // Test 12: Continuation with $3 after latest $3 is rejected
+  // Test 12: Continuation with ₹11 after latest ₹11 is rejected
   let test12FailedProperly = false;
   try {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_c3_fail_${Date.now()}`,
       debateId: debate1.id,
-      amountPaise: 300, // previous was $3, $3 is now invalid
+      amountPaise: 1100, // previous was ₹11, ₹11 is now invalid
       currency: 'INR',
     });
   } catch {
     test12FailedProperly = true;
   }
-  assert(test12FailedProperly, 'Test 12: Continuation with same amount $3 is rejected by backend');
+  assert(test12FailedProperly, 'Test 12: Continuation with same amount ₹11 is rejected by backend');
 
-  // Test 13: Continuation with $4 (400 paise) succeeds
+  // Test 13: Continuation with ₹12 (1200 paise) succeeds
   const res13 = await processSuccessfulPayment({
     providerPaymentId: `test_pay_c3_${Date.now()}`,
     debateId: debate1.id,
-    amountPaise: 400, // $4
+    amountPaise: 1200, // ₹12
     currency: 'INR',
     metadata: { authorUsername: 'test_karan', authorDisplayName: 'Karan', content: 'Counter argument #2' },
   });
   const d1AfterC3 = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res13.success && d1AfterC3?.totalVerifiedContribution === 900 && d1AfterC3.lastContributionAmount === 400 && d1AfterC3.contributionCount === 3,
-    'Test 13: Continuation with $4 succeeds and advances sequence to 3'
+    res13.success && d1AfterC3?.totalVerifiedContribution === 3300 && d1AfterC3.lastContributionAmount === 1200 && d1AfterC3.contributionCount === 3,
+    'Test 13: Continuation with ₹12 succeeds and advances sequence to 3'
   );
 
-  // Test 14: User can pay more than minimum (e.g. $25 vs $5 minimum)
+  // Test 14: User can pay more than minimum (e.g. ₹50 vs ₹13 minimum)
   const payIdC4 = `test_pay_c4_${Date.now()}`;
   const res14 = await processSuccessfulPayment({
     providerPaymentId: payIdC4,
     debateId: debate1.id,
-    amountPaise: 2500, // $25 (greater than $5 minimum)
+    amountPaise: 5000, // ₹50 (greater than ₹13 minimum)
     currency: 'INR',
     metadata: { authorUsername: 'test_vikram', authorDisplayName: 'Vikram', content: 'High conviction boost' },
   });
   const d1AfterC4 = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    res14.success && d1AfterC4?.lastContributionAmount === 2500,
-    'Test 14: User can pay higher amount ($25) and last contribution updates to $25'
+    res14.success && d1AfterC4?.lastContributionAmount === 5000,
+    'Test 14: User can pay higher amount (₹50) and last contribution updates to ₹50'
   );
 
   // Test 15: Paying higher amount updates running total verified contribution
   assert(
-    d1AfterC4?.totalVerifiedContribution === 3400,
-    'Test 15: Paying above minimum correctly updates running total verified contribution to $34 (3400 paise)'
+    d1AfterC4?.totalVerifiedContribution === 8300,
+    'Test 15: Paying above minimum correctly updates running total verified contribution to ₹83 (8300 paise)'
   );
 
-  // Test 16: When latest was $25, $19 is rejected
+  // Test 16: When latest was ₹50, ₹40 is rejected
   let test16FailedProperly = false;
   try {
     await processSuccessfulPayment({
       providerPaymentId: `test_pay_c5_fail_${Date.now()}`,
       debateId: debate1.id,
-      amountPaise: 1900, // $19 < $26
+      amountPaise: 4000, // ₹40 < ₹51
       currency: 'INR',
     });
   } catch {
     test16FailedProperly = true;
   }
-  assert(test16FailedProperly, 'Test 16: When latest was $25, $19 is rejected');
+  assert(test16FailedProperly, 'Test 16: When latest was ₹50, ₹40 is rejected');
 
   // Test 17: Pending contribution excluded from total support
   const pendingContrib = await prisma.contribution.create({
@@ -463,7 +469,7 @@ async function runTestSuite() {
   });
   const d1CheckPending = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1CheckPending?.totalVerifiedContribution === 3400,
+    d1CheckPending?.totalVerifiedContribution === 8300,
     'Test 17: Pending contribution does NOT increment total verified support'
   );
 
@@ -479,7 +485,7 @@ async function runTestSuite() {
   });
   const d1CheckFailed = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1CheckFailed?.totalVerifiedContribution === 3400,
+    d1CheckFailed?.totalVerifiedContribution === 8300,
     'Test 18: Failed contribution does NOT increment total verified support'
   );
 
@@ -495,15 +501,15 @@ async function runTestSuite() {
   });
   const d1CheckCancelled = await prisma.debate.findUnique({ where: { id: debate1.id } });
   assert(
-    d1CheckCancelled?.totalVerifiedContribution === 3400,
+    d1CheckCancelled?.totalVerifiedContribution === 8300,
     'Test 19: Cancelled contribution does NOT increment total verified support'
   );
 
   // Test 20: Only verified contribution affects trending momentum score
   const trendScore = calculateTrendingScore({
-    totalVerifiedPaise: 3400,
-    recent24hVerifiedPaise: 3400,
-    recent7dVerifiedPaise: 3400,
+    totalVerifiedPaise: 8300,
+    recent24hVerifiedPaise: 8300,
+    recent7dVerifiedPaise: 8300,
     contributionCount: 4,
     uniqueParticipants: 4,
     lastContributionAt: new Date(),
@@ -515,7 +521,7 @@ async function runTestSuite() {
   const resDupContrib = await processSuccessfulPayment({
     providerPaymentId: payIdC4, // same provider payment
     debateId: debate1.id,
-    amountPaise: 2500,
+    amountPaise: 5000,
     currency: 'INR',
   });
   const d1CheckDup = await prisma.debate.findUnique({ where: { id: debate1.id } });
@@ -526,13 +532,13 @@ async function runTestSuite() {
 
   // Test 22: Frontend cannot bypass minimum continuation amount (rejects under-minimum)
   assert(
-    !isValidContributionAmount(2000, 2500).valid,
+    !isValidContributionAmount(4000, 5000).valid,
     'Test 22: Frontend monetary validator strictly rejects amount less than next minimum'
   );
 
   // Test 23: Frontend accepts valid continuation amount
   assert(
-    isValidContributionAmount(2600, 2500).valid,
+    isValidContributionAmount(5100, 5000).valid,
     'Test 23: Frontend monetary validator accepts amount meeting or exceeding next minimum'
   );
 
@@ -2641,7 +2647,7 @@ async function runTestSuite() {
     'Test 133: getDebates with following mode filters exclusively to followed creators'
   );
 
-  // Test 134: Paid continuation on a free opinion requires minimum $2 (200 paise) and rejects < $2
+  // Test 134: Paid continuation on a free opinion requires minimum ₹10 (1000 paise) and rejects < ₹10
   const { POST: continueRoute } = await import('../src/app/api/debates/[id]/continue/route');
   const continueLowOnFreeReq = new NextRequest(`http://localhost:3000/api/debates/${freeDebateInDb!.id}/continue`, {
     method: 'POST',
@@ -2650,14 +2656,14 @@ async function runTestSuite() {
       cookie: `indobid_session=${createSessionToken({ userId: userB.id, username: userB.username || 'userb', email: userB.email, displayName: userB.displayName || 'User B', role: 'user' })}`,
     },
     body: JSON.stringify({
-      content: 'Challenging this free opinion with only $1 financial backing.',
-      amountPaise: 100, // $1 < $2 minimum
+      content: 'Challenging this free opinion with only ₹5 financial backing.',
+      amountPaise: 500, // ₹5 < ₹10 minimum
     }),
   });
   const continueLowOnFreeRes = await continueRoute(continueLowOnFreeReq, { params: Promise.resolve({ id: freeDebateInDb!.id }) });
   assert(
     continueLowOnFreeRes.status === 400,
-    'Test 134a: Paid continuation on a free opinion with less than $2 (100 paise) is strictly rejected'
+    'Test 134a: Paid continuation on a free opinion with less than ₹10 (500 paise) is strictly rejected'
   );
 
   const continueOnFreeReq = new NextRequest(`http://localhost:3000/api/debates/${freeDebateInDb!.id}/continue`, {
@@ -2667,8 +2673,8 @@ async function runTestSuite() {
       cookie: `indobid_session=${createSessionToken({ userId: userB.id, username: userB.username || 'userb', email: userB.email, displayName: userB.displayName || 'User B', role: 'user' })}`,
     },
     body: JSON.stringify({
-      content: 'Challenging this free opinion with $2 financial backing.',
-      amountPaise: 200,
+      content: 'Challenging this free opinion with ₹10 financial backing.',
+      amountPaise: 1000,
     }),
   });
 
@@ -2678,8 +2684,8 @@ async function runTestSuite() {
   assert(
     continueOnFreeRes.status === 200 &&
     continueOnFreeData.success === true &&
-    continueOnFreeData.amount === 200,
-    'Test 134: Paid continuation on a free opinion requires minimum $2 (200 paise) as first paid contribution'
+    continueOnFreeData.amount === 1000,
+    'Test 134: Paid continuation on a free opinion requires minimum ₹10 (1000 paise) as first paid contribution'
   );
 
   // Test 135: Free opinion generates ₹0 creator self-stake rewards
@@ -3330,18 +3336,18 @@ async function runTestSuite() {
       cookie: `indobid_session=${createSessionToken({ userId: part13Author.id, username: part13Author.username!, email: part13Author.email, displayName: part13Author.displayName!, role: 'user' })}`,
     },
     body: JSON.stringify({
-      title: 'Part 13 Exact $2 Backed Opinion',
-      content: 'Valid minimum $2 backing passes server validation and initiates order.',
+      title: 'Part 13 Exact ₹10 Backed Opinion',
+      content: 'Valid minimum ₹10 backing passes server validation and initiates order.',
       categoryId: testCategory.id,
       isFree: false,
-      amountPaise: 200, // $2
+      amountPaise: 1000, // ₹10
     }),
   });
   const p13ExactBackRes = await createDebateRoute(p13ExactBackReq);
   const p13ExactBackData = await p13ExactBackRes.json();
   assert(
     p13ExactBackRes.status === 200 && p13ExactBackData.success === true && p13ExactBackData.orderId !== undefined,
-    'Test 174: $2 support succeeds'
+    'Test 174: ₹10 support succeeds'
   );
 
   // Test 175: Higher support ($20 = 2000 paise) succeeds and scales verified total

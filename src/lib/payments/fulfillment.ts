@@ -1,7 +1,7 @@
 import { prisma } from '../db';
 import { Prisma } from '@prisma/client';
 import { calculateTrendingScore } from '../trending';
-import { formatINR, MINIMUM_DEBATE_PAISE, MINIMUM_INCREMENT_PAISE } from '../money';
+import { formatINR, MINIMUM_DEBATE_PAISE, MINIMUM_INCREMENT_PAISE, calculateNextMinimumPaise } from '../money';
 import { CREATOR_SHARE_BPS } from '../creator-economics';
 
 export interface FulfillmentParams {
@@ -250,8 +250,8 @@ export async function processSuccessfulPayment(params: FulfillmentParams): Promi
           };
         } else {
           // CONTINUING AN EXISTING DEBATE
-          // Rule: amount >= previousVerifiedContribution + ₹1 (100 paise)
-          const minRequired = debate.lastContributionAmount + MINIMUM_INCREMENT_PAISE;
+          // Rule: amount >= calculateNextMinimumPaise(previousVerifiedContribution), min ₹10 (1000 paise)
+          const minRequired = calculateNextMinimumPaise(debate.lastContributionAmount);
           if (amountPaise < minRequired) {
             throw new Error(
               `Insufficient contribution: must be at least ${formatINR(minRequired)} (previous was ${formatINR(debate.lastContributionAmount)}). Received ${formatINR(amountPaise)}.`

@@ -27,7 +27,15 @@ import {
   MoreHorizontal,
   EyeOff,
 } from 'lucide-react';
-import { formatINR, formatUSD } from '@/lib/money';
+import {
+  formatINR,
+  formatUSD,
+  getMinimumSupport,
+  getCurrencyConfig,
+  exchangeRateService,
+  formatCurrencyAmount,
+  calculateNextMinimumPaise,
+} from '@/lib/money';
 import { useAuth } from '@/context/AuthContext';
 import { FormattedText } from '@/components/FormattedText';
 import { EditDebateModal } from '@/components/EditDebateModal';
@@ -133,11 +141,17 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Continue Debate Form State
-  const minPaise = debate.minimumNextContribution;
-  const minRupees = Math.ceil(minPaise / 100);
+  // Continue Debate Form State - Currency Aware
+  const [currency, setCurrency] = useState<string>(user?.currencyCode || 'INR');
+  const currencyConfig = getCurrencyConfig(currency);
 
-  const [amountRupees, setAmountRupees] = useState(minRupees);
+  const minPaise = debate.minimumNextContribution;
+  const minMinor = exchangeRateService.convertFromBase(minPaise, currency);
+  const minMajor = minMinor / Math.pow(10, currencyConfig.decimals);
+  const formattedMin = formatCurrencyAmount(minMinor, currency);
+
+  const [amount, setAmount] = useState<number>(minMajor);
+  const [amountRupees, setAmountRupees] = useState<number>(Math.ceil(minPaise / 100));
   const [replyText, setReplyText] = useState('');
   const [username, setUsername] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -182,14 +196,78 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
     if (user) {
       setUsername(user.username);
       if (user.email) setEmail(user.email);
+      if (user.currencyCode && user.currencyCode !== currency) {
+        handleCurrencyChange(user.currencyCode);
+      }
     }
   }, [user]);
 
-  // Sync minRupees if debate updates
+  // Sync amount if debate updates
   useEffect(() => {
-    const nextMinRupees = Math.ceil(debate.minimumNextContribution / 100);
-    setAmountRupees((prev) => Math.max(prev, nextMinRupees));
-  }, [debate.minimumNextContribution]);
+    const updatedMinMinor = exchangeRateService.convertFromBase(debate.minimumNextContribution, currency);
+    const updatedMinMajor = updatedMinMinor / Math.pow(10, currencyConfig.decimals);
+    setAmount((prev) => Math.max(prev, updatedMinMajor));
+    setAmountRupees((prev) => Math.max(prev, Math.ceil(debate.minimumNextContribution / 100)));
+  }, [debate.minimumNextContribution, currency, currencyConfig.decimals]);
+
+  const handleCurrencyChange = (newCurrency: string) => {
+    const cleanCurr = newCurrency.toUpperCase().trim();
+    setCurrency(cleanCurr);
+    const newConfig = getCurrencyConfig(cleanCurr);
+    const newMinMinor = exchangeRateService.convertFromBase(debate.minimumNextContribution, cleanCurr);
+    const newMinMajor = newMinMinor / Math.pow(10, newConfig.decimals);
+    setAmount(newMinMajor);
+    setAmountRupees(cleanCurr === 'INR' ? newMinMajor : Math.ceil(debate.minimumNextContribution / 100));
+  };
+
+  const handleAmountChange = (newVal: number) => {
+    if (isNaN(newVal)) return;
+    const clamped = Math.max(minMajor, newVal);
+    const precision = Math.pow(10, currencyConfig.decimals);
+    const rounded = Math.round(clamped * precision) / precision;
+    setAmount(rounded);
+    if (currency === 'INR') {
+      setAmountRupees(rounded);
+    }
+  };
+
+  const handleDecrement = () => {
+    const step = currencyConfig.decimals === 0 ? 1 : amount > 2 ? 1 : 0.10;
+    const nextVal = Math.max(minMajor, Math.round((amount - step) * 100) / 100);
+    setAmount(nextVal);
+    if (currency === 'INR') {
+      setAmountRupees(nextVal);
+    }
+  };
+
+  const handleIncrement = () => {
+    const step = currencyConfig.decimals === 0 ? 1 : amount < 1 ? 0.10 : 1;
+    const nextVal = Math.round((amount + step) * 100) / 100;
+    setAmount(nextVal);
+    if (currency === 'INR') {
+      setAmountRupees(nextVal);
+    }
+  };
+
+  const presetAmounts = React.useMemo(() => {
+    if (currency === 'INR') {
+      const baseInr = Math.ceil(minPaise / 100);
+      return [
+        baseInr,
+        baseInr + 10,
+        baseInr + 25,
+        baseInr + 50,
+      ];
+    }
+    const baseMinor = minMinor;
+    const stepMinor = Math.max(1, Math.round(baseMinor * 0.25));
+    return [
+      Number((baseMinor / Math.pow(10, currencyConfig.decimals)).toFixed(currencyConfig.decimals)),
+      Number(((baseMinor + stepMinor) / Math.pow(10, currencyConfig.decimals)).toFixed(currencyConfig.decimals)),
+      Number(((baseMinor + stepMinor * 2) / Math.pow(10, currencyConfig.decimals)).toFixed(currencyConfig.decimals)),
+      Number(((baseMinor + stepMinor * 4) / Math.pow(10, currencyConfig.decimals)).toFixed(currencyConfig.decimals)),
+    ];
+  }, [currency, minPaise, minMinor, currencyConfig.decimals]);
 
   const refreshDebate = async () => {
     try {
@@ -250,7 +328,8 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
     setLoading(true);
 
     try {
-      const amountPaise = amountRupees * 100;
+      const targetMinorUnits = Math.round(amount * Math.pow(10, currencyConfig.decimals));
+      const amountPaise = exchangeRateService.convertToBase(targetMinorUnits, currency);
 
       // 1. Call continue debate API
       const res = await fetch(`/api/debates/${debate.id}/continue`, {
@@ -258,6 +337,9 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: replyText,
+          amount,
+          currency,
+          currencyCode: currency,
           amountPaise,
           authorUsername: isAnonymous ? undefined : username || undefined,
           isAnonymous,
@@ -271,12 +353,13 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
       }
 
       const { orderId, keyId, contributionId } = data;
+      const checkoutPaise = data.amount || amountPaise;
 
       // 2. Razorpay Checkout
       if (typeof window !== 'undefined' && (window as any).Razorpay && keyId && keyId !== 'rzp_test_placeholder') {
         const options = {
           key: keyId,
-          amount: amountPaise,
+          amount: checkoutPaise,
           currency: 'INR',
           name: 'IndoBid.lol',
           description: `Back Opinion (#${debate.contributionCount + 1})`,
@@ -300,7 +383,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                   razorpay_signature: response.razorpay_signature,
                   debateId: debate.id,
                   contributionId,
-                  amountPaise,
+                  amountPaise: checkoutPaise,
                 }),
               });
 
@@ -329,32 +412,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
         const rzp = new (window as any).Razorpay(options);
         rzp.open();
       } else {
-        // Dev/Mock Fallback
-        setVerifying(true);
-        const mockPayId = `rzp_mock_${Date.now()}`;
-        const verifyRes = await fetch('/api/payments/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            razorpay_payment_id: mockPayId,
-            razorpay_order_id: orderId,
-            razorpay_signature: 'dev_mock_signature',
-            debateId: debate.id,
-            contributionId,
-            amountPaise,
-          }),
-        });
-
-        const verifyData = await verifyRes.json();
-        if (verifyRes.ok && verifyData.success) {
-          setReplyText('');
-          setSuccessMsg('Your contribution was verified and published to the timeline.');
-          await refreshDebate();
-        } else {
-          throw new Error(verifyData.error || 'Failed to verify simulated payment in test environment');
-        }
-        setVerifying(false);
-        setLoading(false);
+        throw new Error('Payment gateway is currently initializing or unavailable. Please try again.');
       }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : 'Error submitting contribution');
@@ -394,13 +452,6 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
       setReportSubmitting(false);
     }
   };
-
-  const presetAmounts = [
-    { label: `Min $${minRupees}`, value: minRupees },
-    { label: `$${minRupees + 3}`, value: minRupees + 3 },
-    { label: `$${minRupees + 8}`, value: minRupees + 8 },
-    { label: `$${minRupees + 23}`, value: minRupees + 23 },
-  ];
 
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[var(--bg-page)] text-[var(--text-primary)] w-full flex flex-col">
@@ -683,7 +734,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                           />
 
                           <span className="font-mono text-[11px] font-bold text-[var(--color-amber)] shrink-0">
-                            #{c.sequence} · {formatUSD(c.amount)} supported
+                            #{c.sequence} · {c.amount > 0 ? `${formatINR(c.amount)} supported` : 'Free origin'}
                           </span>
                           <span className="text-[var(--text-muted)]">·</span>
                           {c.isAnonymous || c.isGhost || c.isClickableProfile === false ? (
@@ -730,7 +781,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                 <div className="text-right">
                   <span className="text-[10px] text-[var(--text-muted)] block">Minimum Next Support</span>
                   <span className="text-xs font-mono font-bold text-[var(--color-amber)]">
-                    {formatUSD(debate.minimumNextContribution)}
+                    {formattedMin}
                   </span>
                 </div>
               </div>
@@ -786,28 +837,46 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                   {/* Amount Presets and Stepper */}
                   <div className="bg-[var(--bg-page-deep)]/80 p-3.5 rounded-xl border border-white/[0.08] space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">
-                        Your Support Amount (USD)
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-semibold text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">
+                          Your Support Amount ({currency})
+                        </span>
+                        <select
+                          value={currency}
+                          onChange={(e) => handleCurrencyChange(e.target.value)}
+                          className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-md px-1.5 py-0.5 text-[11px] font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] focus:outline-none cursor-pointer"
+                          aria-label="Select currency"
+                        >
+                          <option value="INR">₹ INR</option>
+                          <option value="USD">$ USD</option>
+                          <option value="EUR">€ EUR</option>
+                          <option value="GBP">£ GBP</option>
+                          <option value="CAD">CA$ CAD</option>
+                          <option value="AUD">A$ AUD</option>
+                          <option value="JPY">¥ JPY</option>
+                          <option value="SGD">S$ SGD</option>
+                          <option value="AED">AED</option>
+                        </select>
+                      </div>
                       <span className="font-mono font-bold text-[var(--color-amber)]">
-                        Minimum ${minRupees}
+                        Minimum {formattedMin}
                       </span>
                     </div>
 
                     {/* Presets */}
                     <div className="grid grid-cols-4 gap-1.5">
-                      {presetAmounts.map((p) => (
+                      {presetAmounts.map((val) => (
                         <button
-                          key={p.label}
+                          key={val}
                           type="button"
-                          onClick={() => setAmountRupees(p.value)}
+                          onClick={() => handleAmountChange(val)}
                           className={`py-1.5 rounded-xl text-xs font-bold font-mono transition cursor-pointer ${
-                            amountRupees === p.value
+                            amount === val
                               ? 'bg-[var(--color-coral)] text-[#071B21] shadow-xs'
                               : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-white/[0.07]'
                           }`}
                         >
-                          ${p.value}
+                          {currencyConfig.symbol}{val}
                         </button>
                       ))}
                     </div>
@@ -816,25 +885,29 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                     <div className="flex items-center space-x-2 pt-1">
                       <button
                         type="button"
-                        onClick={() => setAmountRupees((prev) => Math.max(minRupees, prev - 1))}
-                        disabled={amountRupees <= minRupees}
+                        onClick={handleDecrement}
+                        disabled={amount <= minMajor}
                         className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-white/[0.08] text-[var(--text-primary)] font-bold text-sm disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                       >
                         −
                       </button>
                       <div className="flex-1 relative">
-                        <span className="absolute left-3 top-2 text-xs font-bold text-[var(--color-coral)]">$</span>
+                        <span className="absolute left-3 top-2 text-xs font-bold text-[var(--color-coral)]">
+                          {currencyConfig.symbol}
+                        </span>
                         <input
                           type="number"
-                          min={minRupees}
-                          value={amountRupees}
-                          onChange={(e) => setAmountRupees(Math.max(minRupees, parseInt(e.target.value || '0', 10)))}
+                          min={minMajor}
+                          step={currencyConfig.decimals > 0 ? '0.01' : '1'}
+                          value={amount}
+                          onChange={(e) => handleAmountChange(parseFloat(e.target.value || String(minMajor)))}
+                          onBlur={() => { if (!amount || amount < minMajor) setAmount(minMajor); }}
                           className="w-full bg-[var(--bg-surface)] border border-white/[0.08] focus:border-[var(--color-coral)] rounded-xl pl-7 pr-3 py-1.5 text-xs font-bold text-[var(--text-primary)] font-mono focus:outline-none"
                         />
                       </div>
                       <button
                         type="button"
-                        onClick={() => setAmountRupees((prev) => prev + 1)}
+                        onClick={handleIncrement}
                         className="w-8 h-8 rounded-xl bg-[var(--bg-surface)] border border-white/[0.08] text-[var(--text-primary)] font-bold text-sm hover:bg-[var(--bg-card-hover)] transition cursor-pointer flex items-center justify-center shrink-0"
                       >
                         +
@@ -844,7 +917,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
 
                   <button
                     type="submit"
-                    disabled={loading || amountRupees < minRupees}
+                    disabled={loading || amount < minMajor}
                     className="w-full h-12 bg-[var(--color-coral)] hover:bg-[var(--color-coral-bright)] text-[#07171C] font-semibold text-sm rounded-xl shadow-md shadow-[var(--color-coral)]/15 hover:shadow-lg hover:shadow-[var(--color-coral)]/25 transition flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-50 active:scale-[0.99] mt-2"
                   >
                     {loading ? (
@@ -854,7 +927,7 @@ export function DebateDetailClient({ initialDebate }: DebateDetailProps) {
                       </>
                     ) : (
                       <>
-                        <span>Support Opinion · ${amountRupees}</span>
+                        <span>Support Opinion · {currencyConfig.symbol}{amount}</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}

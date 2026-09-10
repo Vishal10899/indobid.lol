@@ -18,6 +18,8 @@ import {
   validateSupportAmount,
   exchangeRateService,
   DEFAULT_COUNTRY,
+  BASE_MINIMUM_SUPPORT_PAISE,
+  formatINR,
 } from '../../lib/money';
 
 export class PaymentService {
@@ -52,11 +54,13 @@ export class PaymentService {
   }
 
   async createCheckoutOrder(dto: CreateCheckoutDTO, userId?: string) {
-    const { countryCode, currencyCode } = await this.resolveUserCountryAndCurrency(userId, dto.countryCode);
+    const resolved = await this.resolveUserCountryAndCurrency(userId, dto.countryCode);
+    const countryCode = resolved.countryCode;
+    const currencyCode = (dto.currency || resolved.currencyCode).toUpperCase();
 
     // 1. Server-side minimum support validation based on canonical ₹10 floor
     const minSupport = getMinimumSupport(currencyCode);
-    if (dto.amountPaise < minSupport.minimumMinorUnits && dto.amountPaise < appConfig.money.MINIMUM_DEBATE_PAISE) {
+    if (dto.amountPaise < minSupport.minimumMinorUnits) {
       throw new ValidationError(
         `Minimum paid backing is ${minSupport.formatted} (${minSupport.minimumMinorUnits} ${currencyCode}).`
       );
@@ -65,9 +69,15 @@ export class PaymentService {
     // 2. Compute canonical base amount in INR paise
     const baseAmountPaise = exchangeRateService.convertToBase(dto.amountPaise, currencyCode);
 
+    if (baseAmountPaise < BASE_MINIMUM_SUPPORT_PAISE) {
+      throw new ValidationError(
+        `Minimum paid backing is ${formatINR(BASE_MINIMUM_SUPPORT_PAISE)}.`
+      );
+    }
+
     const order = await razorpayAdapter.createOrder({
-      amountPaise: dto.amountPaise,
-      currency: currencyCode,
+      amountPaise: baseAmountPaise,
+      currency: 'INR',
       receipt: `rcpt_${Date.now()}`,
       notes: buildSafeRazorpayNotes({
         user_id: userId || '',
@@ -76,7 +86,9 @@ export class PaymentService {
         countryCode,
         currency: currencyCode,
         currencyCode,
-        amount: String(dto.amountPaise),
+        original_amount: String(dto.amountPaise),
+        original_currency: currencyCode,
+        amount: String(baseAmountPaise),
         base_amount: String(baseAmountPaise),
         baseAmountPaise: String(baseAmountPaise),
         debate_id: dto.debateId || '',

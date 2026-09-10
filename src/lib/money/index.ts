@@ -9,12 +9,14 @@ export * from './exchange-rate';
 export * from './minimum-support';
 export * from './money';
 
-// Legacy compatibility exports (Preserving existing test invariants)
-export const MINIMUM_DEBATE_PAISE = 200; // $2 USD base minimum (200 paise / cents)
-export const MINIMUM_DEBATE_USD = 2; // $2 USD minimum
-export const MINIMUM_INCREMENT_PAISE = 100; // $1 USD step-up (100 paise / cents)
+import { BASE_MINIMUM_SUPPORT_PAISE } from './currencies';
+
+// Canonical platform constants (₹10 INR base floor)
+export const MINIMUM_DEBATE_PAISE = BASE_MINIMUM_SUPPORT_PAISE; // 1000 paise = ₹10 INR canonical minimum conviction
+export const MINIMUM_DEBATE_USD = 0.12; // ~$0.12 USD (equivalent to ₹10 INR)
+export const MINIMUM_INCREMENT_PAISE = 100; // 100 paise = ₹1 INR increment
 export const CURRENCY = 'INR';
-export const DISPLAY_CURRENCY = 'USD';
+export const DISPLAY_CURRENCY = 'INR';
 export const USD_TO_INR_RATE = 85;
 
 /**

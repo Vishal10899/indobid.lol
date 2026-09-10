@@ -10,8 +10,7 @@ export { formatCurrencyAmount };
 
 export function formatUSD(paiseOrCents: number): string {
   if (typeof paiseOrCents !== 'number' || isNaN(paiseOrCents) || paiseOrCents <= 0) return '$0';
-  const dollars = paiseOrCents >= 100 ? Math.floor(paiseOrCents / 100) : paiseOrCents;
-  return `$${dollars.toLocaleString('en-US')}`;
+  return formatCurrencyAmount(paiseOrCents, 'USD');
 }
 
 export function formatINR(paise: number): string {
@@ -25,12 +24,9 @@ export function formatINR(paise: number): string {
   return `₹${formattedRupees}`;
 }
 
-export function formatMoney(amountMinor: number, currency: string = 'USD'): string {
+export function formatMoney(amountMinor: number, currency: string = BASE_CURRENCY): string {
   if (currency.toUpperCase() === 'INR') {
     return formatINR(amountMinor);
-  }
-  if (currency.toUpperCase() === 'USD') {
-    return formatUSD(amountMinor);
   }
   return formatCurrencyAmount(amountMinor, currency);
 }

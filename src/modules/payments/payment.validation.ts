@@ -9,7 +9,9 @@ export const CreateCheckoutSchema = z.object({
   amountPaise: z
     .number()
     .int('Amount must be an integer')
-    .min(appConfig.money.MINIMUM_DEBATE_PAISE, `Minimum support is $${appConfig.money.MINIMUM_DEBATE_PAISE / 100}.00`),
+    .min(1, 'Amount must be greater than zero'),
+  currency: z.string().optional(),
+  countryCode: z.string().optional(),
   debateId: z.string().optional(),
   isNewDebate: z.boolean().optional(),
 });

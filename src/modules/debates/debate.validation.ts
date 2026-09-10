@@ -36,5 +36,5 @@ export const ContinueDebateSchema = z.object({
     .string()
     .min(appConfig.debateConstraints.MIN_ARGUMENT_LENGTH, 'Argument content is required')
     .max(appConfig.debateConstraints.MAX_ARGUMENT_LENGTH, 'Argument content is too long'),
-  amountPaise: z.number().int().min(appConfig.money.MINIMUM_DEBATE_PAISE, 'Minimum continuation is $2.00'),
+  amountPaise: z.number().int().min(appConfig.money.MINIMUM_DEBATE_PAISE, 'Minimum continuation is ₹10.00'),
 });
