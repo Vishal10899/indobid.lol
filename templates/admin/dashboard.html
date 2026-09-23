@@ -6,64 +6,82 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
   <!-- Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-white/10 gap-4 mb-8">
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200 gap-4 mb-8">
     <div>
-      <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 mb-2">
+      <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-2">
         <span>⚙️</span>
-        <span>IndoBid Control Center</span>
+        <span>Control Center</span>
       </div>
-      <h1 class="text-2xl sm:text-3xl font-black text-white">Administrator Dashboard</h1>
-      <p class="text-xs text-zinc-400 mt-1">Logged in as: <span class="text-zinc-200 font-mono">{{ session.get('admin_email') }}</span></p>
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Administrator Dashboard</h1>
+      <p class="text-xs text-slate-500 mt-1">Logged in as: <span class="text-slate-700 font-mono">{{ session.get('admin_email') }}</span></p>
     </div>
 
     <div class="flex items-center space-x-3">
-      <a href="{{ url_for('main.index') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors">
+      <a href="{{ url_for('main.index') }}" class="px-4 py-2 rounded-xl text-xs font-semibold btn-secondary transition-colors">
         Live Site ↗
       </a>
-      <a href="{{ url_for('admin.logout') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition-colors">
+      <a href="{{ url_for('admin.logout') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors">
         Sign Out
       </a>
     </div>
   </div>
 
   <!-- Metric Cards -->
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-    <div class="glass-panel p-5 rounded-2xl border border-white/10">
-      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Active Round</span>
-      <div class="text-2xl sm:text-3xl font-black text-white mt-1">#{{ current_round.id }}</div>
-      <div class="text-[11px] text-emerald-400 mt-1 font-mono">Status: {{ current_round.status }}</div>
+  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+    <!-- Total Revenue -->
+    <div class="saas-card p-4 text-center">
+      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Revenue</span>
+      <div class="text-xl sm:text-2xl font-black text-purple-600 mt-1 font-mono-numbers">₹{{ total_revenue|int }}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">Paid entries</div>
     </div>
 
-    <div class="glass-panel p-5 rounded-2xl border border-white/10">
-      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Current Round Pool</span>
-      <div class="text-2xl sm:text-3xl font-black text-amber-400 mt-1">{{ active_entries|length }}</div>
-      <div class="text-[11px] text-zinc-400 mt-1">Eligible participants</div>
+    <!-- Total Paid Entries -->
+    <div class="saas-card p-4 text-center">
+      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paid Entries</span>
+      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_paid_entries }}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">Completed</div>
     </div>
 
-    <div class="glass-panel p-5 rounded-2xl border border-white/10">
-      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Completed Rounds</span>
-      <div class="text-2xl sm:text-3xl font-black text-white mt-1">{{ total_completed_rounds }}</div>
-      <div class="text-[11px] text-zinc-400 mt-1">Historical draws</div>
+    <!-- Total Visitors -->
+    <div class="saas-card p-4 text-center">
+      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Visitors</span>
+      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_visitors_count }}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">Unique logged</div>
     </div>
 
-    <div class="glass-panel p-5 rounded-2xl border border-white/10">
-      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Winners Crowned</span>
-      <div class="text-2xl sm:text-3xl font-black text-purple-400 mt-1">{{ total_winners_count }}</div>
-      <div class="text-[11px] text-zinc-400 mt-1">Gold, Silver, Bronze</div>
+    <!-- Profile Clicks -->
+    <div class="saas-card p-4 text-center">
+      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Clicks</span>
+      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_profile_clicks }}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">Profile visits</div>
+    </div>
+
+    <!-- Active Round Pool -->
+    <div class="saas-card p-4 text-center">
+      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Pool</span>
+      <div class="text-xl sm:text-2xl font-black text-emerald-600 mt-1 font-mono-numbers">{{ active_entries|length }}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">Round #{{ current_round.id }}</div>
+    </div>
+
+    <!-- Completed Rounds -->
+    <div class="saas-card p-4 text-center">
+      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Rounds</span>
+      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_completed_rounds }}</div>
+      <div class="text-[10px] text-slate-400 mt-0.5">Completed</div>
     </div>
   </div>
 
-  <!-- Action Controls -->
-  <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10 mb-10">
-    <h2 class="text-lg font-bold text-white mb-2">Round Operations</h2>
-    <p class="text-xs text-zinc-400 mb-6">
-      Control the current round manually. Normal automatic round resolution operates lazily on incoming requests once the countdown expires.
+  <!-- Action Operations -->
+  <div class="saas-card p-6 sm:p-7 mb-8">
+    <h2 class="text-base font-bold text-slate-900 mb-1">Round Controls</h2>
+    <p class="text-xs text-slate-500 mb-5">
+      The authoritative round engine advances automatically once the countdown expires. You may also execute an immediate draw using the exact same selection engine.
     </p>
 
-    <div class="flex flex-wrap gap-4">
+    <div class="flex flex-wrap items-center gap-3">
       <!-- Force Draw -->
       <form method="POST" action="{{ url_for('admin.trigger_draw') }}" onsubmit="return confirm('Immediately draw winners for Round #{{ current_round.id }} and advance to next round?');">
-        <button type="submit" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2">
+        <button type="submit" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2">
           <span>⚡</span>
           <span>Draw Round #{{ current_round.id }} Now</span>
         </button>
@@ -72,70 +90,127 @@
       <!-- Seed Sample Entries (Disabled in production) -->
       {% if not is_production %}
         <form method="POST" action="{{ url_for('admin.seed_entries') }}">
-          <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white transition-all flex items-center space-x-2">
+          <button type="submit" class="btn-secondary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2">
             <span>🌱</span>
-            <span>Seed 10 Test Entries</span>
+            <span>Seed 10 Test Entries (Dev Only)</span>
           </button>
         </form>
       {% endif %}
     </div>
   </div>
 
-  <!-- Current Round Entries Table -->
-  <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10 mb-10">
-    <div class="flex items-center justify-between mb-6">
+  <!-- Recent Payments Table -->
+  <div class="saas-card p-6 sm:p-7 mb-8">
+    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
       <div>
-        <h2 class="text-lg font-bold text-white">Active Round Entries (Round #{{ current_round.id }})</h2>
-        <p class="text-xs text-zinc-400">All submissions in the pool awaiting the next draw.</p>
+        <h2 class="text-base font-bold text-slate-900">Recent Payment Records</h2>
+        <p class="text-xs text-slate-500">Audit log of Razorpay transactions</p>
       </div>
-      <span class="text-xs font-mono text-amber-400">{{ active_entries|length }} entries</span>
+      <span class="text-xs font-mono font-bold text-purple-600">{{ recent_payments|length }} records</span>
+    </div>
+
+    {% if recent_payments %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+              <th class="py-2.5 px-3">ID</th>
+              <th class="py-2.5 px-3">Order ID</th>
+              <th class="py-2.5 px-3">Payment ID</th>
+              <th class="py-2.5 px-3">Amount</th>
+              <th class="py-2.5 px-3">Status</th>
+              <th class="py-2.5 px-3">Date</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for p in recent_payments %}
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="py-2.5 px-3 font-mono text-slate-400">#{{ p.id }}</td>
+                <td class="py-2.5 px-3 font-mono text-slate-700">{{ p.order_id or '—' }}</td>
+                <td class="py-2.5 px-3 font-mono text-slate-700">{{ p.transaction_id or '—' }}</td>
+                <td class="py-2.5 px-3 font-bold text-slate-900">₹{{ p.amount|int }}</td>
+                <td class="py-2.5 px-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
+                    {% if p.status == 'paid' %}
+                      bg-emerald-50 text-emerald-700 border border-emerald-200
+                    {% elif p.status == 'created' %}
+                      bg-amber-50 text-amber-700 border border-amber-200
+                    {% else %}
+                      bg-red-50 text-red-700 border border-red-200
+                    {% endif %}">
+                    {{ p.status }}
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 text-slate-400 text-[11px]">
+                  {{ p.created_at.strftime('%Y-%m-%d %H:%M') if p.created_at else '—' }}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center py-6 text-slate-400 text-xs">
+        No payment records found.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Current Round Entries Table -->
+  <div class="saas-card p-6 sm:p-7 mb-8">
+    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+      <div>
+        <h2 class="text-base font-bold text-slate-900">Active Round Entries (Round #{{ current_round.id }})</h2>
+        <p class="text-xs text-slate-500">Participants in current pool</p>
+      </div>
+      <span class="text-xs font-mono font-bold text-purple-600">{{ active_entries|length }} entries</span>
     </div>
 
     {% if active_entries %}
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead>
-            <tr class="border-b border-white/10 text-zinc-400 uppercase tracking-wider font-semibold">
-              <th class="py-3 px-3">ID</th>
-              <th class="py-3 px-3">Name</th>
-              <th class="py-3 px-3">Platform</th>
-              <th class="py-3 px-3">Profile URL</th>
-              <th class="py-3 px-3">Status</th>
-              <th class="py-3 px-3 text-right">Actions</th>
+            <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+              <th class="py-2.5 px-3">ID</th>
+              <th class="py-2.5 px-3">Name</th>
+              <th class="py-2.5 px-3">Platform</th>
+              <th class="py-2.5 px-3">Profile URL</th>
+              <th class="py-2.5 px-3">Status</th>
+              <th class="py-2.5 px-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-white/5">
+          <tbody class="divide-y divide-slate-100">
             {% for entry in active_entries %}
-              <tr class="hover:bg-white/[0.02] transition-colors">
-                <td class="py-3 px-3 text-zinc-500 font-mono">#{{ entry.id }}</td>
-                <td class="py-3 px-3 font-medium text-white">{{ entry.display_name }}</td>
-                <td class="py-3 px-3 text-zinc-400 capitalize">{{ entry.platform }}</td>
-                <td class="py-3 px-3">
-                  <a href="{{ entry.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:underline max-w-xs truncate block">
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="py-2.5 px-3 text-slate-400 font-mono">#{{ entry.id }}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900">{{ entry.display_name }}</td>
+                <td class="py-2.5 px-3 text-slate-500 capitalize">{{ entry.platform }}</td>
+                <td class="py-2.5 px-3">
+                  <a href="{{ entry.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:underline max-w-xs truncate block">
                     {{ entry.profile_url }}
                   </a>
                 </td>
-                <td class="py-3 px-3">
+                <td class="py-2.5 px-3">
                   <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
                     {% if entry.status == 'eligible' %}
-                      bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+                      bg-emerald-50 text-emerald-700 border border-emerald-200
                     {% elif entry.status == 'winner' %}
-                      bg-amber-500/10 text-amber-400 border border-amber-500/20
+                      bg-purple-50 text-purple-700 border border-purple-200
                     {% else %}
-                      bg-red-500/10 text-red-400 border border-red-500/20
+                      bg-red-50 text-red-700 border border-red-200
                     {% endif %}">
                     {{ entry.status }}
                   </span>
                 </td>
-                <td class="py-3 px-3 text-right">
+                <td class="py-2.5 px-3 text-right">
                   {% if entry.status == 'eligible' %}
                     <form method="POST" action="{{ url_for('admin.reject_entry', entry_id=entry.id) }}" class="inline" onsubmit="return confirm('Disqualify this entry?');">
-                      <button type="submit" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors">
+                      <button type="submit" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors">
                         Disqualify
                       </button>
                     </form>
                   {% else %}
-                    <span class="text-zinc-600 text-[11px]">—</span>
+                    <span class="text-slate-400 text-[11px]">—</span>
                   {% endif %}
                 </td>
               </tr>
@@ -144,44 +219,8 @@
         </table>
       </div>
     {% else %}
-      <div class="text-center py-10 text-zinc-500 text-xs">
-        No entries in Round #{{ current_round.id }} yet. Use the "Seed 10 Test Entries" button above to add sample profiles.
-      </div>
-    {% endif %}
-  </div>
-
-  <!-- Past Rounds History -->
-  <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10">
-    <h2 class="text-lg font-bold text-white mb-2">Past Rounds History</h2>
-    <p class="text-xs text-zinc-400 mb-6">Archive of previously completed draws.</p>
-
-    {% if past_rounds %}
-      <div class="space-y-4">
-        {% for r in past_rounds %}
-          <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div class="flex items-center space-x-2">
-                <span class="text-sm font-bold text-white">Round #{{ r.id }}</span>
-                <span class="text-xs text-emerald-400 font-medium">Completed</span>
-              </div>
-              <p class="text-xs text-zinc-400 mt-1">
-                Completed: {{ r.completed_at.strftime('%Y-%m-%d %H:%M UTC') if r.completed_at else 'Completed' }} • {{ r.entries|length }} total entries
-              </p>
-            </div>
-
-            <div class="flex items-center space-x-3 text-xs">
-              {% for w in r.winners %}
-                <span class="px-2.5 py-1 rounded-lg bg-white/5 text-zinc-300 border border-white/10">
-                  {{ w.medal_emoji }} {{ w.entry.display_name }}
-                </span>
-              {% endfor %}
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <div class="text-center py-8 text-zinc-500 text-xs">
-        No past completed rounds yet.
+      <div class="text-center py-8 text-slate-400 text-xs">
+        No entries in Round #{{ current_round.id }} yet.
       </div>
     {% endif %}
   </div>

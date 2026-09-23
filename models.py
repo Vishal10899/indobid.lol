@@ -82,6 +82,8 @@ class Winner(Base):
     round_id = Column(Integer, ForeignKey("rounds.id", ondelete="CASCADE"), nullable=False, index=True)
     entry_id = Column(Integer, ForeignKey("entries.id", ondelete="CASCADE"), nullable=False, index=True)
     position = Column(Integer, nullable=False)  # 1 = Gold (🥇), 2 = Silver (🥈), 3 = Bronze (🥉)
+    clicks = Column(Integer, nullable=False, default=0)
+    views = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=get_utc_now)
 
     # Relationships
@@ -106,6 +108,8 @@ class Winner(Base):
             "position": self.position,
             "rank_label": self.rank_label,
             "medal_emoji": self.medal_emoji,
+            "clicks": self.clicks,
+            "views": self.views,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "entry": self.entry.to_dict() if self.entry else None,
         }
@@ -126,16 +130,39 @@ class AdminUser(Base):
         return check_password_hash(self.password_hash, password)
 
 class Payment(Base):
-    """Optional payments table for paid-entry configuration."""
+    """Payment records for paid entries via Razorpay."""
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    entry_id = Column(Integer, ForeignKey("entries.id", ondelete="SET NULL"), nullable=True)
+    entry_id = Column(Integer, ForeignKey("entries.id", ondelete="SET NULL"), nullable=True, index=True)
     provider = Column(String(64), nullable=False, default="razorpay")
-    transaction_id = Column(String(255), nullable=True)
-    amount = Column(Float, nullable=False, default=0.0)
+    order_id = Column(String(255), nullable=True, index=True)
+    transaction_id = Column(String(255), nullable=True, index=True)
+    amount = Column(Float, nullable=False, default=49.0)
     currency = Column(String(16), nullable=False, default="INR")
-    status = Column(String(32), nullable=False, default="completed")  # 'pending', 'completed', 'failed'
+    status = Column(String(32), nullable=False, default="created", index=True)  # 'created', 'pending', 'paid', 'failed', 'refunded'
     created_at = Column(DateTime(timezone=True), nullable=False, default=get_utc_now)
 
     entry = relationship("Entry", back_populates="payments")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entry_id": self.entry_id,
+            "provider": self.provider,
+            "order_id": self.order_id,
+            "transaction_id": self.transaction_id,
+            "amount": self.amount,
+            "currency": self.currency,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+class SiteVisitor(Base):
+    """Privacy-conscious daily visitor tracking without storing personal IP addresses permanently."""
+    __tablename__ = "site_visitors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    visitor_hash = Column(String(64), nullable=False, index=True)
+    visited_date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD
+    created_at = Column(DateTime(timezone=True), nullable=False, default=get_utc_now)

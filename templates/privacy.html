@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}indobid.lol — Privacy Policy{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+  
+  <div class="text-center max-w-2xl mx-auto mb-10">
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+      Privacy Policy
+    </h1>
+    <p class="text-xs sm:text-sm text-slate-500 mt-2">
+      Privacy-first design • No user accounts • Minimal data collection
+    </p>
+  </div>
+
+  <div class="saas-card p-6 sm:p-8 space-y-6 text-sm text-slate-600 leading-relaxed">
+    
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">1. No Accounts Required</h2>
+      <p>
+        indobid.lol is built with privacy as a foundational principle. Normal visitors do not create user accounts, do not provide passwords, and do not maintain user profiles on our system.
+      </p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">2. Information We Collect</h2>
+      <p>When you submit an entry to participate in an hourly draw, we collect:</p>
+      <ul class="list-disc list-inside mt-2 space-y-1 text-xs text-slate-500">
+        <li><strong>Display Name:</strong> The name you choose to represent your profile.</li>
+        <li><strong>Platform:</strong> The social network or website type (e.g., X, GitHub, YouTube, Website).</li>
+        <li><strong>Public Profile URL:</strong> The public link you submit for showcase.</li>
+      </ul>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">3. Privacy-Conscious Visitor Tracking</h2>
+      <p>
+        To accurately report unique daily visitors without compromising user privacy, we generate a one-way cryptographic hash of your temporary IP address combined with the current UTC date and a secret server salt. 
+        <strong>Your raw, personal IP address is never stored permanently in our database.</strong>
+      </p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">4. Payment Processing via Razorpay</h2>
+      <p>
+        Payments are processed securely through Razorpay. We receive transaction verification tokens (Order ID and Payment ID) to validate your payment. We never see, collect, or store your credit card numbers, debit card numbers, UPI PINs, or banking passwords.
+      </p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">5. Data Retention & Transparency</h2>
+      <p>
+        Winners' display names, platforms, and public links are permanently preserved on our public Winners Archive for platform transparency and auditability.
+      </p>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

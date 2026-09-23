@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}indobid.lol — Refund & Cancellation Policy{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+  
+  <div class="text-center max-w-2xl mx-auto mb-10">
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+      Refund & Cancellation Policy
+    </h1>
+    <p class="text-xs sm:text-sm text-slate-500 mt-2">
+      Clear guidelines regarding entry fees and digital transactions
+    </p>
+  </div>
+
+  <div class="saas-card p-6 sm:p-8 space-y-6 text-sm text-slate-600 leading-relaxed">
+    
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">1. Nature of Real-Time Digital Entries</h2>
+      <p>
+        indobid.lol operates high-cadence, 60-minute profile discovery rounds. Upon successful server-side verification of your Razorpay payment, your entry is immediately added to the active round pool and becomes eligible for random winner selection.
+      </p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">2. Non-Refundable Policy</h2>
+      <p>
+        Because entries are immediately placed into the active pool with equal mathematical probability of winning, <strong>entry fees are strictly non-refundable</strong> once confirmed.
+      </p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">3. Technical Errors & Double Charges</h2>
+      <p>
+        If your payment was debited by Razorpay but due to a network interruption or server error your entry was not created in the database, please contact support at <span class="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">support@indobid.lol</span> with your Razorpay Payment ID.
+      </p>
+      <p class="text-xs text-slate-500 mt-2">
+        Verified duplicate transactions or unfulfilled entry orders will be refunded in full within 5–7 business days to the original payment source.
+      </p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-bold text-slate-900 mb-2">4. Disqualified Entries</h2>
+      <p>
+        Entries disqualified by administration for violating terms (e.g. promoting malware, phishing, or illegal content) forfeit their entry fee and are not eligible for a refund.
+      </p>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

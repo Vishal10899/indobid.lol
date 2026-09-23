@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}indobid.lol — Official Rules & Transparency{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+  
+  <div class="text-center max-w-2xl mx-auto mb-10">
+    <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-3">
+      <span>⚖️</span>
+      <span>Equal Odds For All Entries</span>
+    </div>
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+      Official Rules & Transparency
+    </h1>
+    <p class="text-xs sm:text-sm text-slate-500 mt-2">
+      Everything you need to know about our hourly selection mechanism.
+    </p>
+  </div>
+
+  <div class="space-y-6">
+
+    <!-- Rule 1: Selection Logic -->
+    <div class="saas-card p-6 sm:p-8">
+      <h2 class="text-base font-bold text-slate-900 mb-3 flex items-center space-x-2">
+        <span>🎲</span>
+        <span>Equal Opportunity Random Draw</span>
+      </h2>
+      <p class="text-sm text-slate-600 leading-relaxed mb-3">
+        Every eligible entry in an active round has an <strong>exact, equal mathematical probability</strong> of being selected.
+      </p>
+      <p class="text-xs text-slate-500 leading-relaxed">
+        We do NOT prioritize or rank profiles based on follower counts, subscriber metrics, social clout, bidding amount, or submission time. All eligible entries in the round pool are treated with identical weight.
+      </p>
+    </div>
+
+    <!-- Rule 2: Round Cadence & Duration -->
+    <div class="saas-card p-6 sm:p-8">
+      <h2 class="text-base font-bold text-slate-900 mb-3 flex items-center space-x-2">
+        <span>⏱️</span>
+        <span>60-Minute Hourly Rounds</span>
+      </h2>
+      <ul class="space-y-2 text-xs text-slate-600 list-disc list-inside">
+        <li>Each round runs for exactly 60 minutes (3,600 seconds).</li>
+        <li>Entries submitted during an active round participate exclusively in that round.</li>
+        <li>When the round countdown reaches zero, the server closes the round and selects up to 3 winners.</li>
+        <li>A new round automatically begins immediately following round conclusion.</li>
+      </ul>
+    </div>
+
+    <!-- Rule 3: Entry Eligibility & Razorpay -->
+    <div class="saas-card p-6 sm:p-8">
+      <h2 class="text-base font-bold text-slate-900 mb-3 flex items-center space-x-2">
+        <span>💳</span>
+        <span>Paid Entry via Razorpay</span>
+      </h2>
+      <p class="text-sm text-slate-600 leading-relaxed mb-3">
+        Participation requires an entry fee of <strong>₹{{ entry_fee_inr|default(49)|int }} per entry</strong>, processed securely through Razorpay.
+      </p>
+      <ul class="space-y-2 text-xs text-slate-600 list-disc list-inside">
+        <li>An entry only becomes active and eligible after cryptographic signature verification succeeds on the server.</li>
+        <li>Unpaid, pending, or cancelled payment attempts are never entered into the draw.</li>
+        <li>Duplicate submissions of the same profile URL in the same round are prevented.</li>
+      </ul>
+    </div>
+
+    <!-- Rule 4: Winners & Featured Placement -->
+    <div class="saas-card p-6 sm:p-8">
+      <h2 class="text-base font-bold text-slate-900 mb-3 flex items-center space-x-2">
+        <span>🏆</span>
+        <span>Top 3 Featured Creators</span>
+      </h2>
+      <p class="text-sm text-slate-600 leading-relaxed mb-3">
+        At the end of each round:
+      </p>
+      <ul class="space-y-2 text-xs text-slate-600 list-disc list-inside">
+        <li><strong>0 entries:</strong> Round concludes with no winners.</li>
+        <li><strong>1 entry:</strong> 1 Gold winner selected.</li>
+        <li><strong>2 entries:</strong> 1 Gold and 1 Silver winner selected.</li>
+        <li><strong>3 or more entries:</strong> 3 winners selected without replacement (Gold, Silver, Bronze).</li>
+      </ul>
+      <p class="text-xs text-slate-500 mt-3">
+        The winners remain prominently featured on the homepage for the entire following 60 minutes, and their records are permanently preserved in the <a href="{{ url_for('main.winners') }}" class="text-purple-600 hover:underline">Winners Archive</a>.
+      </p>
+    </div>
+
+    <!-- Return to live -->
+    <div class="text-center pt-4">
+      <a href="{{ url_for('main.index') }}" class="btn-primary inline-flex items-center px-6 py-2.5 rounded-xl text-xs font-bold">
+        Back to Live Draw
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@ import random
 from datetime import timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from models import Round, Entry, Winner, get_utc_now, ensure_utc
+from models import Round, Entry, Winner, Payment, get_utc_now, ensure_utc
 
 def get_latest_completed_round(session: Session) -> Round | None:
     """Returns the most recently completed round that has winners, or any latest completed round."""
@@ -88,9 +88,15 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
         return False
 
     # Perform winner selection for this round
+    # Strictly require Payment.status == 'paid'
     eligible_entries = (
         session.query(Entry)
-        .filter_by(round_id=active_round.id, status="eligible")
+        .join(Payment, Entry.id == Payment.entry_id)
+        .filter(
+            Entry.round_id == active_round.id,
+            Entry.status == "eligible",
+            Payment.status == "paid"
+        )
         .all()
     )
 
@@ -98,7 +104,7 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
     winners_count = min(3, num_eligible)
 
     if winners_count > 0:
-        # Select winners randomly without replacement
+        # Select winners randomly without replacement - equal probability for all eligible entries
         selected_entries = random.sample(eligible_entries, winners_count)
         
         # Position 1: Gold (🥇), Position 2: Silver (🥈), Position 3: Bronze (🥉)
@@ -134,12 +140,18 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
 
 def get_glass_box_entries(session: Session, round_id: int, sample_size: int = 12) -> list[dict]:
     """
-    Returns a small sample of current entries (5-15) for the visual glass box.
-    Does not expose sensitive or private data; returns display_name and platform.
+    Returns a small sample of current paid entries for the visual participant card.
+    Only successful paid entries are included. Does not expose raw profile URLs.
     """
     entries = (
         session.query(Entry.display_name, Entry.platform)
-        .filter_by(round_id=round_id, status="eligible")
+        .join(Payment, Entry.id == Payment.entry_id)
+        .filter(
+            Entry.round_id == round_id,
+            Entry.status.in_(["eligible", "winner"]),
+            Payment.status == "paid"
+        )
+        .order_by(desc(Entry.id))
         .all()
     )
     
@@ -148,8 +160,14 @@ def get_glass_box_entries(session: Session, round_id: int, sample_size: int = 12
         
     if len(entries) <= sample_size:
         items = list(entries)
-        random.shuffle(items)
     else:
         items = random.sample(entries, sample_size)
 
-    return [{"display_name": item[0], "platform": item[1]} for item in items]
+    return [
+        {
+            "display_name": item[0],
+            "platform": item[1],
+            "initial": item[0][0].upper() if item[0] else "?"
+        }
+        for item in items
+    ]

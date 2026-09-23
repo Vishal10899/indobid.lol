@@ -59,9 +59,17 @@ class Config:
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@indobid.lol")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "IndoBidAdmin2026!")
 
+    # Entry fee and Razorpay configuration
+    ENTRY_FEE_INR = float(os.getenv("ENTRY_FEE_INR", "49.0"))
+    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder")
+    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "placeholder_secret")
+
 class TestConfig(Config):
     """Configuration for automated testing."""
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     ROUND_DURATION_SECONDS = 3600
     SECRET_KEY = "test-secret-key"
+    ENTRY_FEE_INR = 49.0
+    RAZORPAY_KEY_ID = "rzp_test_key123"
+    RAZORPAY_KEY_SECRET = "test_secret_456"

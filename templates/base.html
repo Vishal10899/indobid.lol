@@ -1,26 +1,24 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}indobid.lol — Hourly Profile Discovery{% endblock %}</title>
-  <meta name="description" content="Submit your profile. 3 profiles are featured every hour. No account required.">
+  <meta name="description" content="Submit your profile. 3 profiles are featured every hour. No user account required.">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      darkMode: 'class',
       theme: {
         extend: {
           colors: {
             brand: {
-              gold: '#F59E0B',
-              amber: '#D97706',
-              purple: '#8B5CF6',
-              dark: '#08090D',
-              surface: '#11131F',
+              purple: '#7c3aed',
+              darkPurple: '#6d28d9',
+              lightPurple: '#f3e8ff',
+              pink: '#ec4899',
             }
           }
         }
@@ -28,56 +26,69 @@
     }
   </script>
 
+  <!-- Razorpay Checkout Script -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
   <!-- Custom Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-[#08090D] text-zinc-100 min-h-screen flex flex-col antialiased selection:bg-amber-500 selection:text-black">
+<body class="bg-[#f8fafc] text-slate-800 min-h-screen flex flex-col antialiased selection:bg-purple-100 selection:text-purple-900 relative">
 
-  <!-- Ambient background glow blobs -->
-  <div class="glow-blob w-96 h-96 bg-purple-600/15 top-0 left-1/4"></div>
-  <div class="glow-blob w-[500px] h-[500px] bg-amber-500/10 top-20 right-1/4"></div>
+  <!-- Ambient top glow -->
+  <div class="bg-ambient-glow"></div>
 
   <!-- Navbar -->
-  <header class="sticky top-0 z-40 w-full backdrop-blur-xl bg-[#08090D]/80 border-b border-white/[0.07]">
+  <header class="sticky top-0 z-40 w-full backdrop-blur-md bg-white/80 border-b border-slate-200/80">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
       
-      <!-- Brand Logo -->
-      <a href="{{ url_for('main.index') }}" class="flex items-center space-x-2.5 group">
-        <span class="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 to-purple-600 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform duration-200">
-          <svg class="w-4 h-4 text-black font-bold fill-current" viewBox="0 0 24 24">
-            <path d="M5 16L3 5L8.5 10L12 4L15.5 10L21 5L19 16H5M19 19C19 19.6 18.6 20 18 20H6C5.4 20 5 19.6 5 19V18H19V19Z" />
-          </svg>
-        </span>
-        <span class="font-extrabold text-xl tracking-tight text-white group-hover:text-amber-400 transition-colors">
-          indobid<span class="text-amber-500">.lol</span>
-        </span>
-      </a>
+      <!-- Brand Logo & Live Pill -->
+      <div class="flex items-center space-x-4">
+        <a href="{{ url_for('main.index') }}" class="flex items-center space-x-2.5 group">
+          <span class="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform duration-200">
+            <svg class="w-4 h-4 text-white font-bold fill-current" viewBox="0 0 24 24">
+              <path d="M5 16L3 5L8.5 10L12 4L15.5 10L21 5L19 16H5M19 19C19 19.6 18.6 20 18 20H6C5.4 20 5 19.6 5 19V18H19V19Z" />
+            </svg>
+          </span>
+          <span class="font-extrabold text-xl tracking-tight text-slate-900 group-hover:text-purple-600 transition-colors">
+            indobid<span class="text-purple-600">.lol</span>
+          </span>
+        </a>
+
+        <!-- Honest Live Metric -->
+        <div class="hidden sm:inline-flex items-center space-x-2 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-700">
+          <span class="live-dot"></span>
+          <span>● Live now</span>
+        </div>
+      </div>
 
       <!-- Navigation Links -->
-      <nav class="hidden md:flex items-center space-x-8 text-sm font-medium text-zinc-400">
-        <a href="{{ url_for('main.index') }}" class="hover:text-white transition-colors {% if request.endpoint == 'main.index' %}text-white font-semibold{% endif %}">
+      <nav class="hidden md:flex items-center space-x-7 text-sm font-medium text-slate-600">
+        <a href="{{ url_for('main.index') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.index' %}text-purple-600 font-semibold{% endif %}">
           Home
         </a>
-        <a href="{{ url_for('main.about') }}" class="hover:text-white transition-colors {% if request.endpoint == 'main.about' %}text-white font-semibold{% endif %}">
-          About
-        </a>
-        <a href="{{ url_for('main.winners') }}" class="hover:text-white transition-colors {% if request.endpoint == 'main.winners' %}text-white font-semibold{% endif %}">
+        <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.winners' %}text-purple-600 font-semibold{% endif %}">
           Winners
+        </a>
+        <a href="{{ url_for('main.rules') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.rules' %}text-purple-600 font-semibold{% endif %}">
+          Rules
+        </a>
+        <a href="{{ url_for('main.about') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.about' %}text-purple-600 font-semibold{% endif %}">
+          About
         </a>
       </nav>
 
-      <!-- Enter CTA Button -->
+      <!-- Action Buttons -->
       <div class="flex items-center space-x-3">
-        <button data-open-enter-modal class="btn-primary px-5 py-2 rounded-xl text-sm font-bold flex items-center space-x-2 cursor-pointer">
-          <svg class="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <a href="#enter-section" class="btn-primary px-4 sm:px-5 py-2 rounded-xl text-sm font-bold flex items-center space-x-1.5 cursor-pointer">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
           </svg>
-          <span>Enter</span>
-        </button>
+          <span>Enter Now</span>
+        </a>
 
         <!-- Mobile Menu Toggle Button -->
-        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5" aria-label="Toggle Navigation">
+        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100" aria-label="Toggle Navigation">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
           </svg>
@@ -87,15 +98,22 @@
     </div>
 
     <!-- Mobile Navigation Drawer -->
-    <div id="mobile-menu" class="hidden md:hidden border-t border-white/[0.08] bg-[#0c0e17] px-4 pt-3 pb-5 space-y-2">
-      <a href="{{ url_for('main.index') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-zinc-300 hover:bg-white/5 hover:text-white">
+    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-4 space-y-2">
+      <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-700 mb-2">
+        <span class="live-dot"></span>
+        <span>● Live now</span>
+      </div>
+      <a href="{{ url_for('main.index') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
         Home
       </a>
-      <a href="{{ url_for('main.about') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-zinc-300 hover:bg-white/5 hover:text-white">
-        About
-      </a>
-      <a href="{{ url_for('main.winners') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-zinc-300 hover:bg-white/5 hover:text-white">
+      <a href="{{ url_for('main.winners') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
         Winners
+      </a>
+      <a href="{{ url_for('main.rules') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
+        Rules
+      </a>
+      <a href="{{ url_for('main.about') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
+        About
       </a>
     </div>
   </header>
@@ -105,15 +123,15 @@
     {% if messages %}
       <div class="max-w-3xl mx-auto w-full px-4 pt-4 z-30">
         {% for category, message in messages %}
-          <div class="flex items-center justify-between p-4 mb-3 rounded-xl border text-sm font-medium
+          <div class="flex items-center justify-between p-4 mb-3 rounded-xl border text-sm font-medium shadow-sm
             {% if category == 'error' %}
-              bg-red-500/10 border-red-500/30 text-red-200
+              bg-red-50 border-red-200 text-red-700
             {% elif category == 'success' %}
-              bg-emerald-500/10 border-emerald-500/30 text-emerald-200
+              bg-emerald-50 border-emerald-200 text-emerald-800
             {% elif category == 'warning' %}
-              bg-amber-500/10 border-amber-500/30 text-amber-200
+              bg-amber-50 border-amber-200 text-amber-800
             {% else %}
-              bg-zinc-800/80 border-white/10 text-zinc-200
+              bg-slate-50 border-slate-200 text-slate-700
             {% endif %}">
             <div class="flex items-center space-x-2">
               <span>{{ message }}</span>
@@ -130,86 +148,35 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Entry Modal (Global Access) -->
-  <div id="enter-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden transition-all">
-    <div class="relative w-full max-w-lg glass-panel rounded-3xl p-6 sm:p-8 shadow-2xl border border-white/15 animate-pulse-subtle">
-      
-      <!-- Close button -->
-      <button data-close-enter-modal class="absolute top-5 right-5 text-zinc-400 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-colors" aria-label="Close modal">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-        </svg>
-      </button>
+  <!-- Clean SaaS Footer -->
+  <footer class="border-t border-slate-200 bg-white py-10 mt-16 z-20">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        
+        <!-- Left: Branding & Subtitle -->
+        <div class="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
+          <span class="font-extrabold text-lg text-slate-900 tracking-tight">indobid<span class="text-purple-600">.lol</span></span>
+          <span class="hidden sm:inline text-slate-300">|</span>
+          <span class="text-xs text-slate-500">Hourly Creator Profile Discovery</span>
+        </div>
 
-      <div class="mb-6">
-        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-3">
-          100% Free • No Account Needed
-        </span>
-        <h2 class="text-2xl font-black text-white tracking-tight">Enter Current Draw</h2>
-        <p class="text-zinc-400 text-sm mt-1">Submit your profile. 3 random profiles are crowned and featured on the homepage every hour.</p>
+        <!-- Center / Right: Navigation & Legal Links -->
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-slate-600">
+          <a href="{{ url_for('main.index') }}" class="hover:text-purple-600 transition-colors">Home</a>
+          <a href="{{ url_for('main.about') }}" class="hover:text-purple-600 transition-colors">About</a>
+          <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors">Winners</a>
+          <a href="{{ url_for('main.rules') }}" class="hover:text-purple-600 transition-colors">Rules</a>
+          <a href="{{ url_for('main.terms') }}" class="hover:text-purple-600 transition-colors">Terms</a>
+          <a href="{{ url_for('main.privacy') }}" class="hover:text-purple-600 transition-colors">Privacy</a>
+          <a href="{{ url_for('main.refunds') }}" class="hover:text-purple-600 transition-colors">Refunds</a>
+          <a href="{{ url_for('admin.login') }}" class="text-slate-400 hover:text-slate-600 transition-colors">Admin</a>
+        </div>
+
       </div>
 
-      <!-- Feedback Banner -->
-      <div id="entry-form-feedback" class="hidden mb-4 p-3.5 rounded-xl border text-sm"></div>
-
-      <!-- Submission Form -->
-      <form id="entry-form" class="space-y-4">
-        <div>
-          <label for="display_name" class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-            Display Name / Creator Name <span class="text-amber-500">*</span>
-          </label>
-          <input type="text" id="display_name" name="display_name" required maxlength="60" placeholder="e.g. Vishal Kumar"
-            class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors text-sm">
-        </div>
-
-        <div>
-          <label for="platform" class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-            Platform <span class="text-amber-500">*</span>
-          </label>
-          <select id="platform" name="platform"
-            class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors text-sm">
-            <option value="twitter">X / Twitter</option>
-            <option value="youtube">YouTube</option>
-            <option value="instagram">Instagram</option>
-            <option value="tiktok">TikTok</option>
-            <option value="github">GitHub</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="website">Personal Website / Blog</option>
-            <option value="other">Other Link</option>
-          </select>
-        </div>
-
-        <div>
-          <label for="profile_url" class="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-            Public Profile or Website URL <span class="text-amber-500">*</span>
-          </label>
-          <input type="url" id="profile_url" name="profile_url" required placeholder="https://x.com/yourhandle"
-            class="w-full px-4 py-3 rounded-xl bg-black/40 border border-white/10 text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors text-sm">
-          <p class="text-xs text-zinc-500 mt-1">Winners are featured with a direct clickable link to this URL.</p>
-        </div>
-
-        <div class="pt-2">
-          <button type="submit" id="entry-submit-btn" class="w-full btn-primary py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-200">
-            Confirm Entry
-          </button>
-        </div>
-      </form>
-
-    </div>
-  </div>
-
-  <!-- Minimal Footer -->
-  <footer class="border-t border-white/[0.07] bg-[#07080b] py-8 mt-12 z-20">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500 space-y-4 sm:space-y-0">
-      <div class="flex items-center space-x-2">
-        <span class="font-bold text-zinc-300">indobid.lol</span>
-        <span>—</span>
-        <span>Hourly Profile Discovery Platform</span>
-      </div>
-      <div class="flex items-center space-x-6">
-        <a href="{{ url_for('main.index') }}" class="hover:text-zinc-300 transition-colors">Home</a>
-        <a href="{{ url_for('main.about') }}" class="hover:text-zinc-300 transition-colors">About & Rules</a>
-        <a href="{{ url_for('main.winners') }}" class="hover:text-zinc-300 transition-colors">Past Winners</a>
+      <div class="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
+        <p>© {{ current_year }} indobid.lol. Three profiles randomly selected every hour.</p>
+        <p>Built for Render Free • Zero fake activity</p>
       </div>
     </div>
   </footer>
@@ -217,7 +184,7 @@
   <!-- Scripts -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   <script>
-    // Simple mobile menu toggle
+    // Mobile navigation toggle
     const mobileBtn = document.getElementById('mobile-menu-btn');
     const mobileMenu = document.getElementById('mobile-menu');
     if (mobileBtn && mobileMenu) {

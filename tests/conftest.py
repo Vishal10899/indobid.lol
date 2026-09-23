@@ -1,5 +1,10 @@
+import os
 import sys
 from pathlib import Path
+
+# Force in-memory SQLite and disable production flag for testing
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["RENDER"] = "false"
 
 # Add project root directory to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -23,20 +28,23 @@ def app():
     )
     Base.metadata.create_all(bind=test_engine)
     
-    # Override global database engine and session factory
+    # Reconfigure database engine and session factory
+    database.db_session.remove()
     database.engine = test_engine
     database.SessionFactory = sessionmaker(bind=test_engine, autoflush=False, autocommit=False)
-    database.db_session = scoped_session(database.SessionFactory)
+    database.db_session.configure(bind=test_engine)
 
-    # Create app
+    # Create app with TestConfig
     test_app = create_app(TestConfig)
     
-    # Create test admin
+    # Create test admin user in test db
     session = database.db_session()
-    admin = AdminUser(email="testadmin@indobid.lol")
-    admin.set_password("TestSecret123!")
-    session.add(admin)
-    session.commit()
+    admin = session.query(AdminUser).filter_by(email=TestConfig.ADMIN_EMAIL).first()
+    if not admin:
+        admin = AdminUser(email=TestConfig.ADMIN_EMAIL)
+        admin.set_password(TestConfig.ADMIN_PASSWORD)
+        session.add(admin)
+        session.commit()
     session.close()
 
     yield test_app
