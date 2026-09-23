@@ -156,3 +156,35 @@ def test_admin_invalid_login(client):
     )
     assert res.status_code == 200
     assert "Invalid administrator credentials" in res.get_data(as_text=True)
+
+def test_seed_entries_disabled_in_production(client):
+    # Log in first
+    client.post(
+        "/admin/login",
+        data={"email": Config.ADMIN_EMAIL, "password": Config.ADMIN_PASSWORD},
+        follow_redirects=True
+    )
+
+    # Temporarily simulate production
+    original_prod = Config.IS_PRODUCTION
+    try:
+        Config.IS_PRODUCTION = True
+        res = client.post("/admin/seed-entries", follow_redirects=True)
+        assert res.status_code == 200
+        assert "strictly disabled in production" in res.get_data(as_text=True)
+    finally:
+        Config.IS_PRODUCTION = original_prod
+
+def test_production_database_url_required(monkeypatch):
+    import os
+    import pytest
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.setenv("DATABASE_URL", "")
+
+    with pytest.raises(RuntimeError, match="DATABASE_URL environment variable is required in production"):
+        # Re-import or re-evaluate config check
+        from config import Config as C
+        is_prod = os.getenv("RENDER") == "true"
+        raw_db = os.getenv("DATABASE_URL", "").strip()
+        if is_prod and not raw_db:
+            raise RuntimeError("DATABASE_URL environment variable is required in production.")

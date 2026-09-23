@@ -69,13 +69,15 @@
         </button>
       </form>
 
-      <!-- Seed Sample Entries -->
-      <form method="POST" action="{{ url_for('admin.seed_entries') }}">
-        <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white transition-all flex items-center space-x-2">
-          <span>🌱</span>
-          <span>Seed 10 Test Entries</span>
-        </button>
-      </form>
+      <!-- Seed Sample Entries (Disabled in production) -->
+      {% if not is_production %}
+        <form method="POST" action="{{ url_for('admin.seed_entries') }}">
+          <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white transition-all flex items-center space-x-2">
+            <span>🌱</span>
+            <span>Seed 10 Test Entries</span>
+          </button>
+        </form>
+      {% endif %}
     </div>
   </div>
 

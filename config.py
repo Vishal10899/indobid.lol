@@ -11,8 +11,32 @@ class Config:
     """Base application configuration."""
     SECRET_KEY = os.getenv("SECRET_KEY", "indobid-secret-key-change-in-production-2026")
     
-    # Database URL with Render postgresql fix
-    db_url = os.getenv("DATABASE_URL", f"sqlite:///{BASE_DIR / 'instance' / 'indobid.db'}")
+    # Environment detection
+    IS_PRODUCTION = (
+        os.getenv("RENDER") == "true"
+        or os.getenv("FLASK_ENV") == "production"
+        or os.getenv("ENVIRONMENT") == "production"
+    )
+
+    raw_db_url = os.getenv("DATABASE_URL", "").strip()
+
+    if IS_PRODUCTION:
+        if not raw_db_url:
+            raise RuntimeError(
+                "FATAL CONFIGURATION ERROR: DATABASE_URL environment variable is required in production. "
+                "Render PostgreSQL connection string must be provided. SQLite fallback is strictly prohibited in production."
+            )
+        if raw_db_url.startswith("sqlite"):
+            raise RuntimeError(
+                "FATAL CONFIGURATION ERROR: Production environment cannot run on SQLite. "
+                "A PostgreSQL DATABASE_URL must be configured."
+            )
+        db_url = raw_db_url
+    else:
+        # Development / local environment automatically defaults to SQLite if DATABASE_URL is absent
+        db_url = raw_db_url if raw_db_url else f"sqlite:///{BASE_DIR / 'instance' / 'indobid.db'}"
+
+    # Normalize Render postgresql connection string
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
     

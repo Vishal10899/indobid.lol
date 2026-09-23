@@ -75,14 +75,17 @@ Run the full pytest suite:
 ```bash
 pytest -v
 ```
-All 17 integration and unit tests cover:
+All 22 integration and unit tests cover:
 - Idempotent timestamp engine progression
 - Winner selection (Gold, Silver, Bronze)
 - Edge cases (0 entries, 1-2 entries)
 - Entry submission (JSON & Form)
-- Anti-duplicate detection
+- Anti-duplicate detection & URL normalization
 - Glass box sampling
-- Admin security & access control
+- Admin security & brute-force protection
+- Production DATABASE_URL strict enforcement
+- Server-side disabled seed in production
+- Security headers & 404/500 error handling
 
 ---
 
@@ -94,7 +97,7 @@ The project includes a ready-to-deploy [`render.yaml`](file:///D:/indobid.lol/re
 2. Create a **Blueprint** or **Web Service**:
    - **Environment:** Python
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4`
+   - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4`
    - **Health Check Path:** `/health`
 3. Attach a **Render PostgreSQL** free database instance.
 4. Set Environment Variables:

@@ -113,7 +113,8 @@ def dashboard():
         total_entries_count=total_entries_count,
         total_winners_count=total_winners_count,
         past_rounds=past_rounds,
-        remaining_seconds=remaining_seconds
+        remaining_seconds=remaining_seconds,
+        is_production=Config.IS_PRODUCTION
     )
 
 @admin_bp.route("/trigger-draw", methods=["POST"])
@@ -137,7 +138,11 @@ def trigger_draw():
 @admin_bp.route("/seed-entries", methods=["POST"])
 @admin_required
 def seed_entries():
-    """Adds realistic sample creator profiles into the current active round for demonstration."""
+    """Adds realistic sample creator profiles into the current active round for demonstration. Disabled in production."""
+    if Config.IS_PRODUCTION:
+        flash("Seeding test entries is strictly disabled in production.", "error")
+        return redirect(url_for("admin.dashboard"))
+
     sample_profiles = [
         ("Vishal Kumar", "twitter", "https://x.com/vishalkumar"),
         ("Sarah Jenkins", "youtube", "https://youtube.com/@sarahbuilds"),
