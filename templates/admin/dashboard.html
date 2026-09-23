@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard — indobid.lol{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-white/10 gap-4 mb-8">
+    <div>
+      <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 mb-2">
+        <span>⚙️</span>
+        <span>IndoBid Control Center</span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-black text-white">Administrator Dashboard</h1>
+      <p class="text-xs text-zinc-400 mt-1">Logged in as: <span class="text-zinc-200 font-mono">{{ session.get('admin_email') }}</span></p>
+    </div>
+
+    <div class="flex items-center space-x-3">
+      <a href="{{ url_for('main.index') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors">
+        Live Site ↗
+      </a>
+      <a href="{{ url_for('admin.logout') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition-colors">
+        Sign Out
+      </a>
+    </div>
+  </div>
+
+  <!-- Metric Cards -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="glass-panel p-5 rounded-2xl border border-white/10">
+      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Active Round</span>
+      <div class="text-2xl sm:text-3xl font-black text-white mt-1">#{{ current_round.id }}</div>
+      <div class="text-[11px] text-emerald-400 mt-1 font-mono">Status: {{ current_round.status }}</div>
+    </div>
+
+    <div class="glass-panel p-5 rounded-2xl border border-white/10">
+      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Current Round Pool</span>
+      <div class="text-2xl sm:text-3xl font-black text-amber-400 mt-1">{{ active_entries|length }}</div>
+      <div class="text-[11px] text-zinc-400 mt-1">Eligible participants</div>
+    </div>
+
+    <div class="glass-panel p-5 rounded-2xl border border-white/10">
+      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Completed Rounds</span>
+      <div class="text-2xl sm:text-3xl font-black text-white mt-1">{{ total_completed_rounds }}</div>
+      <div class="text-[11px] text-zinc-400 mt-1">Historical draws</div>
+    </div>
+
+    <div class="glass-panel p-5 rounded-2xl border border-white/10">
+      <span class="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Winners Crowned</span>
+      <div class="text-2xl sm:text-3xl font-black text-purple-400 mt-1">{{ total_winners_count }}</div>
+      <div class="text-[11px] text-zinc-400 mt-1">Gold, Silver, Bronze</div>
+    </div>
+  </div>
+
+  <!-- Action Controls -->
+  <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10 mb-10">
+    <h2 class="text-lg font-bold text-white mb-2">Round Operations</h2>
+    <p class="text-xs text-zinc-400 mb-6">
+      Control the current round manually. Normal automatic round resolution operates lazily on incoming requests once the countdown expires.
+    </p>
+
+    <div class="flex flex-wrap gap-4">
+      <!-- Force Draw -->
+      <form method="POST" action="{{ url_for('admin.trigger_draw') }}" onsubmit="return confirm('Immediately draw winners for Round #{{ current_round.id }} and advance to next round?');">
+        <button type="submit" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2">
+          <span>⚡</span>
+          <span>Draw Round #{{ current_round.id }} Now</span>
+        </button>
+      </form>
+
+      <!-- Seed Sample Entries -->
+      <form method="POST" action="{{ url_for('admin.seed_entries') }}">
+        <button type="submit" class="px-6 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-white transition-all flex items-center space-x-2">
+          <span>🌱</span>
+          <span>Seed 10 Test Entries</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Current Round Entries Table -->
+  <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10 mb-10">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-bold text-white">Active Round Entries (Round #{{ current_round.id }})</h2>
+        <p class="text-xs text-zinc-400">All submissions in the pool awaiting the next draw.</p>
+      </div>
+      <span class="text-xs font-mono text-amber-400">{{ active_entries|length }} entries</span>
+    </div>
+
+    {% if active_entries %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-white/10 text-zinc-400 uppercase tracking-wider font-semibold">
+              <th class="py-3 px-3">ID</th>
+              <th class="py-3 px-3">Name</th>
+              <th class="py-3 px-3">Platform</th>
+              <th class="py-3 px-3">Profile URL</th>
+              <th class="py-3 px-3">Status</th>
+              <th class="py-3 px-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-white/5">
+            {% for entry in active_entries %}
+              <tr class="hover:bg-white/[0.02] transition-colors">
+                <td class="py-3 px-3 text-zinc-500 font-mono">#{{ entry.id }}</td>
+                <td class="py-3 px-3 font-medium text-white">{{ entry.display_name }}</td>
+                <td class="py-3 px-3 text-zinc-400 capitalize">{{ entry.platform }}</td>
+                <td class="py-3 px-3">
+                  <a href="{{ entry.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-amber-400 hover:underline max-w-xs truncate block">
+                    {{ entry.profile_url }}
+                  </a>
+                </td>
+                <td class="py-3 px-3">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
+                    {% if entry.status == 'eligible' %}
+                      bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+                    {% elif entry.status == 'winner' %}
+                      bg-amber-500/10 text-amber-400 border border-amber-500/20
+                    {% else %}
+                      bg-red-500/10 text-red-400 border border-red-500/20
+                    {% endif %}">
+                    {{ entry.status }}
+                  </span>
+                </td>
+                <td class="py-3 px-3 text-right">
+                  {% if entry.status == 'eligible' %}
+                    <form method="POST" action="{{ url_for('admin.reject_entry', entry_id=entry.id) }}" class="inline" onsubmit="return confirm('Disqualify this entry?');">
+                      <button type="submit" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors">
+                        Disqualify
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="text-zinc-600 text-[11px]">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center py-10 text-zinc-500 text-xs">
+        No entries in Round #{{ current_round.id }} yet. Use the "Seed 10 Test Entries" button above to add sample profiles.
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Past Rounds History -->
+  <div class="glass-panel rounded-3xl p-6 sm:p-8 border border-white/10">
+    <h2 class="text-lg font-bold text-white mb-2">Past Rounds History</h2>
+    <p class="text-xs text-zinc-400 mb-6">Archive of previously completed draws.</p>
+
+    {% if past_rounds %}
+      <div class="space-y-4">
+        {% for r in past_rounds %}
+          <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="text-sm font-bold text-white">Round #{{ r.id }}</span>
+                <span class="text-xs text-emerald-400 font-medium">Completed</span>
+              </div>
+              <p class="text-xs text-zinc-400 mt-1">
+                Completed: {{ r.completed_at.strftime('%Y-%m-%d %H:%M UTC') if r.completed_at else 'Completed' }} • {{ r.entries|length }} total entries
+              </p>
+            </div>
+
+            <div class="flex items-center space-x-3 text-xs">
+              {% for w in r.winners %}
+                <span class="px-2.5 py-1 rounded-lg bg-white/5 text-zinc-300 border border-white/10">
+                  {{ w.medal_emoji }} {{ w.entry.display_name }}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="text-center py-8 text-zinc-500 text-xs">
+        No past completed rounds yet.
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

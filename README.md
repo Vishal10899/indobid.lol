@@ -1,144 +1,127 @@
-# indobid.lol — The Public Pay-To-Rank Attention Marketplace
+# indobid.lol
 
-> **"Pay more. Rank higher. Every position is earned with a verified bid."**
-
-`indobid.lol` is a transparent, production-ready, pay-to-rank leaderboard and attention marketplace.
-
----
-
-## ⚡ Core Product Rules
-
-1. **RANK = VERIFIED BID**: There is no hidden quality score, voting score, popularity score, or algorithm. Position is strictly determined by verified cumulative bids (`ORDER BY verified_bid DESC, bid_reached_at ASC`).
-2. **Incremental Bidding**: Users only pay the difference to raise an existing listing's rank.
-3. **Strict Payment Security**: The frontend never determines or changes `verified_bid`. All amounts are computed server-side and updated exclusively via cryptographically signed Stripe webhooks with database transaction idempotency.
-4. **First-Party Click Tracking**: Outbound destination visits are routed through `/visit/:listingId` with anti-abuse protection and marked `rel="sponsored"`.
+> **YOUR LUCK COULD PUT YOU ON TOP.**  
+> Submit your profile. Three profiles are featured every hour.  
+> An ultra-lightweight, sleep-proof hourly profile-discovery platform engineered specifically for **Render Free**.
 
 ---
 
-## 🛠️ Tech Stack
+## 🌟 Product Philosophy
 
-- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/) + React 19 + TypeScript
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-- **Database & ORM**: SQLite / PostgreSQL with [Prisma ORM](https://www.prisma.io/)
-- **Payments**: Stripe Checkout + Cryptographic Webhooks
-- **Icons**: Lucide Icons + Custom Platform SVGs
+* **Zero Accounts for Visitors:** Normal users never register, log in, or remember passwords. Anyone can submit a display name and profile URL in seconds.
+* **Sleep-Proof Timestamp Engine:** Free tier instances sleep when idle. The database is the single source of truth for rounds. Round resolution executes deterministically and idempotently on incoming requests.
+* **Minimalist & Fast:** No heavy frameworks, no microservices, no Redis, no WebSockets. Built with Python, Flask, SQLAlchemy, Tailwind CSS, and Vanilla JavaScript.
+* **Permanent Hall of Fame:** Every hourly champion (🥇 Gold, 🥈 Silver, 🥉 Bronze) is permanently recorded in PostgreSQL and archived on `/winners`.
 
 ---
 
-## 🚀 Getting Started
+## 🏗️ Architecture
 
-### 1. Prerequisites
-- Node.js 18+ (tested on Node.js 24)
-- npm or pnpm
-
-### 2. Clone & Install
-```bash
-git clone <repo-url>
-cd indobid.lol
-npm install
+```text
+Browser (Vanilla JS + Tailwind CSS)
+   ↓ HTTP / JSON
+Flask (Python 3.11+ / Gunicorn)
+   ↓ SQLAlchemy
+PostgreSQL (Render PostgreSQL / SQLite local fallback)
 ```
 
-### 3. Configure Environment Variables
+### Database Schema
+
+1. **`rounds`**: `id`, `start_time`, `end_time`, `status`, `created_at`, `completed_at`
+2. **`entries`**: `id`, `round_id`, `display_name`, `platform`, `profile_url`, `status`, `created_at`
+3. **`winners`**: `id`, `round_id`, `entry_id`, `position` (1 = Gold, 2 = Silver, 3 = Bronze), `created_at`
+4. **`admin_users`**: `id`, `email`, `password_hash`, `created_at`
+5. **`payments`**: `id`, `entry_id`, `provider`, `transaction_id`, `amount`, `currency`, `status`, `created_at`
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### 1. Prerequisites
+- Python 3.11+ (tested on Python 3.11 - 3.14)
+- Git
+
+### 2. Setup Virtual Environment
+```bash
+python -m venv .venv
+
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+# On Linux/macOS:
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### 3. Configure Environment
 Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
+*(If `DATABASE_URL` is omitted, the app will automatically use a local SQLite database at `instance/indobid.db`)*
 
-Edit `.env` with your credentials:
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/indobid_db?schema=public"
-RAZORPAY_KEY_ID="your_razorpay_key_id"
-RAZORPAY_KEY_SECRET="your_razorpay_key_secret"
-RAZORPAY_WEBHOOK_SECRET="your_razorpay_webhook_secret"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-ADMIN_EMAIL="vishalkumar75912@gmail.com"
-ADMIN_SECRET_KEY="indobid_admin_secret_key_2026"
-```
-
-### 4. Database Setup & Seeding
+### 4. Run the Application
 ```bash
-npx prisma db push
-npm run db:seed
+python app.py
 ```
-
-### 5. Start Development Server
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open your browser to [http://localhost:5000](http://localhost:5000).
 
 ---
 
 ## 🧪 Automated Testing
 
-The repository includes an end-to-end test suite validating all 26 core product test cases:
-
+Run the full pytest suite:
 ```bash
-npm test
+pytest -v
 ```
-
-### Test Coverage (26 Cases)
-1. New listing with minimum bid ($5.00).
-2. New listing placed below #1.
-3. New listing taking #1 rank globally.
-4. Existing listing increases cumulative bid.
-5. User pays only incremental difference.
-6. Failed payment never affects leaderboard.
-7. Canceled checkout preserves leaderboard state.
-8. Duplicate webhook rejected idempotently without doubling bids.
-9. 3x identical webhook deliveries handled cleanly.
-10. Concurrent payments processed atomically in DB transactions.
-11. Equal bids tie-broken deterministically by earlier `bid_reached_at`.
-12. Duplicate URL submission deduplicated to canonical key.
-13. UTM & tracking parameters stripped cleanly during canonicalization.
-14. Malformed/invalid URLs, localhost, and script protocols rejected.
-15. Platform detection (Website, X, YouTube, Instagram, other).
-16. Admin can hide listings.
-17. Hidden listings strictly excluded from public leaderboard.
-18. First-party outbound click tracking (`/visit/:listingId`).
-19. Responsive mobile layout.
-20. Responsive desktop layout.
-21. Category filtering.
-22. Global and category rank calculation.
-23. Checkout amount matches server calculation.
-24. Client cannot manipulate final bid amount.
-25. Client cannot mark payment as successful.
-26. Unauthorized admin access blocked with 401.
+All 17 integration and unit tests cover:
+- Idempotent timestamp engine progression
+- Winner selection (Gold, Silver, Bronze)
+- Edge cases (0 entries, 1-2 entries)
+- Entry submission (JSON & Form)
+- Anti-duplicate detection
+- Glass box sampling
+- Admin security & access control
 
 ---
 
-## 💳 Stripe Webhook Setup
+## ☁️ Deployment on Render (Render Free)
 
-For local webhook testing with Stripe CLI:
-```bash
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
-```
+The project includes a ready-to-deploy [`render.yaml`](file:///D:/indobid.lol/render.yaml) blueprint:
 
-Copy the printed webhook secret into `STRIPE_WEBHOOK_SECRET` in `.env`.
-
----
-
-## 🛡️ Admin Moderation Panel
-
-- Navigate to `/admin`
-- Enter your configured `ADMIN_SECRET_KEY`
-- Features:
-  - Hide / Restore suspicious or malicious listings
-  - Change listing category
-  - View real-time Cashfree payment logs & order IDs
-  - Inspect bid histories
+1. Connect your repository to **Render**.
+2. Create a **Blueprint** or **Web Service**:
+   - **Environment:** Python
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4`
+   - **Health Check Path:** `/health`
+3. Attach a **Render PostgreSQL** free database instance.
+4. Set Environment Variables:
+   - `DATABASE_URL`: Automatically linked from Render PostgreSQL.
+   - `SECRET_KEY`: Random secret string (or auto-generated by Render).
+   - `ADMIN_EMAIL`: Your administrator email.
+   - `ADMIN_PASSWORD`: Your administrator password.
+   - `ROUND_DURATION_SECONDS`: `3600` (1 hour).
 
 ---
 
-## 🚢 Production Deployment
+## 🔒 Administrator Access
 
-### Option A: Vercel / Netlify
-1. Connect your GitHub repository.
-2. Set Environment Variables in dashboard (`DATABASE_URL`, `CASHFREE_APP_ID`, `CASHFREE_SECRET_KEY`, `CASHFREE_ENVIRONMENT`, `ADMIN_SECRET_KEY`, `NEXT_PUBLIC_APP_URL`).
-3. Deploy!
+Normal users never see a login page. Admin access is strictly isolated at:
 
-### Option B: Node.js / Docker
-```bash
-npm run build
-npm run start
+```text
+/admin/login
 ```
+
+Inside the Admin Control Center:
+- View live round statistics & active participant pool
+- Manually trigger an early draw (`Draw Round Now`)
+- Seed sample entries for demonstration (`Seed 10 Test Entries`)
+- Moderate and disqualify inappropriate profile entries
+- View complete historical round logs
+
+---
+
+## 📄 License
+MIT License. Built for simplicity and speed.

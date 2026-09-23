@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="glowGrad" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#8B5CF6" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#090A10" />
+  <rect x="2" y="2" width="60" height="60" rx="14" stroke="url(#glowGrad)" stroke-width="2" stroke-opacity="0.6" />
+  <!-- Minimalist Trophy / Crown Symbol -->
+  <path d="M20 18H44L38 36C38 41 33 44 26 44C20 44 18 41 18 36L20 18Z" fill="url(#glowGrad)" fill-opacity="0.8" />
+  <circle cx="32" cy="27" r="4" fill="#FFFFFF" />
+  <path d="M26 46H38V50H26V46Z" fill="#F59E0B" rx="1" />
+  <path d="M22 50H42V53H22V50Z" fill="#F59E0B" rx="1" />
+</svg>

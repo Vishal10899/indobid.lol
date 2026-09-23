@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}System Error — indobid.lol{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto px-4 py-20 text-center">
+  <div class="glass-panel rounded-3xl p-8 border border-white/10">
+    <div class="text-5xl font-black text-purple-400 mb-3">500</div>
+    <h1 class="text-xl font-bold text-white mb-2">Temporary System Hiccup</h1>
+    <p class="text-xs text-zinc-400 mb-6">
+      The server experienced a temporary issue. Please refresh the page.
+    </p>
+    <a href="{{ url_for('main.index') }}" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-bold inline-block">
+      Refresh Homepage
+    </a>
+  </div>
+</div>
+{% endblock %}

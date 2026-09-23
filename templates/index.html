@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}indobid.lol — YOUR LUCK COULD PUT YOU ON TOP{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+
+  <!-- HERO SECTION -->
+  <section class="text-center max-w-3xl mx-auto mb-10 sm:mb-14">
+    <!-- Live Badge -->
+    <div class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/[0.05] border border-white/10 mb-6 backdrop-blur-md">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+      <span id="live-round-badge" class="text-xs font-bold uppercase tracking-wider text-zinc-300">
+        LIVE ROUND #{{ current_round.id }}
+      </span>
+      <span class="text-zinc-500">•</span>
+      <span id="entries-count-badge" class="text-xs font-medium text-amber-400">
+        {{ total_entries_count }} in the draw
+      </span>
+    </div>
+
+    <!-- Large Headline -->
+    <h1 class="text-4xl sm:text-6xl md:text-7xl font-black tracking-tight text-white uppercase leading-[1.05] sm:leading-[1.05] mb-6">
+      YOUR LUCK<br>
+      <span class="bg-gradient-to-r from-amber-400 via-amber-200 to-purple-400 bg-clip-text text-transparent">
+        COULD PUT YOU ON TOP.
+      </span>
+    </h1>
+
+    <!-- Subtitle -->
+    <p class="text-base sm:text-lg md:text-xl text-zinc-400 font-normal leading-relaxed max-w-xl mx-auto">
+      Submit your profile. Three profiles are featured every hour.
+    </p>
+
+    <!-- Main CTA Button -->
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+      <button data-open-enter-modal class="w-full sm:w-auto btn-primary px-8 py-3.5 rounded-2xl text-base font-extrabold flex items-center justify-center space-x-2.5 shadow-xl hover:scale-105 active:scale-95 transition-all">
+        <svg class="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        <span>Enter Free Draw</span>
+      </button>
+      <a href="#podium" class="text-xs font-medium text-zinc-400 hover:text-white px-4 py-2 transition-colors">
+        See Current Champions ↓
+      </a>
+    </div>
+  </section>
+
+  <!-- GLASS BOX (MAIN VISUAL) -->
+  <section class="w-full max-w-xl mx-auto mb-10">
+    <div class="relative glass-box-hero rounded-3xl p-6 sm:p-8 overflow-hidden">
+      
+      <!-- Ambient corner glow inside glass box -->
+      <div class="absolute -top-16 -right-16 w-36 h-36 bg-purple-500/20 rounded-full blur-2xl pointer-events-none"></div>
+      <div class="absolute -bottom-16 -left-16 w-36 h-36 bg-amber-500/15 rounded-full blur-2xl pointer-events-none"></div>
+
+      <!-- Glass Box Header -->
+      <div class="flex items-center justify-between border-b border-white/10 pb-4 mb-6">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+          <h2 class="text-xs font-extrabold tracking-widest uppercase text-zinc-300">
+            CURRENT ENTRIES
+          </h2>
+        </div>
+        <span class="text-xs text-zinc-400 font-mono">
+          Round #{{ current_round.id }} Pool
+        </span>
+      </div>
+
+      <!-- Entries Container (Rendered dynamically from PostgreSQL) -->
+      <div id="glass-entries-list" class="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+        {% if glass_entries %}
+          {% for entry in glass_entries %}
+            <div class="entry-item flex items-center justify-between px-4 py-2.5 rounded-xl glass-pill transition-all duration-300">
+              <div class="flex items-center space-x-3 truncate">
+                <span class="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-xs font-bold text-zinc-300">
+                  {% if entry.platform == 'twitter' %}𝕏
+                  {% elif entry.platform == 'youtube' %}▶
+                  {% elif entry.platform == 'instagram' %}📷
+                  {% elif entry.platform == 'tiktok' %}🎵
+                  {% elif entry.platform == 'github' %}🐙
+                  {% elif entry.platform == 'linkedin' %}in
+                  {% elif entry.platform == 'website' %}🌐
+                  {% else %}🔗{% endif %}
+                </span>
+                <span class="text-sm font-medium text-zinc-200 truncate">{{ entry.display_name }}</span>
+              </div>
+              <span class="text-xs text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                Entered
+              </span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="py-10 text-center text-zinc-400 text-sm">
+            <p class="font-medium text-zinc-300">The pool is wide open for Round #{{ current_round.id }}!</p>
+            <p class="text-xs text-zinc-500 mt-1">Be the first profile to join this hour's draw.</p>
+            <button data-open-enter-modal class="mt-4 px-4 py-2 rounded-xl text-xs font-bold bg-white/10 text-white hover:bg-white/20 transition-all">
+              + Submit First Entry
+            </button>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Glass box footer caption -->
+      <div class="mt-5 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-500">
+        <span>Random sample of active pool</span>
+        <span>Equal probability draw</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COUNTDOWN SECTION -->
+  <section class="text-center w-full max-w-md mx-auto mb-16" id="countdown-container" data-end-time="{{ current_round.end_time.isoformat() }}">
+    <p class="text-xs font-black tracking-widest text-zinc-400 uppercase mb-2">
+      NEXT DRAW IN
+    </p>
+    
+    <div class="inline-block px-8 py-4 rounded-2xl glass-panel border border-white/15">
+      <div id="countdown-display" class="font-mono-numbers text-4xl sm:text-5xl font-black tracking-wider text-white">
+        --:--
+      </div>
+    </div>
+
+    <p class="text-xs text-zinc-500 mt-3">
+      Timestamp verified by PostgreSQL • Automatically concludes at draw time
+    </p>
+  </section>
+
+  <!-- FEATURED WINNERS PODIUM (CURRENT / LAST ROUND CHAMPIONS) -->
+  <section id="podium" class="w-full max-w-4xl mx-auto pt-6 border-t border-white/10">
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-2">
+        <span>🏆</span>
+        <span id="featured-podium-round-title">
+          {% if latest_completed %}Round #{{ latest_completed.id }} Featured Profiles{% else %}Hourly Champions{% endif %}
+        </span>
+      </div>
+      <h3 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
+        Featured Creators
+      </h3>
+      <p class="text-xs sm:text-sm text-zinc-400 mt-1">
+        These profiles were crowned in the latest draw and will remain featured until the current round ends.
+      </p>
+    </div>
+
+    <div id="featured-winners-podium" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {% if latest_completed and latest_completed.winners %}
+        {% for winner in latest_completed.winners %}
+          <div class="relative glass-panel rounded-3xl p-6 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1
+            {% if winner.position == 1 %}
+              badge-gold shadow-lg shadow-amber-500/10 order-first md:order-2 md:-translate-y-2
+            {% elif winner.position == 2 %}
+              badge-silver md:order-1
+            {% else %}
+              badge-bronze md:order-3
+            {% endif %}">
+
+            <!-- Medal Badge -->
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-2xl">{{ winner.medal_emoji }}</span>
+              <span class="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-black/40">
+                {{ winner.rank_label }}
+              </span>
+            </div>
+
+            <!-- Profile Info -->
+            <div class="mb-6">
+              <h4 class="text-lg font-bold text-white truncate">
+                {{ winner.entry.display_name }}
+              </h4>
+              <p class="text-xs text-zinc-400 capitalize mt-0.5 flex items-center space-x-1">
+                <span>Platform:</span>
+                <span class="font-medium text-zinc-300">{{ winner.entry.platform }}</span>
+              </p>
+            </div>
+
+            <!-- Clickable Profile Link -->
+            <a href="{{ winner.entry.profile_url }}" target="_blank" rel="noopener noreferrer"
+              class="w-full text-center py-2.5 px-4 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-colors flex items-center justify-center space-x-1.5">
+              <span>Visit Profile</span>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+              </svg>
+            </a>
+
+          </div>
+        {% endfor %}
+      {% else %}
+        <!-- Empty state placeholder for first launch -->
+        <div class="col-span-full py-12 text-center glass-panel rounded-3xl p-8 border border-white/10">
+          <div class="text-3xl mb-3">⏳</div>
+          <h4 class="text-base font-bold text-white">First Round In Progress</h4>
+          <p class="text-xs text-zinc-400 mt-1 max-w-sm mx-auto">
+            The very first round is currently counting down! Submit your profile above to be crowned in the next draw.
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Archive Link -->
+    <div class="text-center mt-8">
+      <a href="{{ url_for('main.winners') }}" class="text-xs font-semibold text-zinc-400 hover:text-amber-400 transition-colors inline-flex items-center space-x-1">
+        <span>View permanent archive of all past winners</span>
+        <span>→</span>
+      </a>
+    </div>
+
+  </section>
+
+</div>
+{% endblock %}
