@@ -12,7 +12,7 @@ services:
     plan: free
     region: ohio
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4
+    startCommand: gunicorn app:app
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -25,6 +25,10 @@ services:
         generateValue: true
       - key: ROUND_DURATION_SECONDS
         value: "3600"
+      - key: LISTING_PRICE
+        value: "2.0"
+      - key: CURRENCY
+        value: "USD"
       - key: ENTRY_FEE_INR
         value: "49.0"
       - key: RAZORPAY_KEY_ID
