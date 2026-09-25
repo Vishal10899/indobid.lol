@@ -2,7 +2,7 @@ import random
 from datetime import timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from models import Round, Entry, Winner, Payment, get_utc_now, ensure_utc
+from models import Round, Listing, Entry, Winner, Payment, get_utc_now, ensure_utc
 
 def get_latest_completed_round(session: Session) -> Round | None:
     """Returns the most recently completed round that has winners, or any latest completed round."""
@@ -54,7 +54,7 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
     Checks if active round has expired. If so, picks up to 3 random winners,
     marks round completed, and creates the next active round.
 
-    Thread-safe and idempotent: Uses SELECT FOR UPDATE on databases supporting it (PostgreSQL)
+    Thread-safe and idempotent: Uses SELECT FOR UPDATE on PostgreSQL
     and atomic status checks so concurrent web requests cannot create duplicate winners.
 
     Returns True if a round was completed, False otherwise.
@@ -63,7 +63,7 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
 
     # Query candidate round to process
     if force_close_id:
-        query = session.query(Round).filter(Round.id == force_close_id)
+        query = session.query(Round).filter(Round.id == force_close_id, Round.status == "active")
         try:
             active_round = query.with_for_update().first()
         except Exception:
@@ -84,38 +84,39 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
                 active_round = r
                 break
 
-    if not active_round:
+    if not active_round or active_round.status != "active":
         return False
 
     # Perform winner selection for this round
-    # Strictly require Payment.status == 'paid'
-    eligible_entries = (
-        session.query(Entry)
-        .join(Payment, Entry.id == Payment.entry_id)
+    # Strictly require Payment.status in ('paid', 'SUCCESS') and Listing.payment_status in ('paid', 'SUCCESS')
+    eligible_listings = (
+        session.query(Listing)
+        .join(Payment, Listing.id == Payment.listing_id)
         .filter(
-            Entry.round_id == active_round.id,
-            Entry.status == "eligible",
-            Payment.status == "paid"
+            Listing.round_id == active_round.id,
+            Listing.status == "eligible",
+            Listing.payment_status.in_(["SUCCESS", "paid"]),
+            Payment.status.in_(["SUCCESS", "paid"])
         )
         .all()
     )
 
-    num_eligible = len(eligible_entries)
+    num_eligible = len(eligible_listings)
     winners_count = min(3, num_eligible)
 
     if winners_count > 0:
         # Select winners randomly without replacement - equal probability for all eligible entries
-        selected_entries = random.sample(eligible_entries, winners_count)
-        
+        selected_listings = random.sample(eligible_listings, winners_count)
+
         # Position 1: Gold (🥇), Position 2: Silver (🥈), Position 3: Bronze (🥉)
-        for position, entry in enumerate(selected_entries, start=1):
+        for position, listing in enumerate(selected_listings, start=1):
             winner = Winner(
                 round_id=active_round.id,
-                entry_id=entry.id,
+                listing_id=listing.id,
                 position=position,
                 created_at=now
             )
-            entry.status = "winner"
+            listing.status = "winner"
             session.add(winner)
 
     # Mark round as completed
@@ -138,36 +139,47 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
         session.rollback()
         raise
 
-def get_glass_box_entries(session: Session, round_id: int, sample_size: int = 12) -> list[dict]:
+def get_current_listings(session: Session, round_id: int) -> list[Listing]:
     """
-    Returns a small sample of current paid entries for the visual participant card.
-    Only successful paid entries are included. Does not expose raw profile URLs.
+    Returns all paid listings entered into the given round.
+    Only successful paid listings appear here.
     """
-    entries = (
-        session.query(Entry.display_name, Entry.platform)
-        .join(Payment, Entry.id == Payment.entry_id)
+    return (
+        session.query(Listing)
+        .join(Payment, Listing.id == Payment.listing_id)
         .filter(
-            Entry.round_id == round_id,
-            Entry.status.in_(["eligible", "winner"]),
-            Payment.status == "paid"
+            Listing.round_id == round_id,
+            Listing.status.in_(["eligible", "winner"]),
+            Listing.payment_status.in_(["SUCCESS", "paid"]),
+            Payment.status.in_(["SUCCESS", "paid"])
         )
-        .order_by(desc(Entry.id))
+        .order_by(desc(Listing.id))
         .all()
     )
-    
-    if not entries:
+
+def get_glass_box_entries(session: Session, round_id: int, sample_size: int = 12) -> list[dict]:
+    """
+    Returns sample of current paid entries for display/backward compatibility.
+    Only successful paid entries are included.
+    """
+    listings = get_current_listings(session, round_id)
+    if not listings:
         return []
-        
-    if len(entries) <= sample_size:
-        items = list(entries)
+
+    if len(listings) <= sample_size:
+        items = list(listings)
     else:
-        items = random.sample(entries, sample_size)
+        items = listings[:sample_size]
 
     return [
         {
-            "display_name": item[0],
-            "platform": item[1],
-            "initial": item[0][0].upper() if item[0] else "?"
+            "id": item.id,
+            "display_name": item.username,
+            "username": item.username,
+            "platform": item.platform,
+            "profile_url": item.profile_url,
+            "initial": item.username[0].upper() if item.username else "?",
+            "click_count": item.click_count,
         }
         for item in items
     ]

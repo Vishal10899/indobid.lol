@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}indobid.lol — Hourly Profile Discovery{% endblock %}</title>
-  <meta name="description" content="Submit your profile. 3 profiles are featured every hour. No user account required.">
+  <title>{% block title %}{{ settings.site_name|default('indobid.lol') }} — Hourly Link Discovery{% endblock %}</title>
+  <meta name="description" content="Hourly paid profile and link discovery platform. 3 listings are randomly selected every hour. Equal chance for all.">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
 
   <!-- Tailwind CSS CDN -->
@@ -15,10 +15,8 @@
         extend: {
           colors: {
             brand: {
-              purple: '#7c3aed',
-              darkPurple: '#6d28d9',
-              lightPurple: '#f3e8ff',
-              pink: '#ec4899',
+              purple: '{{ settings.primary_color|default("#7c3aed") }}',
+              lavender: '{{ settings.secondary_color|default("#f3e8ff") }}',
             }
           }
         }
@@ -31,65 +29,70 @@
 
   <!-- Custom Styles -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    :root {
+      --primary: {{ settings.primary_color|default('#7c3aed') }};
+      --secondary: {{ settings.secondary_color|default('#f3e8ff') }};
+      --bg-page: {{ settings.background_color|default('#f8fafc') }};
+      --btn-color: {{ settings.button_color|default('#7c3aed') }};
+    }
+  </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-[#f8fafc] text-slate-800 min-h-screen flex flex-col antialiased selection:bg-purple-100 selection:text-purple-900 relative">
+<body class="bg-[var(--bg-page)] text-slate-800 min-h-screen flex flex-col antialiased selection:bg-purple-100 selection:text-purple-900 relative">
 
   <!-- Ambient top glow -->
   <div class="bg-ambient-glow"></div>
 
   <!-- Navbar -->
-  <header class="sticky top-0 z-40 w-full backdrop-blur-md bg-white/80 border-b border-slate-200/80">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+  <header class="sticky top-0 z-40 w-full backdrop-blur-md bg-white/85 border-b border-slate-200/80">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
       
-      <!-- Brand Logo & Live Pill -->
-      <div class="flex items-center space-x-4">
-        <a href="{{ url_for('main.index') }}" class="flex items-center space-x-2.5 group">
-          <span class="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center shadow-md shadow-purple-500/20 group-hover:scale-105 transition-transform duration-200">
-            <svg class="w-4 h-4 text-white font-bold fill-current" viewBox="0 0 24 24">
+      <!-- Brand Logo & Live Visitors Pill -->
+      <div class="flex items-center space-x-3">
+        <a href="{{ url_for('main.index') }}" class="flex items-center space-x-2 group">
+          <span class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center shadow-sm shadow-purple-500/20 group-hover:scale-105 transition-transform duration-150">
+            <svg class="w-3.5 h-3.5 text-white fill-current" viewBox="0 0 24 24">
               <path d="M5 16L3 5L8.5 10L12 4L15.5 10L21 5L19 16H5M19 19C19 19.6 18.6 20 18 20H6C5.4 20 5 19.6 5 19V18H19V19Z" />
             </svg>
           </span>
-          <span class="font-extrabold text-xl tracking-tight text-slate-900 group-hover:text-purple-600 transition-colors">
-            indobid<span class="text-purple-600">.lol</span>
+          <span class="font-extrabold text-lg tracking-tight text-slate-900 group-hover:text-purple-600 transition-colors">
+            {{ settings.site_name|default('indobid.lol') }}
           </span>
         </a>
 
-        <!-- Honest Live Metric -->
-        <div class="hidden sm:inline-flex items-center space-x-2 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-700">
+        <!-- Honest Live Visitors Metric -->
+        <div class="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-semibold text-emerald-700">
           <span class="live-dot"></span>
-          <span>● Live now</span>
+          <span id="nav-live-visitors">● {{ stats.online_visitors|default(1) if stats else 1 }} online</span>
         </div>
       </div>
 
-      <!-- Navigation Links -->
-      <nav class="hidden md:flex items-center space-x-7 text-sm font-medium text-slate-600">
+      <!-- Navigation Links: Home, About, All Winners -->
+      <nav class="hidden md:flex items-center space-x-6 text-sm font-medium text-slate-600">
         <a href="{{ url_for('main.index') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.index' %}text-purple-600 font-semibold{% endif %}">
           Home
-        </a>
-        <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.winners' %}text-purple-600 font-semibold{% endif %}">
-          Winners
-        </a>
-        <a href="{{ url_for('main.rules') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.rules' %}text-purple-600 font-semibold{% endif %}">
-          Rules
         </a>
         <a href="{{ url_for('main.about') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.about' %}text-purple-600 font-semibold{% endif %}">
           About
         </a>
+        <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors {% if request.endpoint == 'main.winners' %}text-purple-600 font-semibold{% endif %}">
+          All Winners
+        </a>
       </nav>
 
-      <!-- Action Buttons -->
-      <div class="flex items-center space-x-3">
-        <a href="#enter-section" class="btn-primary px-4 sm:px-5 py-2 rounded-xl text-sm font-bold flex items-center space-x-1.5 cursor-pointer">
-          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <!-- Action Button: ENTER NOW -->
+      <div class="flex items-center space-x-2">
+        <button type="button" onclick="openEnterModal()" class="btn-primary px-3.5 sm:px-4 py-1.5 rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-1.5 cursor-pointer">
+          <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path>
           </svg>
-          <span>Enter Now</span>
-        </a>
+          <span>ENTER NOW</span>
+        </button>
 
         <!-- Mobile Menu Toggle Button -->
-        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100" aria-label="Toggle Navigation">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button id="mobile-menu-btn" class="md:hidden p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100" aria-label="Toggle Navigation">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
           </svg>
         </button>
@@ -98,22 +101,15 @@
     </div>
 
     <!-- Mobile Navigation Drawer -->
-    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-4 space-y-2">
-      <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-700 mb-2">
-        <span class="live-dot"></span>
-        <span>● Live now</span>
-      </div>
-      <a href="{{ url_for('main.index') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
+    <div id="mobile-menu" class="hidden md:hidden border-t border-slate-200 bg-white px-4 pt-2.5 pb-3 space-y-1.5 text-sm">
+      <a href="{{ url_for('main.index') }}" class="block px-3 py-1.5 rounded-lg font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
         Home
       </a>
-      <a href="{{ url_for('main.winners') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
-        Winners
-      </a>
-      <a href="{{ url_for('main.rules') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
-        Rules
-      </a>
-      <a href="{{ url_for('main.about') }}" class="block px-3 py-2 rounded-lg text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
+      <a href="{{ url_for('main.about') }}" class="block px-3 py-1.5 rounded-lg font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
         About
+      </a>
+      <a href="{{ url_for('main.winners') }}" class="block px-3 py-1.5 rounded-lg font-medium text-slate-700 hover:bg-slate-50 hover:text-purple-600">
+        All Winners
       </a>
     </div>
   </header>
@@ -121,9 +117,9 @@
   <!-- Flash Notification Messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div class="max-w-3xl mx-auto w-full px-4 pt-4 z-30">
+      <div class="max-w-2xl mx-auto w-full px-4 pt-3 z-30">
         {% for category, message in messages %}
-          <div class="flex items-center justify-between p-4 mb-3 rounded-xl border text-sm font-medium shadow-sm
+          <div class="flex items-center justify-between p-3 mb-2 rounded-xl border text-xs font-semibold shadow-sm
             {% if category == 'error' %}
               bg-red-50 border-red-200 text-red-700
             {% elif category == 'success' %}
@@ -133,9 +129,7 @@
             {% else %}
               bg-slate-50 border-slate-200 text-slate-700
             {% endif %}">
-            <div class="flex items-center space-x-2">
-              <span>{{ message }}</span>
-            </div>
+            <span>{{ message }}</span>
             <button onclick="this.parentElement.remove()" class="text-xs opacity-70 hover:opacity-100 font-bold ml-4">✕</button>
           </div>
         {% endfor %}
@@ -148,35 +142,141 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- Clean SaaS Footer -->
-  <footer class="border-t border-slate-200 bg-white py-10 mt-16 z-20">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
-        
-        <!-- Left: Branding & Subtitle -->
-        <div class="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-          <span class="font-extrabold text-lg text-slate-900 tracking-tight">indobid<span class="text-purple-600">.lol</span></span>
-          <span class="hidden sm:inline text-slate-300">|</span>
-          <span class="text-xs text-slate-500">Hourly Creator Profile Discovery</span>
-        </div>
+  <!-- ENTER LISTING MODAL -->
+  <div id="enter-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 modal-overlay">
+    <div class="saas-card w-full max-w-md p-6 bg-white relative shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      
+      <!-- Close Button -->
+      <button type="button" onclick="closeEnterModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg font-bold p-1">
+        ✕
+      </button>
 
-        <!-- Center / Right: Navigation & Legal Links -->
-        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium text-slate-600">
-          <a href="{{ url_for('main.index') }}" class="hover:text-purple-600 transition-colors">Home</a>
-          <a href="{{ url_for('main.about') }}" class="hover:text-purple-600 transition-colors">About</a>
-          <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors">Winners</a>
-          <a href="{{ url_for('main.rules') }}" class="hover:text-purple-600 transition-colors">Rules</a>
-          <a href="{{ url_for('main.terms') }}" class="hover:text-purple-600 transition-colors">Terms</a>
-          <a href="{{ url_for('main.privacy') }}" class="hover:text-purple-600 transition-colors">Privacy</a>
-          <a href="{{ url_for('main.refunds') }}" class="hover:text-purple-600 transition-colors">Refunds</a>
-          <a href="{{ url_for('admin.login') }}" class="text-slate-400 hover:text-slate-600 transition-colors">Admin</a>
-        </div>
-
+      <div class="mb-4 pb-3 border-b border-slate-100">
+        <h2 class="text-base font-bold text-slate-900">Enter Current Round</h2>
+        <p class="text-xs text-slate-500 mt-0.5">Pay {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }} to feature your link for 60 minutes.</p>
       </div>
 
-      <div class="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-2">
-        <p>© {{ current_year }} indobid.lol. Three profiles randomly selected every hour.</p>
-        <p>Built for Render Free • Zero fake activity</p>
+      <!-- Feedback Alert -->
+      <div id="payment-feedback" class="hidden mb-3 p-3 rounded-xl text-xs font-semibold"></div>
+
+      <!-- Section 6: Inline Payment Error Card -->
+      <div id="payment-error-card" class="hidden mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-slate-800 animate-in fade-in duration-150">
+        <div class="flex items-start space-x-3">
+          <div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm shrink-0">
+            ⚠️
+          </div>
+          <div class="flex-1">
+            <h3 class="text-xs font-bold text-red-900">Payment couldn't be completed</h3>
+            <p class="text-xs text-red-700 mt-1 font-medium">Your listing has NOT been added.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Please try again.</p>
+            <div class="mt-3 flex items-center space-x-2">
+              <button type="button" id="btn-error-retry" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors">
+                Try Again
+              </button>
+              <button type="button" id="btn-error-cancel" onclick="closeEnterModal()" class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 8: Inline Success Card -->
+      <div id="payment-success-card" class="hidden py-4 text-center animate-in fade-in duration-200">
+        <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
+          ✓
+        </div>
+        <h3 class="text-base font-extrabold text-slate-900">Payment successful</h3>
+        <p class="text-xs text-slate-600 mt-1">Your listing is now live in the current round.</p>
+        
+        <div class="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 inline-block text-left w-full">
+          <div class="flex items-center justify-between text-xs font-bold text-slate-800">
+            <span id="success-round-title">Round #--</span>
+            <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
+              <span class="live-dot"></span>
+              <span>LIVE</span>
+            </span>
+          </div>
+          <div class="mt-2 text-xs text-slate-500 flex items-center justify-between">
+            <span>Ends in:</span>
+            <span id="success-countdown" class="font-mono-numbers font-bold text-slate-900 text-sm">--:--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form -->
+      <form id="entry-payment-form" class="space-y-3.5">
+        <div>
+          <label for="display_name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Username / Display Name <span class="text-purple-600">*</span>
+          </label>
+          <input type="text" id="display_name" name="display_name" required maxlength="60" placeholder="e.g. Alex"
+            class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-colors">
+        </div>
+
+        <div>
+          <label for="platform" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Platform <span class="text-purple-600">*</span>
+          </label>
+          <select id="platform" name="platform"
+            class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-colors">
+            <option value="twitter">X / Twitter</option>
+            <option value="instagram">Instagram</option>
+            <option value="youtube">YouTube</option>
+            <option value="tiktok">TikTok</option>
+            <option value="github">GitHub</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="website" selected>Website / Product</option>
+            <option value="other">Other Link</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="profile_url" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Public Profile or Link URL <span class="text-purple-600">*</span>
+          </label>
+          <input type="url" id="profile_url" name="profile_url" required placeholder="https://example.com/yourlink"
+            class="w-full px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-600 transition-colors">
+          <p class="text-[10px] text-slate-400 mt-1">If selected, visitors will click directly through to this URL.</p>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" id="pay-button" 
+                  data-key-id="{{ razorpay_key_id }}"
+                  data-price="{{ settings.listing_price }}"
+                  data-currency="{{ settings.currency|default('USD') }}"
+                  data-symbol="{{ settings.currency_symbol|default('$') }}"
+                  class="w-full btn-primary py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center space-x-2">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            <span id="pay-button-text">Continue to Pay {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }}</span>
+          </button>
+        </div>
+
+        <div class="text-center pt-0.5">
+          <span class="text-[10px] text-slate-400">
+            🔒 Secured with Razorpay • Equal random chance • Instant entry
+          </span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Compact Modern Footer -->
+  <footer class="border-t border-slate-200 bg-white py-6 mt-12 z-20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+      <div class="flex items-center space-x-2">
+        <span class="font-extrabold text-slate-900">{{ settings.site_name|default('indobid.lol') }}</span>
+        <span>•</span>
+        <span>Hourly Paid Link Discovery</span>
+      </div>
+
+      <div class="flex items-center space-x-5 font-medium">
+        <a href="{{ url_for('main.index') }}" class="hover:text-purple-600 transition-colors">Home</a>
+        <a href="{{ url_for('main.about') }}" class="hover:text-purple-600 transition-colors">About</a>
+        <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors">All Winners</a>
+        <a href="{{ url_for('admin.login') }}" class="text-slate-400 hover:text-slate-600 transition-colors">Admin</a>
       </div>
     </div>
   </footer>
@@ -190,6 +290,38 @@
     if (mobileBtn && mobileMenu) {
       mobileBtn.addEventListener('click', () => {
         mobileMenu.classList.toggle('hidden');
+      });
+    }
+
+    // Modal helpers
+    function openEnterModal() {
+      const modal = document.getElementById('enter-modal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        setTimeout(() => document.getElementById('display_name')?.focus(), 50);
+      }
+    }
+
+    function closeEnterModal() {
+      const modal = document.getElementById('enter-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+      }
+      if (typeof window.resetPayButtonState === 'function') {
+        window.resetPayButtonState();
+      }
+    }
+
+    // Close on backdrop click or ESC
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeEnterModal();
+    });
+    const modalEl = document.getElementById('enter-modal');
+    if (modalEl) {
+      modalEl.addEventListener('click', (e) => {
+        if (e.target === modalEl) closeEnterModal();
       });
     }
   </script>

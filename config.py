@@ -33,8 +33,12 @@ class Config:
             )
         db_url = raw_db_url
     else:
-        # Development / local environment automatically defaults to SQLite if DATABASE_URL is absent
-        db_url = raw_db_url if raw_db_url else f"sqlite:///{BASE_DIR / 'instance' / 'indobid.db'}"
+        # Local development must use SQLite if DATABASE_URL is not configured
+        # Do NOT attempt to connect to Render PostgreSQL during normal local development
+        if raw_db_url and not "render.com" in raw_db_url:
+            db_url = raw_db_url
+        else:
+            db_url = f"sqlite:///{BASE_DIR / 'instance' / 'indobid.db'}"
 
     # Normalize Render postgresql connection string
     if db_url.startswith("postgres://"):
@@ -59,7 +63,9 @@ class Config:
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@indobid.lol")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "IndoBidAdmin2026!")
 
-    # Entry fee and Razorpay configuration
+    # Listing price and currency configuration (defaults to $2 USD)
+    LISTING_PRICE = float(os.getenv("LISTING_PRICE", "2.0"))
+    CURRENCY = os.getenv("CURRENCY", "USD").upper()
     ENTRY_FEE_INR = float(os.getenv("ENTRY_FEE_INR", "49.0"))
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder")
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "placeholder_secret")
@@ -70,6 +76,8 @@ class TestConfig(Config):
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     ROUND_DURATION_SECONDS = 3600
     SECRET_KEY = "test-secret-key"
+    LISTING_PRICE = 2.0
+    CURRENCY = "USD"
     ENTRY_FEE_INR = 49.0
     RAZORPAY_KEY_ID = "rzp_test_key123"
     RAZORPAY_KEY_SECRET = "test_secret_456"

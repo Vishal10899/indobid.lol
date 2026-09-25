@@ -4,17 +4,18 @@ import hmac
 import hashlib
 import json
 import urllib.request
+import urllib.error
 import base64
 from collections import defaultdict
 from urllib.parse import urlparse
-from datetime import timezone
+from datetime import timezone, timedelta
 from flask import (
     Blueprint, render_template, request, jsonify, flash, redirect, url_for, current_app
 )
 from sqlalchemy import func, desc
 from database import db_session
-from models import Round, Entry, Winner, Payment, SiteVisitor, get_utc_now, ensure_utc
-from engine import get_current_round, get_glass_box_entries, get_latest_completed_round
+from models import Round, Listing, Entry, Winner, Payment, SiteVisitor, SiteSetting, get_utc_now, ensure_utc
+from engine import get_current_round, get_current_listings, get_glass_box_entries, get_latest_completed_round
 from config import Config
 
 main_bp = Blueprint("main", __name__)
@@ -42,7 +43,7 @@ ALLOWED_PLATFORMS = {
     "github": "GitHub",
     "linkedin": "LinkedIn",
     "website": "Website / Portfolio",
-    "other": "Other Profile"
+    "other": "Other Link"
 }
 
 def validate_profile_url(url: str) -> bool:
@@ -60,9 +61,9 @@ def validate_profile_url(url: str) -> bool:
 
 def track_visitor(session, client_ip: str) -> None:
     """
-    Privacy-conscious visitor tracking.
+    Lightweight, privacy-conscious visitor tracking.
     Hashes IP + date + secret key so raw personal IPs are never permanently stored.
-    Counts unique daily visits genuinely in the database.
+    Updates last_seen_at timestamp for live online visitors count.
     """
     try:
         now = get_utc_now()
@@ -70,76 +71,86 @@ def track_visitor(session, client_ip: str) -> None:
         secret = current_app.config.get("SECRET_KEY", "indobid-salt")
         visitor_hash = hashlib.sha256(f"{client_ip}:{today_str}:{secret}".encode("utf-8")).hexdigest()
 
-        exists = (
+        visitor = (
             session.query(SiteVisitor)
             .filter_by(visitor_hash=visitor_hash, visited_date=today_str)
             .first()
         )
-        if not exists:
+        if visitor:
+            visitor.last_seen_at = now
+            visitor.page_views = (visitor.page_views or 1) + 1
+        else:
             visitor = SiteVisitor(
                 visitor_hash=visitor_hash,
                 visited_date=today_str,
+                last_seen_at=now,
+                page_views=1,
                 created_at=now
             )
             session.add(visitor)
-            session.commit()
+        session.commit()
     except Exception as e:
         session.rollback()
         current_app.logger.warning(f"Visitor tracking skipped: {e}")
+
+def get_online_visitors_count(session) -> int:
+    """Calculates active visitors in the last 5 minutes from actual site_visitors activity."""
+    try:
+        cutoff = get_utc_now() - timedelta(minutes=5)
+        count = session.query(func.count(SiteVisitor.id)).filter(SiteVisitor.last_seen_at >= cutoff).scalar() or 0
+        return max(1, int(count))
+    except Exception:
+        return 1
 
 def get_site_statistics(session) -> dict:
     """
     Returns authentic database statistics:
     - Total Visitors (from site_visitors)
-    - Total Entries (successful paid entries)
-    - Profile Clicks (sum of clicks on featured winner profiles)
+    - Total Page Views (sum of page_views)
+    - Total Listings (successful paid listings)
+    - Total Link Clicks (sum of click_count on listings)
+    - Online Visitors (actual active sessions in last 5 min)
     """
     total_visitors = session.query(func.count(SiteVisitor.id)).scalar() or 0
-    total_entries = (
-        session.query(func.count(Payment.id))
-        .filter(Payment.status == "paid")
+    total_page_views = session.query(func.coalesce(func.sum(SiteVisitor.page_views), 0)).scalar() or 0
+    total_listings = (
+        session.query(func.count(Listing.id))
+        .filter(Listing.payment_status.in_(["SUCCESS", "paid"]))
         .scalar() or 0
     )
-    profile_clicks = session.query(func.coalesce(func.sum(Winner.clicks), 0)).scalar() or 0
+    total_clicks = session.query(func.coalesce(func.sum(Listing.click_count), 0)).scalar() or 0
+    online_visitors = get_online_visitors_count(session)
 
     return {
         "total_visitors": total_visitors,
-        "total_entries": total_entries,
-        "profile_clicks": int(profile_clicks),
+        "total_page_views": int(total_page_views),
+        "total_listings": total_listings,
+        "total_entries": total_listings,  # backward compatibility alias
+        "total_clicks": int(total_clicks),
+        "profile_clicks": int(total_clicks),  # backward compatibility alias
+        "online_visitors": online_visitors,
     }
 
 @main_bp.route("/")
 def index():
     """
-    Homepage — compact, fast, SaaS-inspired light theme.
-    Displays:
-    1. Hero: YOUR LUCK COULD PUT YOU ON TOP.
-    2. Statistics: Total Visitors, Total Entries, Profile Clicks
-    3. Live Round: Round #, Countdown, Progress Bar
-    4. Enter This Round: ₹49/entry with Razorpay
-    5. Current Entries: Compact participant list
-    6. Featured Winners: 🏆 TOP 3 WINNERS (Gold, Silver, Bronze)
+    Homepage — ultra-compact, clean, modern layout:
+    1. Navbar
+    2. Hero: "Get Your Link On Top."
+    3. Live Round: Round #XX, Countdown (59:42), "3 listings are selected every hour."
+    4. Current Listings: show current paid listings (Username, Platform, Visit Link)
+    5. Top 3: Gold, Silver, Bronze directly below current listings
+    6. Footer
     """
     session = db_session()
     client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
     track_visitor(session, client_ip)
 
     current_round = get_current_round(session, Config.ROUND_DURATION_SECONDS)
-    glass_entries = get_glass_box_entries(session, current_round.id, Config.GLASS_BOX_SAMPLE_SIZE)
+    current_listings = get_current_listings(session, current_round.id)
     latest_completed = get_latest_completed_round(session)
     stats = get_site_statistics(session)
-
-    # Count paid entries in the current round
-    active_paid_entries_count = (
-        session.query(Entry)
-        .join(Payment, Entry.id == Payment.entry_id)
-        .filter(
-            Entry.round_id == current_round.id,
-            Entry.status == "eligible",
-            Payment.status == "paid"
-        )
-        .count()
-    )
+    settings = SiteSetting.get_settings(session)
 
     now = get_utc_now()
     remaining_seconds = max(0, int((ensure_utc(current_round.end_time) - ensure_utc(now)).total_seconds()))
@@ -149,22 +160,26 @@ def index():
     return render_template(
         "index.html",
         current_round=current_round,
-        glass_entries=glass_entries,
+        current_listings=current_listings,
+        glass_entries=get_glass_box_entries(session, current_round.id),
         latest_completed=latest_completed,
-        active_entries_count=active_paid_entries_count,
+        active_entries_count=len(current_listings),
         remaining_seconds=remaining_seconds,
         progress_percent=round(progress_percent, 1),
         stats=stats,
-        entry_fee_inr=Config.ENTRY_FEE_INR,
-        razorpay_key_id=Config.RAZORPAY_KEY_ID,
+        settings=settings,
+        entry_fee_inr=getattr(settings, "listing_price", 2.0),
+        razorpay_key_id=settings.razorpay_key_id or Config.RAZORPAY_KEY_ID,
         allowed_platforms=ALLOWED_PLATFORMS
     )
 
 @main_bp.route("/entry/create-order", methods=["POST"])
+@main_bp.route("/listing/create-order", methods=["POST"])
 def create_order():
     """
     Step 1 of Payment Flow:
-    Validates entry info, creates a Razorpay order, records initial Payment in DB.
+    Validates listing info, creates Razorpay order, records initial Payment in DB.
+    IMPORTANT: Listing is NOT created before successful payment verification!
     """
     session = db_session()
     client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
@@ -176,7 +191,7 @@ def create_order():
         }), 429
 
     data = request.get_json(silent=True) or request.form
-    display_name = (data.get("display_name") or "").strip()
+    username = (data.get("username") or data.get("display_name") or "").strip()
     platform = (data.get("platform") or "").strip().lower()
     profile_url = (data.get("profile_url") or "").strip()
 
@@ -188,42 +203,56 @@ def create_order():
 
     # Validation
     errors = []
-    if not display_name or len(display_name) < 2 or len(display_name) > 60:
-        errors.append("Display name must be between 2 and 60 characters.")
+    if not username or len(username) < 2 or len(username) > 60:
+        errors.append("Username / Display Name must be between 2 and 60 characters.")
     if platform not in ALLOWED_PLATFORMS:
         platform = "website"
     if not validate_profile_url(profile_url):
-        errors.append("Please enter a valid public profile or website URL.")
+        errors.append("Please enter a valid public profile or product link URL.")
 
     if errors:
         return jsonify({"success": False, "errors": errors, "error": errors[0]}), 400
 
     current_round = get_current_round(session, Config.ROUND_DURATION_SECONDS)
 
-    # Check for duplicate paid entry in the same round with identical profile URL
-    existing_entry = (
-        session.query(Entry)
-        .join(Payment, Entry.id == Payment.entry_id)
+    # Check for duplicate paid listing in the same round with identical profile URL
+    existing_listing = (
+        session.query(Listing)
+        .join(Payment, Listing.id == Payment.listing_id)
         .filter(
-            Entry.round_id == current_round.id,
-            Entry.profile_url == profile_url,
-            Payment.status == "paid"
+            Listing.round_id == current_round.id,
+            Listing.profile_url == profile_url,
+            Listing.payment_status.in_(["SUCCESS", "paid"]),
+            Payment.status.in_(["SUCCESS", "paid"])
         )
         .first()
     )
-    if existing_entry:
+    if existing_listing:
         return jsonify({
             "success": False,
-            "error": f"This profile is already entered in Round #{current_round.id}!"
+            "error": f"This link is already entered in Round #{current_round.id}!"
         }), 400
 
-    fee_inr = float(current_app.config.get("ENTRY_FEE_INR", Config.ENTRY_FEE_INR))
-    amount_paise = int(round(fee_inr * 100))
-    key_id = current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
-    key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
+    settings = SiteSetting.get_settings(session)
+    if current_app.config.get("TESTING"):
+        key_id = current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
+        key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
+        price = float(current_app.config.get("LISTING_PRICE", settings.listing_price))
+        currency = str(current_app.config.get("CURRENCY", settings.currency)).upper()
+    else:
+        key_id = settings.razorpay_key_id or current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
+        key_secret = settings.razorpay_key_secret or current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
+        price = float(settings.listing_price)
+        currency = str(settings.currency).upper()
+
+    amount_subunits = int(round(price * 100))  # cents or paise
     order_id = None
 
-    # Call Razorpay API if live/test keys are configured (and not mock/testing)
+    # Call Razorpay API if live/test keys are configured
+    is_test_mode = False
+    test_payment_id = None
+    test_signature = None
+
     if (
         key_id 
         and not key_id.startswith("rzp_test_placeholder") 
@@ -235,11 +264,11 @@ def create_order():
             auth_str = f"{key_id}:{key_secret}"
             b64_auth = base64.b64encode(auth_str.encode()).decode()
             payload = json.dumps({
-                "amount": amount_paise,
-                "currency": "INR",
+                "amount": amount_subunits,
+                "currency": currency,
                 "receipt": f"rcpt_{int(time.time())}_{uuid.uuid4().hex[:6]}",
                 "notes": {
-                    "display_name": display_name,
+                    "username": username,
                     "platform": platform,
                     "round_id": str(current_round.id)
                 }
@@ -257,19 +286,41 @@ def create_order():
             with urllib.request.urlopen(req, timeout=10) as resp:
                 resp_json = json.loads(resp.read().decode())
                 order_id = resp_json.get("id")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")
+            current_app.logger.error(f"Razorpay order API HTTP error {e.code}: {err_body}")
+            try:
+                err_json = json.loads(err_body)
+                err_desc = err_json.get("error", {}).get("description") or "Order creation rejected."
+            except Exception:
+                err_desc = "Order creation rejected."
+            return jsonify({
+                "success": False,
+                "error": f"Payment gateway error: {err_desc}"
+            }), 400
         except Exception as e:
-            current_app.logger.warning(f"Razorpay order API call exception: {e}")
-
-    # Fallback order id generation for test/local development environments
-    if not order_id:
+            current_app.logger.error(f"Razorpay order API call exception: {e}")
+            return jsonify({
+                "success": False,
+                "error": "Unable to connect to payment gateway. Please check connection and try again."
+            }), 502
+    else:
+        # Local development / test mode
+        is_test_mode = True
         order_id = f"order_{int(time.time())}_{uuid.uuid4().hex[:10]}"
+        test_payment_id = f"pay_test_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+        test_signature = hmac.new(
+            key_secret.encode("utf-8"),
+            f"{order_id}|{test_payment_id}".encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
 
     # Save initial payment record with status='created'
     payment = Payment(
         provider="razorpay",
         order_id=order_id,
-        amount=fee_inr,
-        currency="INR",
+        amount=price,
+        currency=currency,
         status="created",
         created_at=get_utc_now()
     )
@@ -279,25 +330,33 @@ def create_order():
     return jsonify({
         "success": True,
         "order_id": order_id,
-        "amount": amount_paise,
-        "currency": "INR",
+        "amount": amount_subunits,
+        "currency": currency,
+        "currency_symbol": settings.currency_symbol,
         "key_id": key_id,
-        "fee_inr": fee_inr,
-        "display_name": display_name,
+        "price": price,
+        "fee_inr": price,  # backward compatibility alias
+        "username": username,
+        "display_name": username,
         "platform": platform,
         "profile_url": profile_url,
-        "round_id": current_round.id
+        "round_id": current_round.id,
+        "is_test_mode": is_test_mode,
+        "test_payment_id": test_payment_id,
+        "test_signature": test_signature
     }), 200
 
 @main_bp.route("/entry/verify-payment", methods=["POST"])
+@main_bp.route("/listing/verify-payment", methods=["POST"])
 def verify_payment():
     """
     Step 2 of Payment Flow:
     Server-side Razorpay signature verification.
     ONLY upon valid signature:
-    - mark payment as 'paid'
-    - create active Entry
-    - link entry to payment and current round
+    - mark payment as SUCCESS (paid)
+    - create active Listing
+    - link listing to payment and current round
+    If verification fails or payment fails: NO listing is created!
     """
     session = db_session()
     data = request.get_json(silent=True) or request.form
@@ -305,7 +364,7 @@ def verify_payment():
     order_id = (data.get("razorpay_order_id") or "").strip()
     payment_id = (data.get("razorpay_payment_id") or "").strip()
     signature = (data.get("razorpay_signature") or "").strip()
-    display_name = (data.get("display_name") or "").strip()
+    username = (data.get("username") or data.get("display_name") or "").strip()
     platform = (data.get("platform") or "").strip().lower()
     profile_url = (data.get("profile_url") or "").strip()
 
@@ -315,9 +374,17 @@ def verify_payment():
             "error": "Missing payment verification parameters."
         }), 400
 
+    settings = SiteSetting.get_settings(session)
+    if current_app.config.get("TESTING"):
+        key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
+        price = float(current_app.config.get("LISTING_PRICE", settings.listing_price))
+        currency = str(current_app.config.get("CURRENCY", settings.currency)).upper()
+    else:
+        key_secret = settings.razorpay_key_secret or current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
+        price = float(settings.listing_price)
+        currency = str(settings.currency).upper()
+
     # Server-side Razorpay HMAC-SHA256 signature verification
-    key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
-    fee_inr = float(current_app.config.get("ENTRY_FEE_INR", Config.ENTRY_FEE_INR))
     msg = f"{order_id}|{payment_id}".encode("utf-8")
     expected_sig = hmac.new(key_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
 
@@ -329,12 +396,12 @@ def verify_payment():
             session.commit()
         return jsonify({
             "success": False,
-            "error": "Payment signature verification failed. Active entry was not created."
+            "error": "Payment signature verification failed. Listing was not created."
         }), 400
 
     # Ensure valid inputs
-    if not display_name or len(display_name) < 2 or len(display_name) > 60:
-        return jsonify({"success": False, "error": "Invalid display name."}), 400
+    if not username or len(username) < 2 or len(username) > 60:
+        return jsonify({"success": False, "error": "Invalid username."}), 400
     if platform not in ALLOWED_PLATFORMS:
         platform = "website"
     if not validate_profile_url(profile_url):
@@ -348,81 +415,108 @@ def verify_payment():
         payment = Payment(
             provider="razorpay",
             order_id=order_id,
-            amount=fee_inr,
-            currency="INR",
+            amount=price,
+            currency=currency,
             status="created",
             created_at=get_utc_now()
         )
         session.add(payment)
 
-    # If already paid and entry exists, idempotent response
-    if payment.status == "paid" and payment.entry_id:
-        existing_entry = session.query(Entry).filter_by(id=payment.entry_id).first()
-        if existing_entry:
+    # If already paid and listing exists, return idempotent response
+    if payment.status in ("paid", "SUCCESS") and payment.listing_id:
+        existing_listing = session.query(Listing).filter_by(id=payment.listing_id).first()
+        if existing_listing:
             return jsonify({
                 "success": True,
-                "message": f"Payment already confirmed! You are in Round #{existing_entry.round_id}.",
-                "round_id": existing_entry.round_id,
-                "entry": existing_entry.to_dict()
+                "message": f"Payment already confirmed! You are in Round #{existing_listing.round_id}.",
+                "round_id": existing_listing.round_id,
+                "listing": existing_listing.to_dict(),
+                "entry": existing_listing.to_dict()
             }), 200
 
-    # Create active Entry
+    # Payment marked SUCCESS
     now = get_utc_now()
-    new_entry = Entry(
+    new_listing = Listing(
         round_id=current_round.id,
-        display_name=display_name,
+        username=username,
         platform=platform,
         profile_url=profile_url,
+        payment_status="SUCCESS",
+        payment_id=payment_id,
+        click_count=0,
         status="eligible",
         created_at=now
     )
-    session.add(new_entry)
+    session.add(new_listing)
     session.flush()
 
-    # Link entry to payment and finalize payment status
-    payment.entry_id = new_entry.id
-    payment.transaction_id = payment_id
+    # Link listing to payment and finalize payment status
+    payment.listing_id = new_listing.id
+    payment.payment_id = payment_id
     payment.status = "paid"
     session.commit()
 
     return jsonify({
         "success": True,
-        "message": f"Payment verified! You are entered into Round #{current_round.id}.",
+        "message": f"Payment verified! Your listing is now entered into Round #{current_round.id}.",
         "round_id": current_round.id,
-        "entry": new_entry.to_dict()
+        "listing": new_listing.to_dict(),
+        "entry": new_listing.to_dict()
     }), 201
 
 @main_bp.route("/entry/payment-failed", methods=["POST"])
+@main_bp.route("/listing/payment-failed", methods=["POST"])
 def payment_failed():
-    """Records payment failure or modal dismissal so unpaid entries are never created."""
+    """Records payment failure or modal dismissal so unpaid listings are never created."""
     session = db_session()
     data = request.get_json(silent=True) or request.form
     order_id = (data.get("order_id") or data.get("razorpay_order_id") or "").strip()
 
     if order_id:
         payment = session.query(Payment).filter_by(order_id=order_id).first()
-        if payment and payment.status != "paid":
+        if payment and payment.status not in ("paid", "SUCCESS"):
             payment.status = "failed"
             session.commit()
 
-    return jsonify({"success": True, "message": "Payment failure recorded."}), 200
+    return jsonify({"success": True, "message": "Payment failure recorded. No listing created."}), 200
+
+@main_bp.route("/visit/<int:listing_id>")
+def visit_listing(listing_id: int):
+    """
+    Profile / Link Click Tracking endpoint.
+    1. Validate listing
+    2. Increment click counter
+    3. Redirect to original URL
+    """
+    session = db_session()
+    listing = session.query(Listing).filter_by(id=listing_id).first()
+
+    if not listing:
+        return redirect(url_for("main.index"))
+
+    listing.click_count = (listing.click_count or 0) + 1
+    session.commit()
+
+    target_url = listing.profile_url
+    if not (target_url.startswith("http://") or target_url.startswith("https://")):
+        target_url = "https://" + target_url
+
+    return redirect(target_url, code=302)
 
 @main_bp.route("/profile/<int:winner_id>/visit")
 def visit_profile(winner_id: int):
-    """
-    Profile click tracking endpoint.
-    Increments Winner.clicks in the database and redirects to the creator's profile URL.
-    """
+    """Profile visit endpoint: increments clicks and redirects to target URL."""
     session = db_session()
     winner = session.query(Winner).filter_by(id=winner_id).first()
-
-    if not winner or not winner.entry:
+    if not winner or not winner.listing:
         return redirect(url_for("main.index"))
 
     winner.clicks = (winner.clicks or 0) + 1
+    if winner.listing:
+        winner.listing.click_count = (winner.listing.click_count or 0) + 1
     session.commit()
 
-    target_url = winner.entry.profile_url
+    target_url = winner.listing.profile_url
     if not (target_url.startswith("http://") or target_url.startswith("https://")):
         target_url = "https://" + target_url
 
@@ -431,25 +525,14 @@ def visit_profile(winner_id: int):
 @main_bp.route("/api/round-status")
 def round_status():
     """
-    JSON API for the frontend countdown, progress bar, and live visual updates.
-    Automatically checks and rolls the round when end_time is reached.
+    JSON API for live countdown, progress bar, current listings, and top 3 winners.
+    Automatically closes expired round, selects winners, and starts next round.
     """
     session = db_session()
     current_round = get_current_round(session, Config.ROUND_DURATION_SECONDS)
-    glass_entries = get_glass_box_entries(session, current_round.id, Config.GLASS_BOX_SAMPLE_SIZE)
+    current_listings = get_current_listings(session, current_round.id)
     latest_completed = get_latest_completed_round(session)
     stats = get_site_statistics(session)
-
-    active_paid_entries_count = (
-        session.query(Entry)
-        .join(Payment, Entry.id == Payment.entry_id)
-        .filter(
-            Entry.round_id == current_round.id,
-            Entry.status == "eligible",
-            Payment.status == "paid"
-        )
-        .count()
-    )
 
     now = get_utc_now()
     remaining_seconds = max(0, int((ensure_utc(current_round.end_time) - ensure_utc(now)).total_seconds()))
@@ -460,14 +543,28 @@ def round_status():
     if latest_completed and latest_completed.winners:
         latest_winners_data = [w.to_dict() for w in latest_completed.winners]
 
+    listings_data = [
+        {
+            "id": l.id,
+            "username": l.username,
+            "platform": l.platform,
+            "profile_url": l.profile_url,
+            "click_count": l.click_count,
+            "initial": l.username[0].upper() if l.username else "?"
+        }
+        for l in current_listings
+    ]
+
     return jsonify({
         "round_id": current_round.id,
         "start_time": current_round.start_time.isoformat(),
         "end_time": current_round.end_time.isoformat(),
         "remaining_seconds": remaining_seconds,
         "progress_percent": round(progress_percent, 1),
-        "entries_count": active_paid_entries_count,
-        "glass_box_entries": glass_entries,
+        "entries_count": len(current_listings),
+        "listings_count": len(current_listings),
+        "current_listings": listings_data,
+        "glass_box_entries": listings_data[:Config.GLASS_BOX_SAMPLE_SIZE],
         "latest_completed_round_id": latest_completed.id if latest_completed else None,
         "latest_winners": latest_winners_data,
         "stats": stats
@@ -476,9 +573,8 @@ def round_status():
 @main_bp.route("/winners")
 def winners():
     """
-    Archive of past winners.
-    Permanently displays all historical completed rounds and their Gold, Silver, Bronze winners
-    along with views and clicks.
+    Permanent archive of all past hourly winners.
+    Every winner is permanently preserved with Username, Platform, Link, Position, Round, Date, and Clicks.
     """
     session = db_session()
     completed_rounds = (
@@ -491,31 +587,31 @@ def winners():
 
 @main_bp.route("/about")
 def about():
-    """About page detailing product philosophy, hourly engine, and creator discovery."""
+    """Simple About page explaining how the 60-minute round discovery works."""
     return render_template("about.html")
 
 @main_bp.route("/rules")
 def rules():
-    """Official rules and transparency page explaining the random draw mechanism."""
-    return render_template("rules.html", entry_fee_inr=Config.ENTRY_FEE_INR)
+    """Rules and transparency page."""
+    return render_template("rules.html")
 
 @main_bp.route("/terms")
 def terms():
-    """Terms and conditions page."""
+    """Terms of Service."""
     return render_template("terms.html")
 
 @main_bp.route("/privacy")
 def privacy():
-    """Privacy policy explaining data handling and privacy-preserving visitor counting."""
+    """Privacy Policy."""
     return render_template("privacy.html")
 
 @main_bp.route("/refunds")
 def refunds():
-    """Refund policy for paid entries."""
+    """Refund Policy."""
     return render_template("refunds.html")
 
 @main_bp.route("/health")
 @main_bp.route("/api/health")
 def health():
-    """Render health check endpoint."""
+    """Health check endpoint for Render."""
     return jsonify({"status": "ok", "service": "indobid.lol"}), 200

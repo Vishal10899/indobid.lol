@@ -24,15 +24,20 @@
   const payButton = document.getElementById('pay-button');
   const payButtonText = document.getElementById('pay-button-text');
   const paymentFeedback = document.getElementById('payment-feedback');
-  const statVisitors = document.getElementById('stat-visitors');
-  const statEntries = document.getElementById('stat-entries');
-  const statClicks = document.getElementById('stat-clicks');
   const featuredWinnersContainer = document.getElementById('featured-winners-container');
+  const navLiveVisitors = document.getElementById('nav-live-visitors');
+  const paymentErrorCard = document.getElementById('payment-error-card');
+  const btnErrorRetry = document.getElementById('btn-error-retry');
+  const paymentSuccessCard = document.getElementById('payment-success-card');
+  const successRoundTitle = document.getElementById('success-round-title');
+  const successCountdown = document.getElementById('success-countdown');
 
   // Initialize
   function init() {
     setupCountdown();
     setupEntryPaymentForm();
+    // Poll every 30s to keep live visitor & listings count synced
+    setInterval(fetchRoundStatus, 30000);
   }
 
   // --- Countdown and Progress Bar ---
@@ -57,6 +62,7 @@
 
       if (diff <= 0) {
         countdownEl.textContent = '00 : 00';
+        if (successCountdown) successCountdown.textContent = '00:00';
         if (progressBar) progressBar.style.width = '100%';
         if (!isResolvingRound) {
           handleRoundEnded();
@@ -70,6 +76,9 @@
 
       const pad = (n) => String(n).padStart(2, '0');
       countdownEl.textContent = `${pad(minutes)} : ${pad(seconds)}`;
+      if (successCountdown) {
+        successCountdown.textContent = `${pad(minutes)}:${pad(seconds)}`;
+      }
 
       // Update progress bar for 60-minute (3600s) round
       if (progressBar) {
@@ -86,7 +95,7 @@
   async function handleRoundEnded() {
     isResolvingRound = true;
     if (countdownEl) {
-      countdownEl.innerHTML = '<span class="text-purple-600 animate-pulse text-2xl sm:text-3xl font-extrabold">DRAWING WINNERS...</span>';
+      countdownEl.innerHTML = '<span class="text-purple-600 animate-pulse text-xl sm:text-2xl font-extrabold">DRAWING WINNERS...</span>';
     }
 
     // Wait 2.5 seconds, then sync with backend
@@ -112,33 +121,25 @@
 
       // Update Round Title
       if (liveRoundTitle && data.round_id) {
-        liveRoundTitle.textContent = `LIVE ROUND #${data.round_id}`;
+        liveRoundTitle.textContent = `Round #${data.round_id}`;
       }
 
       // Update Active Counts
-      const countText = typeof data.entries_count !== 'undefined' ? data.entries_count : 0;
-      if (activePoolCount) activePoolCount.textContent = `${countText} active entries`;
-      if (currentEntriesBadge) currentEntriesBadge.textContent = countText;
+      const count = typeof data.entries_count !== 'undefined' ? data.entries_count : 0;
+      if (activePoolCount) activePoolCount.textContent = `${count} paid listings`;
+      if (currentEntriesBadge) currentEntriesBadge.textContent = `${count} listings`;
 
-      // Update Real Stats
-      if (data.stats) {
-        if (statVisitors && typeof data.stats.total_visitors !== 'undefined') {
-          statVisitors.textContent = data.stats.total_visitors;
-        }
-        if (statEntries && typeof data.stats.total_entries !== 'undefined') {
-          statEntries.textContent = data.stats.total_entries;
-        }
-        if (statClicks && typeof data.stats.profile_clicks !== 'undefined') {
-          statClicks.textContent = data.stats.profile_clicks;
-        }
+      // Update Live Online Visitors
+      if (navLiveVisitors && data.stats && typeof data.stats.online_visitors !== 'undefined') {
+        navLiveVisitors.textContent = `● ${data.stats.online_visitors} online`;
       }
 
-      // Update Current Entries List
-      if (data.glass_box_entries && currentEntriesContainer) {
-        renderCurrentEntries(data.glass_box_entries, data.round_id);
+      // Update Current Listings
+      if (data.current_listings && currentEntriesContainer) {
+        renderCurrentListings(data.current_listings, data.round_id);
       }
 
-      // If winners crowned and container exists, refresh page or update podium
+      // Update Top 3 Winners
       if (data.latest_winners && data.latest_winners.length > 0) {
         renderWinnersPodium(data.latest_winners);
       }
@@ -147,33 +148,35 @@
     }
   }
 
-  function renderCurrentEntries(entries, roundId) {
+  function renderCurrentListings(listings, roundId) {
     if (!currentEntriesContainer) return;
 
-    if (!entries || entries.length === 0) {
+    if (!listings || listings.length === 0) {
       currentEntriesContainer.innerHTML = `
-        <div class="text-center py-8 text-slate-400">
-          <p class="text-xs font-medium text-slate-500">No entries yet in Round #${roundId || ''}</p>
-          <p class="text-[11px] text-slate-400 mt-1">Be the first to enter this round!</p>
+        <div class="col-span-full saas-card p-6 text-center text-slate-400">
+          <p class="text-xs font-medium text-slate-600">No listings yet in Round #${roundId || ''}</p>
+          <p class="text-[11px] text-slate-400 mt-0.5">Be the first to enter this round!</p>
+          <button type="button" onclick="openEnterModal()" class="mt-3 btn-primary px-4 py-1.5 rounded-xl text-xs font-bold inline-flex items-center space-x-1">
+            <span>Enter Round</span>
+          </button>
         </div>
       `;
       return;
     }
 
-    currentEntriesContainer.innerHTML = entries.map(item => `
-      <div class="participant-pill flex items-center justify-between p-2.5 rounded-xl">
-        <div class="flex items-center space-x-2.5 truncate">
-          <div class="avatar-circle">
-            ${escapeHtml(item.initial || (item.display_name ? item.display_name[0].toUpperCase() : '?'))}
-          </div>
-          <div class="truncate">
-            <div class="text-xs font-bold text-slate-800 truncate">${escapeHtml(item.display_name)}</div>
-            <div class="text-[10px] text-slate-400 capitalize">${escapeHtml(item.platform)}</div>
-          </div>
+    currentEntriesContainer.innerHTML = listings.map(item => `
+      <div class="listing-card flex items-center justify-between">
+        <div class="truncate mr-2">
+          <div class="text-xs font-bold text-slate-900 truncate">${escapeHtml(item.username)}</div>
+          <div class="text-[10px] text-slate-400 capitalize">${escapeHtml(item.platform)}</div>
         </div>
-        <span class="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-          Eligible
-        </span>
+        <a href="/visit/${item.id}" target="_blank" rel="noopener noreferrer"
+           class="btn-secondary px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 hover:border-purple-300 hover:text-purple-600 flex items-center space-x-1">
+          <span>Visit Link</span>
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+          </svg>
+        </a>
       </div>
     `).join('');
   }
@@ -192,32 +195,34 @@
         badgeClass = 'badge-silver';
       }
 
-      const displayName = w.entry ? w.entry.display_name : 'Featured Creator';
-      const platform = w.entry ? w.entry.platform : 'Profile';
+      const listing = w.listing || w.entry;
+      const username = listing ? listing.username || listing.display_name : 'Winner';
+      const platform = listing ? listing.platform : 'Platform';
       const clicks = typeof w.clicks !== 'undefined' ? w.clicks : 0;
+      const listingId = w.listing_id || w.entry_id || (listing ? listing.id : 0);
 
       return `
-        <div class="saas-card p-5 flex flex-col justify-between ${cardClass}">
+        <div class="saas-card p-4 flex flex-col justify-between ${cardClass}">
           <div>
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-2">
               <span class="text-2xl">${escapeHtml(w.medal_emoji || '🏆')}</span>
-              <span class="text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full ${badgeClass}">
+              <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${badgeClass}">
                 ${escapeHtml(w.rank_label || 'Winner')}
               </span>
             </div>
-            <h3 class="text-base font-bold text-slate-900 truncate">${escapeHtml(displayName)}</h3>
+            <h3 class="text-sm font-bold text-slate-900 truncate">${escapeHtml(username)}</h3>
             <p class="text-xs text-slate-500 capitalize mt-0.5">${escapeHtml(platform)}</p>
-            <div class="mt-3 flex items-center space-x-2 text-xs font-semibold text-slate-600 bg-slate-50/80 px-2.5 py-1 rounded-lg border border-slate-200/60">
-              <svg class="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="mt-2.5 flex items-center space-x-1.5 text-[11px] font-semibold text-slate-600 bg-white/80 px-2 py-1 rounded-md border border-slate-200/60">
+              <svg class="w-3 h-3 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path>
               </svg>
-              <span>${clicks} Profile Clicks</span>
+              <span>${clicks} Clicks</span>
             </div>
           </div>
-          <div class="mt-5 pt-3 border-t border-slate-100">
-            <a href="/profile/${w.id}/visit" target="_blank" rel="noopener noreferrer"
-               class="w-full btn-secondary py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 hover:border-purple-300 hover:text-purple-600">
-              <span>Visit Profile</span>
+          <div class="mt-4 pt-2.5 border-t border-slate-100">
+            <a href="/visit/${listingId}" target="_blank" rel="noopener noreferrer"
+               class="w-full btn-secondary py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 hover:border-purple-300 hover:text-purple-600">
+              <span>Visit Link</span>
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
               </svg>
@@ -229,41 +234,155 @@
   }
 
   // --- Razorpay Payment & Entry Submission Flow ---
+  let isPaymentRunning = false;
+
+  function getNormalButtonText() {
+    if (!payButton) return 'Continue to Pay $2';
+    const symbol = payButton.getAttribute('data-symbol') || '$';
+    const price = payButton.getAttribute('data-price') || '2';
+    const numPrice = Number(price);
+    const formattedPrice = !isNaN(numPrice) && numPrice % 1 === 0 ? parseInt(numPrice, 10) : price;
+    return `Continue to Pay ${symbol}${formattedPrice}`;
+  }
+
+  function setPayButtonState(state) {
+    if (!payButton || !payButtonText) return;
+    switch (state) {
+      case 'creating_order':
+        payButton.disabled = true;
+        payButton.classList.add('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Creating secure payment...';
+        break;
+      case 'opened':
+        payButton.disabled = true;
+        payButton.classList.add('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Processing...';
+        break;
+      case 'verifying':
+        payButton.disabled = true;
+        payButton.classList.add('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Verifying payment...';
+        break;
+      case 'success':
+        payButton.disabled = true;
+        payButton.classList.add('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Payment successful';
+        break;
+      case 'failure':
+        payButton.disabled = false;
+        payButton.classList.remove('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Payment failed';
+        break;
+      case 'retry':
+        payButton.disabled = false;
+        payButton.classList.remove('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Try Again';
+        break;
+      case 'normal':
+      default:
+        payButton.disabled = false;
+        payButton.classList.remove('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = getNormalButtonText();
+        break;
+    }
+  }
+
+  function showPaymentErrorCard() {
+    hideFeedback();
+    if (paymentErrorCard) {
+      paymentErrorCard.classList.remove('hidden');
+    }
+    if (paymentSuccessCard) {
+      paymentSuccessCard.classList.add('hidden');
+    }
+    setPayButtonState('failure');
+  }
+
+  function hidePaymentErrorCard() {
+    if (paymentErrorCard) {
+      paymentErrorCard.classList.add('hidden');
+    }
+  }
+
+  function showPaymentSuccessCard(roundId) {
+    hideFeedback();
+    hidePaymentErrorCard();
+    if (entryPaymentForm) {
+      entryPaymentForm.classList.add('hidden');
+    }
+    if (paymentSuccessCard) {
+      paymentSuccessCard.classList.remove('hidden');
+    }
+    if (successRoundTitle) {
+      successRoundTitle.textContent = `Round #${roundId || ''}`;
+    }
+    if (successCountdown && countdownEl) {
+      const text = countdownEl.textContent.trim().replace(/\s*:\s*/g, ':');
+      successCountdown.textContent = text || '59:42';
+    }
+    setPayButtonState('success');
+  }
+
+  window.resetPayButtonState = function () {
+    isPaymentRunning = false;
+    setPayButtonState('normal');
+    hideFeedback();
+    hidePaymentErrorCard();
+    if (paymentSuccessCard) {
+      paymentSuccessCard.classList.add('hidden');
+    }
+    if (entryPaymentForm) {
+      entryPaymentForm.classList.remove('hidden');
+      entryPaymentForm.reset();
+    }
+  };
+
   function setupEntryPaymentForm() {
     if (!entryPaymentForm) return;
 
+    if (btnErrorRetry) {
+      btnErrorRetry.addEventListener('click', function () {
+        hidePaymentErrorCard();
+        setPayButtonState('retry');
+        document.getElementById('display_name')?.focus();
+      });
+    }
+
     entryPaymentForm.addEventListener('submit', async function (e) {
       e.preventDefault();
+      if (isPaymentRunning) return; // Prevent double clicking
 
-      const displayName = (document.getElementById('display_name')?.value || '').trim();
+      const username = (document.getElementById('display_name')?.value || '').trim();
       const platform = (document.getElementById('platform')?.value || 'website').trim();
       let profileUrl = (document.getElementById('profile_url')?.value || '').trim();
 
-      if (!displayName || displayName.length < 2) {
-        showFeedback('error', 'Display name must be at least 2 characters.');
+      if (!username || username.length < 2) {
+        showFeedback('error', 'Username must be at least 2 characters.');
         return;
       }
 
       if (!profileUrl) {
-        showFeedback('error', 'Please enter your profile URL.');
+        showFeedback('error', 'Please enter your link URL.');
         return;
       }
 
-      // Format URL if missing protocol
       if (!profileUrl.startsWith('http://') && !profileUrl.startsWith('https://')) {
         profileUrl = 'https://' + profileUrl;
       }
 
-      setButtonState(true, 'Initializing Order...');
       hideFeedback();
+      hidePaymentErrorCard();
+      isPaymentRunning = true;
+      setPayButtonState('creating_order');
 
       try {
-        // Step 1: Request backend order creation
+        // Step 1: Create Order on backend
         const orderRes = await fetch('/entry/create-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            display_name: displayName,
+            username: username,
+            display_name: username,
             platform: platform,
             profile_url: profileUrl
           })
@@ -272,28 +391,67 @@
         const orderData = await orderRes.json();
 
         if (!orderRes.ok || !orderData.success) {
-          showFeedback('error', orderData.error || 'Failed to initialize entry order.');
-          setButtonState(false);
+          isPaymentRunning = false;
+          showPaymentErrorCard();
           return;
         }
 
-        // Step 2: Open Razorpay Checkout modal
-        if (typeof Razorpay === 'undefined') {
-          showFeedback('error', 'Payment gateway failed to load. Please check your internet connection or ad-blocker.');
-          setButtonState(false);
+        // Test Mode (Local development simulation)
+        if (orderData.is_test_mode) {
+          setPayButtonState('verifying');
+          try {
+            const verifyRes = await fetch('/entry/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: orderData.order_id,
+                razorpay_payment_id: orderData.test_payment_id,
+                razorpay_signature: orderData.test_signature,
+                username: orderData.username,
+                display_name: orderData.username,
+                platform: orderData.platform,
+                profile_url: orderData.profile_url
+              })
+            });
+
+            const verifyData = await verifyRes.json();
+
+            if (verifyRes.ok && verifyData.success) {
+              showPaymentSuccessCard(verifyData.round_id || orderData.round_id);
+              setTimeout(async () => {
+                if (typeof closeEnterModal === 'function') closeEnterModal();
+                await fetchRoundStatus();
+              }, 2500);
+            } else {
+              showPaymentErrorCard();
+            }
+          } catch (err) {
+            showPaymentErrorCard();
+          } finally {
+            isPaymentRunning = false;
+          }
           return;
         }
+
+        // Real Razorpay Checkout flow
+        if (typeof Razorpay === 'undefined') {
+          isPaymentRunning = false;
+          showPaymentErrorCard();
+          return;
+        }
+
+        setPayButtonState('opened');
 
         const options = {
           key: orderData.key_id,
-          amount: orderData.amount, // in paise
-          currency: orderData.currency || 'INR',
+          amount: orderData.amount, // subunits
+          currency: orderData.currency || 'USD',
           name: 'indobid.lol',
-          description: `Hourly Round #${orderData.round_id} Entry`,
+          description: `Hourly Round #${orderData.round_id} Listing`,
           order_id: orderData.order_id,
           handler: async function (response) {
             // Step 3: Server-side Razorpay signature verification
-            setButtonState(true, 'Verifying Payment...');
+            setPayButtonState('verifying');
             try {
               const verifyRes = await fetch('/entry/verify-payment', {
                 method: 'POST',
@@ -302,7 +460,8 @@
                   razorpay_order_id: response.razorpay_order_id || orderData.order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
                   razorpay_signature: response.razorpay_signature,
-                  display_name: orderData.display_name,
+                  username: orderData.username,
+                  display_name: orderData.username,
                   platform: orderData.platform,
                   profile_url: orderData.profile_url
                 })
@@ -311,22 +470,24 @@
               const verifyData = await verifyRes.json();
 
               if (verifyRes.ok && verifyData.success) {
-                showFeedback('success', verifyData.message || 'Payment verified! You are entered in the active draw.');
-                entryPaymentForm.reset();
-                await fetchRoundStatus();
+                showPaymentSuccessCard(verifyData.round_id || orderData.round_id);
+                setTimeout(async () => {
+                  if (typeof closeEnterModal === 'function') closeEnterModal();
+                  await fetchRoundStatus();
+                }, 2500);
               } else {
-                showFeedback('error', verifyData.error || 'Payment signature verification failed.');
+                showPaymentErrorCard();
               }
             } catch (err) {
-              showFeedback('error', 'Network error verifying payment with server.');
+              showPaymentErrorCard();
             } finally {
-              setButtonState(false);
+              isPaymentRunning = false;
             }
           },
           modal: {
             ondismiss: function () {
-              setButtonState(false);
-              showFeedback('info', 'Payment was cancelled. Your profile was not entered into the draw.');
+              isPaymentRunning = false;
+              showPaymentErrorCard();
               fetch('/entry/payment-failed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -335,7 +496,7 @@
             }
           },
           prefill: {
-            name: orderData.display_name
+            name: orderData.username
           },
           theme: {
             color: '#7c3aed'
@@ -344,8 +505,8 @@
 
         const rzp = new Razorpay(options);
         rzp.on('payment.failed', function (resp) {
-          setButtonState(false);
-          showFeedback('error', resp.error?.description || 'Payment failed. Please try again.');
+          isPaymentRunning = false;
+          showPaymentErrorCard();
           fetch('/entry/payment-failed', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -355,28 +516,15 @@
 
         rzp.open();
       } catch (err) {
-        showFeedback('error', 'Connection error. Please try again.');
-        setButtonState(false);
+        isPaymentRunning = false;
+        showPaymentErrorCard();
       }
     });
   }
 
-  function setButtonState(loading, text) {
-    if (!payButton) return;
-    payButton.disabled = loading;
-    if (loading) {
-      payButton.classList.add('opacity-75', 'cursor-not-allowed');
-      if (payButtonText) payButtonText.textContent = text || 'Processing...';
-    } else {
-      payButton.classList.remove('opacity-75', 'cursor-not-allowed');
-      const fee = payButton.getAttribute('data-amount-inr') || '49';
-      if (payButtonText) payButtonText.textContent = `Pay ₹${fee} & Enter Round`;
-    }
-  }
-
   function showFeedback(type, message) {
     if (!paymentFeedback) return;
-    paymentFeedback.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'border', 'border-red-200', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200', 'bg-purple-50', 'text-purple-700', 'border-purple-200');
+    paymentFeedback.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'border', 'border-red-200', 'bg-emerald-50', 'text-emerald-800', 'border-emerald-200');
 
     if (type === 'error') {
       paymentFeedback.classList.add('bg-red-50', 'text-red-700', 'border', 'border-red-200');
@@ -387,7 +535,6 @@
     }
 
     paymentFeedback.textContent = message;
-    paymentFeedback.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function hideFeedback() {

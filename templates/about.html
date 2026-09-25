@@ -1,99 +1,81 @@
 {% extends "base.html" %}
 
-{% block title %}indobid.lol — About{% endblock %}
+{% block title %}About — {{ settings.site_name|default('indobid.lol') }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+<div class="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
   
   <!-- Header -->
-  <div class="text-center max-w-2xl mx-auto mb-12">
-    <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-3">
-      <span>⚡</span>
-      <span>Lightweight • Transparent • Fast</span>
-    </div>
-    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-      About indobid.lol
+  <div class="text-center mb-8">
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+      About {{ settings.site_name|default('indobid.lol') }}
     </h1>
-    <p class="text-sm text-slate-500 mt-2">
-      An hourly profile-discovery platform built to feature creators, developers, and builders.
+    <p class="text-xs sm:text-sm text-slate-500 mt-1">
+      A simple hourly paid profile and link discovery platform.
     </p>
   </div>
 
-  <div class="space-y-6">
+  <div class="space-y-4">
     
-    <!-- Principle 1: Zero Accounts -->
-    <div class="saas-card p-6 sm:p-8">
-      <div class="flex items-center space-x-3 mb-3">
-        <span class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
-          01
-        </span>
-        <h2 class="text-lg font-bold text-slate-900">Zero Friction • No User Accounts</h2>
+    <!-- How it works Card -->
+    <div class="saas-card p-5 sm:p-6">
+      <h2 class="text-sm font-bold text-slate-900 mb-3 uppercase tracking-wider text-purple-700">
+        How It Works
+      </h2>
+      <ol class="space-y-2.5 text-xs sm:text-sm text-slate-700">
+        <li class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+          <span><strong>Submit your link:</strong> Enter your display name, platform, and public URL.</span>
+        </li>
+        <li class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+          <span><strong>Pay {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }}:</strong> Complete payment securely via Razorpay.</span>
+        </li>
+        <li class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+          <span><strong>Join the 60-minute round:</strong> Upon payment verification, your listing enters the active round.</span>
+        </li>
+        <li class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">4</span>
+          <span><strong>Hourly draw:</strong> At the end of 60 minutes, 3 listings are randomly selected (Gold, Silver, Bronze).</span>
+        </li>
+        <li class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">5</span>
+          <span><strong>Homepage Top 3:</strong> Selected winners appear prominently on the homepage for the next hour.</span>
+        </li>
+        <li class="flex items-start space-x-2">
+          <span class="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">6</span>
+          <span><strong>Permanent archive:</strong> All previous winners remain permanently in the <a href="{{ url_for('main.winners') }}" class="text-purple-600 underline font-semibold">Winners archive</a>.</span>
+        </li>
+      </ol>
+    </div>
+
+    <!-- Transparency Statement -->
+    <div class="saas-card p-5 bg-purple-50/60 border-purple-200 text-center">
+      <div class="text-xs sm:text-sm font-bold text-purple-900">
+        "Every paid listing has an equal chance of being selected."
       </div>
-      <p class="text-sm text-slate-600 leading-relaxed">
-        We believe the modern web has too many sign-up forms, confirmation emails, and forgotten passwords. 
-        On <strong>indobid.lol</strong>, visitors never need to register an account. You simply enter your display name, platform, and public profile link, complete the entry fee through Razorpay, and your entry is instantly eligible.
+      <p class="text-[11px] text-purple-700 mt-1 max-w-md mx-auto">
+        There is NO voting, NO ranking based on followers, NO algorithmic scoring, and NO popularity score. Every eligible paid listing gets an equal random probability.
       </p>
     </div>
 
-    <!-- Principle 2: How It Works -->
-    <div class="saas-card p-6 sm:p-8">
-      <div class="flex items-center space-x-3 mb-4">
-        <span class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
-          02
-        </span>
-        <h2 class="text-lg font-bold text-slate-900">The Hourly Discovery Flow</h2>
-      </div>
-
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-          <div class="text-[11px] font-bold text-purple-600 mb-1">STEP 1</div>
-          <h3 class="text-xs font-bold text-slate-800 mb-1">Submit & Pay</h3>
-          <p class="text-[11px] text-slate-500 leading-normal">
-            Enter your public creator profile and complete the ₹49 entry fee via Razorpay.
-          </p>
-        </div>
-
-        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-          <div class="text-[11px] font-bold text-purple-600 mb-1">STEP 2</div>
-          <h3 class="text-xs font-bold text-slate-800 mb-1">Hourly Draw</h3>
-          <p class="text-[11px] text-slate-500 leading-normal">
-            When the 60-minute countdown concludes, 3 eligible profiles are randomly selected.
-          </p>
-        </div>
-
-        <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-          <div class="text-[11px] font-bold text-purple-600 mb-1">STEP 3</div>
-          <h3 class="text-xs font-bold text-slate-800 mb-1">Featured Spotlight</h3>
-          <p class="text-[11px] text-slate-500 leading-normal">
-            Gold, Silver, and Bronze winners are featured on the homepage for the entire following hour.
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Principle 3: Architecture & Transparency -->
-    <div class="saas-card p-6 sm:p-8">
-      <div class="flex items-center space-x-3 mb-3">
-        <span class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
-          03
-        </span>
-        <h2 class="text-lg font-bold text-slate-900">Authoritative Timestamp Engine</h2>
-      </div>
-      <p class="text-sm text-slate-600 leading-relaxed mb-3">
-        indobid.lol runs an on-demand, timestamp-based round engine specifically engineered to run efficiently on Render Free and PostgreSQL without background queues.
+    <!-- Zero Accounts Principle -->
+    <div class="saas-card p-5">
+      <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
+        Zero Friction • No Accounts Needed
+      </h3>
+      <p class="text-xs text-slate-600 leading-relaxed">
+        Normal users never need an account, password, or dashboard. Simply click Enter, submit your link, pay {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }}, and your listing is in the current round.
       </p>
-      <ul class="space-y-2 text-xs text-slate-500 list-disc list-inside">
-        <li>The backend and PostgreSQL strictly determine round completion and winner selection. The browser is never authoritative.</li>
-        <li>Idempotent concurrency guarantees that multiple simultaneous incoming requests cannot create duplicate winners or desynchronize rounds.</li>
-        <li>Historical winners are permanently archived and accessible on the <a href="{{ url_for('main.winners') }}" class="text-purple-600 hover:underline">Winners page</a>.</li>
-      </ul>
     </div>
 
     <!-- CTA -->
-    <div class="text-center pt-4">
-      <a href="{{ url_for('main.index') }}#enter-section" class="btn-primary inline-flex items-center px-6 py-2.5 rounded-xl text-xs font-bold">
-        Enter Current Round
-      </a>
+    <div class="text-center pt-2">
+      <button type="button" onclick="openEnterModal()" class="btn-primary inline-flex items-center px-5 py-2 rounded-xl text-xs font-bold space-x-1.5">
+        <span>Enter Current Round</span>
+        <span>→</span>
+      </button>
     </div>
 
   </div>

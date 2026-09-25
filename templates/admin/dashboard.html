@@ -1,110 +1,235 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Dashboard — indobid.lol{% endblock %}
+{% block title %}Admin Dashboard — {{ settings.site_name|default('indobid.lol') }}{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
 
-  <!-- Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200 gap-4 mb-8">
+  <!-- Admin Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-200 gap-3">
     <div>
-      <div class="inline-flex items-center space-x-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-2">
+      <div class="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-1">
         <span>⚙️</span>
         <span>Control Center</span>
       </div>
-      <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Administrator Dashboard</h1>
-      <p class="text-xs text-slate-500 mt-1">Logged in as: <span class="text-slate-700 font-mono">{{ session.get('admin_email') }}</span></p>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">Administrator Dashboard</h1>
+      <p class="text-xs text-slate-500">Logged in: <span class="font-mono text-slate-700">{{ session.get('admin_email') }}</span></p>
     </div>
 
-    <div class="flex items-center space-x-3">
-      <a href="{{ url_for('main.index') }}" class="px-4 py-2 rounded-xl text-xs font-semibold btn-secondary transition-colors">
+    <div class="flex items-center space-x-2">
+      <a href="{{ url_for('main.index') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold btn-secondary transition-colors">
         Live Site ↗
       </a>
-      <a href="{{ url_for('admin.logout') }}" class="px-4 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors">
+      <a href="{{ url_for('admin.logout') }}" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors">
         Sign Out
       </a>
     </div>
   </div>
 
-  <!-- Metric Cards -->
-  <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-    <!-- Total Revenue -->
-    <div class="saas-card p-4 text-center">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Revenue</span>
-      <div class="text-xl sm:text-2xl font-black text-purple-600 mt-1 font-mono-numbers">₹{{ total_revenue|int }}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">Paid entries</div>
-    </div>
-
-    <!-- Total Paid Entries -->
-    <div class="saas-card p-4 text-center">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Paid Entries</span>
-      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_paid_entries }}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">Completed</div>
-    </div>
-
-    <!-- Total Visitors -->
-    <div class="saas-card p-4 text-center">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Visitors</span>
-      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_visitors_count }}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">Unique logged</div>
-    </div>
-
-    <!-- Profile Clicks -->
-    <div class="saas-card p-4 text-center">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Clicks</span>
-      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_profile_clicks }}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">Profile visits</div>
-    </div>
-
-    <!-- Active Round Pool -->
-    <div class="saas-card p-4 text-center">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Pool</span>
-      <div class="text-xl sm:text-2xl font-black text-emerald-600 mt-1 font-mono-numbers">{{ active_entries|length }}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">Round #{{ current_round.id }}</div>
-    </div>
-
-    <!-- Completed Rounds -->
-    <div class="saas-card p-4 text-center">
-      <span class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Rounds</span>
-      <div class="text-xl sm:text-2xl font-black text-slate-900 mt-1 font-mono-numbers">{{ total_completed_rounds }}</div>
-      <div class="text-[10px] text-slate-400 mt-0.5">Completed</div>
-    </div>
+  <!-- Dashboard Section Navigation -->
+  <div class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-2 text-xs font-bold text-slate-600">
+    <a href="#overview" class="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-purple-600">Overview</a>
+    <a href="#current-round" class="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-purple-600">Current Round</a>
+    <a href="#listings" class="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-purple-600">Listings ({{ all_listings|length }})</a>
+    <a href="#payments" class="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-purple-600">Payments ({{ recent_payments|length }})</a>
+    <a href="#winners" class="px-3 py-1.5 rounded-lg hover:bg-slate-100 hover:text-purple-600">Winners ({{ all_winners|length }})</a>
+    <a href="#settings" class="px-3 py-1.5 rounded-lg bg-purple-50 text-purple-700 font-extrabold">Settings ⚙️</a>
   </div>
 
-  <!-- Action Operations -->
-  <div class="saas-card p-6 sm:p-7 mb-8">
-    <h2 class="text-base font-bold text-slate-900 mb-1">Round Controls</h2>
-    <p class="text-xs text-slate-500 mb-5">
-      The authoritative round engine advances automatically once the countdown expires. You may also execute an immediate draw using the exact same selection engine.
-    </p>
+  <!-- 1. OVERVIEW -->
+  <section id="overview" class="space-y-3">
+    <h2 class="text-xs font-extrabold uppercase tracking-wider text-slate-500">Platform Overview</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <!-- Total Listings -->
+      <div class="saas-card p-3.5 text-center">
+        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Listings</span>
+        <div class="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 font-mono-numbers">{{ total_listings_count }}</div>
+        <div class="text-[10px] text-emerald-600 font-semibold">{{ total_paid_listings }} paid</div>
+      </div>
 
-    <div class="flex flex-wrap items-center gap-3">
-      <!-- Force Draw -->
-      <form method="POST" action="{{ url_for('admin.trigger_draw') }}" onsubmit="return confirm('Immediately draw winners for Round #{{ current_round.id }} and advance to next round?');">
-        <button type="submit" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2">
-          <span>⚡</span>
-          <span>Draw Round #{{ current_round.id }} Now</span>
-        </button>
-      </form>
+      <!-- Total Payments -->
+      <div class="saas-card p-3.5 text-center">
+        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Payments</span>
+        <div class="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 font-mono-numbers">{{ total_successful_payments }}</div>
+        <div class="text-[10px] text-slate-400">successful</div>
+      </div>
 
-      <!-- Seed Sample Entries (Disabled in production) -->
-      {% if not is_production %}
-        <form method="POST" action="{{ url_for('admin.seed_entries') }}">
-          <button type="submit" class="btn-secondary px-5 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2">
-            <span>🌱</span>
-            <span>Seed 10 Test Entries (Dev Only)</span>
+      <!-- Total Revenue -->
+      <div class="saas-card p-3.5 text-center">
+        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Revenue</span>
+        <div class="text-xl sm:text-2xl font-black text-purple-600 mt-0.5 font-mono-numbers">{{ settings.currency_symbol|default('$') }}{{ total_revenue|int if total_revenue.is_integer() else total_revenue }}</div>
+        <div class="text-[10px] text-slate-400">{{ settings.currency|default('USD') }}</div>
+      </div>
+
+      <!-- Total Visitors -->
+      <div class="saas-card p-3.5 text-center">
+        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Visitors</span>
+        <div class="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 font-mono-numbers">{{ total_visitors_count }}</div>
+        <div class="text-[10px] text-slate-400">logged</div>
+      </div>
+
+      <!-- Total Link Clicks -->
+      <div class="saas-card p-3.5 text-center col-span-2 sm:col-span-1">
+        <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Link Clicks</span>
+        <div class="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 font-mono-numbers">{{ total_link_clicks }}</div>
+        <div class="text-[10px] text-slate-400">redirects</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. CURRENT ROUND -->
+  <section id="current-round" class="saas-card p-5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">Round Controls (Round #{{ current_round.id }})</h2>
+        <p class="text-xs text-slate-500">
+          Start: {{ current_round.start_time.strftime('%H:%M:%S UTC') if current_round.start_time else '—' }} • 
+          End: {{ current_round.end_time.strftime('%H:%M:%S UTC') if current_round.end_time else '—' }} • 
+          Time Left: <span class="font-mono font-bold text-slate-800">{{ remaining_seconds // 60 }}:{{ '%02d' % (remaining_seconds % 60) }}</span>
+        </p>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <form method="POST" action="{{ url_for('admin.trigger_draw') }}" onsubmit="return confirm('Immediately draw winners for Round #{{ current_round.id }} and advance to next round?');">
+          <button type="submit" class="btn-primary px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1">
+            <span>⚡</span>
+            <span>Draw Round #{{ current_round.id }} Now</span>
           </button>
         </form>
-      {% endif %}
-    </div>
-  </div>
 
-  <!-- Recent Payments Table -->
-  <div class="saas-card p-6 sm:p-7 mb-8">
-    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+        {% if not is_production %}
+          <form method="POST" action="{{ url_for('admin.seed_entries') }}">
+            <button type="submit" class="btn-secondary px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1">
+              <span>🌱</span>
+              <span>Seed 10 Entries (Dev)</span>
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Current Round Listings Table -->
+    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Round #{{ current_round.id }} Listings ({{ active_listings|length }})</h3>
+    {% if active_listings %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+              <th class="py-2 px-2.5">ID</th>
+              <th class="py-2 px-2.5">Username</th>
+              <th class="py-2 px-2.5">Platform</th>
+              <th class="py-2 px-2.5">URL</th>
+              <th class="py-2 px-2.5">Status</th>
+              <th class="py-2 px-2.5">Clicks</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for item in active_listings %}
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="py-2 px-2.5 text-slate-400 font-mono">#{{ item.id }}</td>
+                <td class="py-2 px-2.5 font-bold text-slate-900">{{ item.username }}</td>
+                <td class="py-2 px-2.5 text-slate-500 capitalize">{{ item.platform }}</td>
+                <td class="py-2 px-2.5">
+                  <a href="{{ item.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:underline max-w-[200px] truncate block">
+                    {{ item.profile_url }}
+                  </a>
+                </td>
+                <td class="py-2 px-2.5">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {{ item.payment_status }}
+                  </span>
+                </td>
+                <td class="py-2 px-2.5 font-mono text-slate-700">{{ item.click_count }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center py-4 text-xs text-slate-400">
+        No listings in Round #{{ current_round.id }} yet.
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- 3. ALL LISTINGS TABLE -->
+  <section id="listings" class="saas-card p-5">
+    <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
       <div>
-        <h2 class="text-base font-bold text-slate-900">Recent Payment Records</h2>
-        <p class="text-xs text-slate-500">Audit log of Razorpay transactions</p>
+        <h2 class="text-sm font-bold text-slate-900">All Listings</h2>
+        <p class="text-xs text-slate-500">Most recent paid & entered listings</p>
+      </div>
+      <span class="text-xs font-mono font-bold text-purple-600">{{ all_listings|length }} shown</span>
+    </div>
+
+    {% if all_listings %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
+              <th class="py-2 px-2.5">ID</th>
+              <th class="py-2 px-2.5">Username</th>
+              <th class="py-2 px-2.5">Platform</th>
+              <th class="py-2 px-2.5">URL</th>
+              <th class="py-2 px-2.5">Round</th>
+              <th class="py-2 px-2.5">Payment</th>
+              <th class="py-2 px-2.5">Clicks</th>
+              <th class="py-2 px-2.5">Created</th>
+              <th class="py-2 px-2.5 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for l in all_listings %}
+              <tr class="hover:bg-slate-50 transition-colors">
+                <td class="py-2 px-2.5 text-slate-400 font-mono">#{{ l.id }}</td>
+                <td class="py-2 px-2.5 font-bold text-slate-900">{{ l.username }}</td>
+                <td class="py-2 px-2.5 text-slate-500 capitalize">{{ l.platform }}</td>
+                <td class="py-2 px-2.5">
+                  <a href="{{ l.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:underline max-w-[180px] truncate block">
+                    {{ l.profile_url }}
+                  </a>
+                </td>
+                <td class="py-2 px-2.5 font-mono text-slate-700">#{{ l.round_id }}</td>
+                <td class="py-2 px-2.5">
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
+                    {% if l.payment_status in ('SUCCESS', 'paid') %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                    {% else %}bg-amber-50 text-amber-700 border border-amber-200{% endif %}">
+                    {{ l.payment_status }}
+                  </span>
+                </td>
+                <td class="py-2 px-2.5 font-mono font-bold text-slate-900">{{ l.click_count }}</td>
+                <td class="py-2 px-2.5 text-slate-400 text-[10px]">
+                  {{ l.created_at.strftime('%m-%d %H:%M') if l.created_at else '—' }}
+                </td>
+                <td class="py-2 px-2.5 text-right">
+                  {% if l.status == 'eligible' %}
+                    <form method="POST" action="{{ url_for('admin.reject_entry', listing_id=l.id) }}" class="inline" onsubmit="return confirm('Disqualify this listing?');">
+                      <button type="submit" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200">
+                        Disqualify
+                      </button>
+                    </form>
+                  {% else %}
+                    <span class="text-slate-400 text-[10px]">{{ l.status }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="text-center py-4 text-xs text-slate-400">
+        No listings recorded.
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- 4. PAYMENTS AUDIT TABLE -->
+  <section id="payments" class="saas-card p-5">
+    <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+      <div>
+        <h2 class="text-sm font-bold text-slate-900">Payment Records</h2>
+        <p class="text-xs text-slate-500">Razorpay transaction audit trail</p>
       </div>
       <span class="text-xs font-mono font-bold text-purple-600">{{ recent_payments|length }} records</span>
     </div>
@@ -114,34 +239,38 @@
         <table class="w-full text-left text-xs">
           <thead>
             <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
-              <th class="py-2.5 px-3">ID</th>
-              <th class="py-2.5 px-3">Order ID</th>
-              <th class="py-2.5 px-3">Payment ID</th>
-              <th class="py-2.5 px-3">Amount</th>
-              <th class="py-2.5 px-3">Status</th>
-              <th class="py-2.5 px-3">Date</th>
+              <th class="py-2 px-2.5">ID</th>
+              <th class="py-2 px-2.5">Order ID</th>
+              <th class="py-2 px-2.5">Payment ID</th>
+              <th class="py-2 px-2.5">Listing</th>
+              <th class="py-2 px-2.5">Amount</th>
+              <th class="py-2 px-2.5">Status</th>
+              <th class="py-2 px-2.5">Date</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             {% for p in recent_payments %}
               <tr class="hover:bg-slate-50 transition-colors">
-                <td class="py-2.5 px-3 font-mono text-slate-400">#{{ p.id }}</td>
-                <td class="py-2.5 px-3 font-mono text-slate-700">{{ p.order_id or '—' }}</td>
-                <td class="py-2.5 px-3 font-mono text-slate-700">{{ p.transaction_id or '—' }}</td>
-                <td class="py-2.5 px-3 font-bold text-slate-900">₹{{ p.amount|int }}</td>
-                <td class="py-2.5 px-3">
+                <td class="py-2 px-2.5 text-slate-400 font-mono">#{{ p.id }}</td>
+                <td class="py-2 px-2.5 font-mono text-slate-700">{{ p.order_id or '—' }}</td>
+                <td class="py-2 px-2.5 font-mono text-slate-700">{{ p.payment_id or '—' }}</td>
+                <td class="py-2 px-2.5 text-slate-700">
+                  {% if p.listing %}
+                    <span class="font-bold text-slate-900">{{ p.listing.username }}</span>
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+                </td>
+                <td class="py-2 px-2.5 font-bold text-slate-900">{{ settings.currency_symbol|default('$') }}{{ p.amount|int if p.amount.is_integer() else p.amount }} {{ p.currency }}</td>
+                <td class="py-2 px-2.5">
                   <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
-                    {% if p.status == 'paid' %}
-                      bg-emerald-50 text-emerald-700 border border-emerald-200
-                    {% elif p.status == 'created' %}
-                      bg-amber-50 text-amber-700 border border-amber-200
-                    {% else %}
-                      bg-red-50 text-red-700 border border-red-200
-                    {% endif %}">
+                    {% if p.status in ('paid', 'SUCCESS') %}bg-emerald-50 text-emerald-700 border border-emerald-200
+                    {% elif p.status == 'created' %}bg-amber-50 text-amber-700 border border-amber-200
+                    {% else %}bg-red-50 text-red-700 border border-red-200{% endif %}">
                     {{ p.status }}
                   </span>
                 </td>
-                <td class="py-2.5 px-3 text-slate-400 text-[11px]">
+                <td class="py-2 px-2.5 text-slate-400 text-[10px]">
                   {{ p.created_at.strftime('%Y-%m-%d %H:%M') if p.created_at else '—' }}
                 </td>
               </tr>
@@ -150,68 +279,59 @@
         </table>
       </div>
     {% else %}
-      <div class="text-center py-6 text-slate-400 text-xs">
+      <div class="text-center py-4 text-xs text-slate-400">
         No payment records found.
       </div>
     {% endif %}
-  </div>
+  </section>
 
-  <!-- Current Round Entries Table -->
-  <div class="saas-card p-6 sm:p-7 mb-8">
-    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+  <!-- 5. ALL WINNERS -->
+  <section id="winners" class="saas-card p-5">
+    <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
       <div>
-        <h2 class="text-base font-bold text-slate-900">Active Round Entries (Round #{{ current_round.id }})</h2>
-        <p class="text-xs text-slate-500">Participants in current pool</p>
+        <h2 class="text-sm font-bold text-slate-900">Winners Archive</h2>
+        <p class="text-xs text-slate-500">All historical Gold, Silver, and Bronze winners</p>
       </div>
-      <span class="text-xs font-mono font-bold text-purple-600">{{ active_entries|length }} entries</span>
+      <span class="text-xs font-mono font-bold text-purple-600">{{ all_winners|length }} winners</span>
     </div>
 
-    {% if active_entries %}
+    {% if all_winners %}
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs">
           <thead>
             <tr class="border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold">
-              <th class="py-2.5 px-3">ID</th>
-              <th class="py-2.5 px-3">Name</th>
-              <th class="py-2.5 px-3">Platform</th>
-              <th class="py-2.5 px-3">Profile URL</th>
-              <th class="py-2.5 px-3">Status</th>
-              <th class="py-2.5 px-3 text-right">Actions</th>
+              <th class="py-2 px-2.5">Round</th>
+              <th class="py-2 px-2.5">Position</th>
+              <th class="py-2 px-2.5">Username</th>
+              <th class="py-2 px-2.5">Platform</th>
+              <th class="py-2 px-2.5">URL</th>
+              <th class="py-2 px-2.5">Clicks</th>
+              <th class="py-2 px-2.5">Awarded</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            {% for entry in active_entries %}
+            {% for w in all_winners %}
               <tr class="hover:bg-slate-50 transition-colors">
-                <td class="py-2.5 px-3 text-slate-400 font-mono">#{{ entry.id }}</td>
-                <td class="py-2.5 px-3 font-semibold text-slate-900">{{ entry.display_name }}</td>
-                <td class="py-2.5 px-3 text-slate-500 capitalize">{{ entry.platform }}</td>
-                <td class="py-2.5 px-3">
-                  <a href="{{ entry.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:underline max-w-xs truncate block">
-                    {{ entry.profile_url }}
-                  </a>
+                <td class="py-2 px-2.5 font-mono text-purple-600 font-bold">#{{ w.round_id }}</td>
+                <td class="py-2 px-2.5 font-bold">
+                  {{ w.medal_emoji }} {{ w.rank_label }}
                 </td>
-                <td class="py-2.5 px-3">
-                  <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold
-                    {% if entry.status == 'eligible' %}
-                      bg-emerald-50 text-emerald-700 border border-emerald-200
-                    {% elif entry.status == 'winner' %}
-                      bg-purple-50 text-purple-700 border border-purple-200
-                    {% else %}
-                      bg-red-50 text-red-700 border border-red-200
-                    {% endif %}">
-                    {{ entry.status }}
-                  </span>
+                <td class="py-2 px-2.5 font-bold text-slate-900">
+                  {{ w.listing.username if w.listing else '—' }}
                 </td>
-                <td class="py-2.5 px-3 text-right">
-                  {% if entry.status == 'eligible' %}
-                    <form method="POST" action="{{ url_for('admin.reject_entry', entry_id=entry.id) }}" class="inline" onsubmit="return confirm('Disqualify this entry?');">
-                      <button type="submit" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors">
-                        Disqualify
-                      </button>
-                    </form>
-                  {% else %}
-                    <span class="text-slate-400 text-[11px]">—</span>
-                  {% endif %}
+                <td class="py-2 px-2.5 text-slate-500 capitalize">
+                  {{ w.listing.platform if w.listing else '—' }}
+                </td>
+                <td class="py-2 px-2.5">
+                  {% if w.listing %}
+                    <a href="{{ w.listing.profile_url }}" target="_blank" rel="noopener noreferrer" class="text-purple-600 hover:underline max-w-[160px] truncate block">
+                      {{ w.listing.profile_url }}
+                    </a>
+                  {% else %}—{% endif %}
+                </td>
+                <td class="py-2 px-2.5 font-mono font-bold text-slate-900">{{ w.clicks }}</td>
+                <td class="py-2 px-2.5 text-slate-400 text-[10px]">
+                  {{ w.created_at.strftime('%Y-%m-%d %H:%M') if w.created_at else '—' }}
                 </td>
               </tr>
             {% endfor %}
@@ -219,11 +339,159 @@
         </table>
       </div>
     {% else %}
-      <div class="text-center py-8 text-slate-400 text-xs">
-        No entries in Round #{{ current_round.id }} yet.
+      <div class="text-center py-4 text-xs text-slate-400">
+        No winners drawn yet.
       </div>
     {% endif %}
-  </div>
+  </section>
+
+  <!-- 6. SETTINGS (CUSTOMIZE PRICING, THEME, COPY, RAZORPAY) -->
+  <section id="settings" class="saas-card p-5 sm:p-6">
+    <div class="pb-3 mb-4 border-b border-slate-100">
+      <h2 class="text-sm font-bold text-slate-900">Platform Settings</h2>
+      <p class="text-xs text-slate-500">Configure listing price, branding, colors, copy, and payment keys without modifying code.</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('admin.update_settings') }}" class="space-y-4">
+      
+      <!-- Pricing & Currency -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="listing_price" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Listing Price <span class="text-purple-600">*</span>
+          </label>
+          <input type="number" step="0.01" min="0.10" id="listing_price" name="listing_price" required value="{{ settings.listing_price }}"
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600">
+          <p class="text-[10px] text-slate-400 mt-1">Default $2. Change here to update entry price site-wide.</p>
+        </div>
+
+        <div>
+          <label for="currency" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Currency Code <span class="text-purple-600">*</span>
+          </label>
+          <input type="text" id="currency" name="currency" required maxlength="10" value="{{ settings.currency|default('USD') }}"
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm uppercase focus:outline-none focus:border-purple-600">
+          <p class="text-[10px] text-slate-400 mt-1">e.g. USD ($), INR (₹), EUR (€), GBP (£)</p>
+        </div>
+      </div>
+
+      <!-- Site Name & Logo -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="site_name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Site Name
+          </label>
+          <input type="text" id="site_name" name="site_name" value="{{ settings.site_name|default('indobid.lol') }}"
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600">
+        </div>
+
+        <div>
+          <label for="site_logo" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Site Logo URL (Optional)
+          </label>
+          <input type="url" id="site_logo" name="site_logo" value="{{ settings.site_logo|default('') }}" placeholder="https://..."
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600">
+        </div>
+      </div>
+
+      <!-- Theme Colors -->
+      <div>
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Theme Customization</h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Primary Color</label>
+            <div class="flex items-center space-x-2">
+              <input type="color" onchange="document.getElementById('primary_hex').value=this.value" value="{{ settings.primary_color|default('#7c3aed') }}" class="w-8 h-8 rounded border border-slate-200 cursor-pointer">
+              <input type="text" id="primary_hex" name="primary_color" value="{{ settings.primary_color|default('#7c3aed') }}" class="w-full px-2 py-1 text-xs border rounded-lg font-mono">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Secondary Color</label>
+            <div class="flex items-center space-x-2">
+              <input type="color" onchange="document.getElementById('sec_hex').value=this.value" value="{{ settings.secondary_color|default('#f3e8ff') }}" class="w-8 h-8 rounded border border-slate-200 cursor-pointer">
+              <input type="text" id="sec_hex" name="secondary_color" value="{{ settings.secondary_color|default('#f3e8ff') }}" class="w-full px-2 py-1 text-xs border rounded-lg font-mono">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Background Color</label>
+            <div class="flex items-center space-x-2">
+              <input type="color" onchange="document.getElementById('bg_hex').value=this.value" value="{{ settings.background_color|default('#f8fafc') }}" class="w-8 h-8 rounded border border-slate-200 cursor-pointer">
+              <input type="text" id="bg_hex" name="background_color" value="{{ settings.background_color|default('#f8fafc') }}" class="w-full px-2 py-1 text-xs border rounded-lg font-mono">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-600 mb-1">Button Color</label>
+            <div class="flex items-center space-x-2">
+              <input type="color" onchange="document.getElementById('btn_hex').value=this.value" value="{{ settings.button_color|default('#7c3aed') }}" class="w-8 h-8 rounded border border-slate-200 cursor-pointer">
+              <input type="text" id="btn_hex" name="button_color" value="{{ settings.button_color|default('#7c3aed') }}" class="w-full px-2 py-1 text-xs border rounded-lg font-mono">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Copy & Text Customization -->
+      <div class="space-y-3">
+        <div>
+          <label for="hero_heading" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Hero Heading
+          </label>
+          <input type="text" id="hero_heading" name="hero_heading" value="{{ settings.hero_heading|default('Get Your Link On Top.') }}"
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600">
+        </div>
+
+        <div>
+          <label for="hero_description" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Hero Description
+          </label>
+          <textarea id="hero_description" name="hero_description" rows="2"
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600">{{ settings.hero_description|default('Submit your profile or product link. 3 listings are randomly selected every hour.') }}</textarea>
+        </div>
+
+        <div>
+          <label for="homepage_text" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+            Basic Homepage Text
+          </label>
+          <textarea id="homepage_text" name="homepage_text" rows="2"
+            class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm focus:outline-none focus:border-purple-600">{{ settings.homepage_text|default('Every paid listing has an equal chance of being selected.') }}</textarea>
+        </div>
+      </div>
+
+      <!-- Razorpay Payment Provider Settings -->
+      <div class="border-t border-slate-200 pt-4 space-y-3">
+        <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Razorpay Settings</h3>
+        <p class="text-[11px] text-slate-500">Never expose secret keys on frontend. Keys are securely stored and verified server-side only.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="razorpay_key_id" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Razorpay Key ID
+            </label>
+            <input type="text" id="razorpay_key_id" name="razorpay_key_id" value="{{ settings.razorpay_key_id|default('') }}" placeholder="rzp_live_..."
+              class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-600">
+          </div>
+
+          <div>
+            <label for="razorpay_key_secret" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Razorpay Key Secret
+            </label>
+            <input type="password" id="razorpay_key_secret" name="razorpay_key_secret" value="••••••••" placeholder="Leave unchanged to keep current"
+              class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 text-xs sm:text-sm font-mono focus:outline-none focus:border-purple-600">
+            <p class="text-[10px] text-slate-400 mt-1">Leave as •••••••• to keep existing secret.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button type="submit" class="btn-primary px-6 py-2 rounded-xl text-xs sm:text-sm font-bold">
+          Save Settings
+        </button>
+      </div>
+
+    </form>
+  </section>
 
 </div>
 {% endblock %}

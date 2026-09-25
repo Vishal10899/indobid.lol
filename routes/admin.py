@@ -1,14 +1,13 @@
 import time
-import random
 from collections import defaultdict
 from functools import wraps
 from flask import (
     Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 )
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from database import db_session
-from models import AdminUser, Round, Entry, Winner, Payment, SiteVisitor, get_utc_now, ensure_utc
-from engine import get_current_round, sync_rounds, get_glass_box_entries
+from models import AdminUser, Round, Listing, Entry, Winner, Payment, SiteVisitor, SiteSetting, get_utc_now, ensure_utc
+from engine import get_current_round, sync_rounds, get_current_listings
 from config import Config
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -82,42 +81,53 @@ def logout():
 @admin_bp.route("/dashboard")
 @admin_required
 def dashboard():
-    """Admin control center for monitoring rounds, payments, and site statistics."""
+    """
+    Admin control center providing:
+    - Overview (Total Listings, Payments, Revenue, Visitors, Clicks)
+    - Current Round (Round #, Start, End, Remaining, Listings)
+    - Listings table (all listings, clicks, payment status, disqualify action)
+    - Payments table (Payment ID, Listing, Amount, Currency, Status, Date)
+    - Winners table (all historical winners)
+    - Settings (Listing price, currency, colors, copy, Razorpay settings)
+    """
     db = db_session()
     current_round = get_current_round(db, Config.ROUND_DURATION_SECONDS)
-    
-    # Active round entries
-    active_entries = (
-        db.query(Entry)
-        .filter_by(round_id=current_round.id)
-        .order_by(Entry.id.desc())
+    settings = SiteSetting.get_settings(db)
+
+    # Active round listings
+    active_listings = get_current_listings(db, current_round.id)
+
+    # Overview Metrics from real database
+    total_listings_count = db.query(Listing).count()
+    total_paid_listings = db.query(Listing).filter(Listing.payment_status.in_(["SUCCESS", "paid"])).count()
+    total_payments_count = db.query(Payment).count()
+    total_successful_payments = db.query(Payment).filter(Payment.status.in_(["SUCCESS", "paid"])).count()
+    total_revenue = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(Payment.status.in_(["SUCCESS", "paid"])).scalar() or 0.0
+    total_visitors_count = db.query(SiteVisitor).count()
+    total_link_clicks = db.query(func.coalesce(func.sum(Listing.click_count), 0)).scalar() or 0
+    total_completed_rounds = db.query(Round).filter_by(status="completed").count()
+
+    # All Listings (most recent 50)
+    all_listings = (
+        db.query(Listing)
+        .order_by(Listing.id.desc())
+        .limit(50)
         .all()
     )
 
-    # Real metrics from database
-    total_rounds_count = db.query(Round).count()
-    total_completed_rounds = db.query(Round).filter_by(status="completed").count()
-    total_entries_count = db.query(Entry).count()
-    total_paid_entries = db.query(Payment).filter_by(status="paid").count()
-    total_revenue = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(Payment.status == "paid").scalar() or 0.0
-    total_visitors_count = db.query(SiteVisitor).count()
-    total_profile_clicks = db.query(func.coalesce(func.sum(Winner.clicks), 0)).scalar() or 0
-    total_winners_count = db.query(Winner).count()
-
-    # Recent payments
+    # Recent Payments (most recent 30)
     recent_payments = (
         db.query(Payment)
         .order_by(Payment.id.desc())
-        .limit(15)
+        .limit(30)
         .all()
     )
 
-    # Past rounds
-    past_rounds = (
-        db.query(Round)
-        .filter_by(status="completed")
-        .order_by(Round.id.desc())
-        .limit(10)
+    # All Winners (most recent 30)
+    all_winners = (
+        db.query(Winner)
+        .order_by(Winner.id.desc())
+        .limit(30)
         .all()
     )
 
@@ -127,28 +137,99 @@ def dashboard():
     return render_template(
         "admin/dashboard.html",
         current_round=current_round,
-        active_entries=active_entries,
-        total_rounds_count=total_rounds_count,
-        total_completed_rounds=total_completed_rounds,
-        total_entries_count=total_entries_count,
-        total_paid_entries=total_paid_entries,
+        active_entries=active_listings,
+        active_listings=active_listings,
+        total_listings_count=total_listings_count,
+        total_paid_listings=total_paid_listings,
+        total_payments_count=total_payments_count,
+        total_successful_payments=total_successful_payments,
         total_revenue=float(total_revenue),
         total_visitors_count=total_visitors_count,
-        total_profile_clicks=int(total_profile_clicks),
-        total_winners_count=total_winners_count,
+        total_link_clicks=int(total_link_clicks),
+        total_profile_clicks=int(total_link_clicks),
+        total_completed_rounds=total_completed_rounds,
+        all_listings=all_listings,
         recent_payments=recent_payments,
-        past_rounds=past_rounds,
+        all_winners=all_winners,
+        settings=settings,
         remaining_seconds=remaining_seconds,
         is_production=Config.IS_PRODUCTION
     )
+
+@admin_bp.route("/settings", methods=["POST"])
+@admin_required
+def update_settings():
+    """Updates customizable platform settings."""
+    db = db_session()
+    settings = SiteSetting.get_settings(db)
+
+    try:
+        price = float(request.form.get("listing_price", settings.listing_price))
+        if price > 0:
+            settings.listing_price = price
+    except ValueError:
+        flash("Invalid listing price.", "error")
+        return redirect(url_for("admin.dashboard") + "#settings")
+
+    currency = request.form.get("currency", settings.currency).strip().upper()
+    if currency:
+        settings.currency = currency
+
+    site_name = request.form.get("site_name", settings.site_name).strip()
+    if site_name:
+        settings.site_name = site_name
+
+    site_logo = request.form.get("site_logo", "").strip()
+    settings.site_logo = site_logo
+
+    primary_color = request.form.get("primary_color", settings.primary_color).strip()
+    if primary_color:
+        settings.primary_color = primary_color
+
+    secondary_color = request.form.get("secondary_color", settings.secondary_color).strip()
+    if secondary_color:
+        settings.secondary_color = secondary_color
+
+    background_color = request.form.get("background_color", settings.background_color).strip()
+    if background_color:
+        settings.background_color = background_color
+
+    button_color = request.form.get("button_color", settings.button_color).strip()
+    if button_color:
+        settings.button_color = button_color
+
+    hero_heading = request.form.get("hero_heading", settings.hero_heading).strip()
+    if hero_heading:
+        settings.hero_heading = hero_heading
+
+    hero_description = request.form.get("hero_description", settings.hero_description).strip()
+    if hero_description:
+        settings.hero_description = hero_description
+
+    homepage_text = request.form.get("homepage_text", settings.homepage_text).strip()
+    if homepage_text:
+        settings.homepage_text = homepage_text
+
+    razorpay_key_id = request.form.get("razorpay_key_id", "").strip()
+    if razorpay_key_id:
+        settings.razorpay_key_id = razorpay_key_id
+
+    razorpay_key_secret = request.form.get("razorpay_key_secret", "").strip()
+    if razorpay_key_secret and razorpay_key_secret != "••••••••":
+        settings.razorpay_key_secret = razorpay_key_secret
+
+    settings.updated_at = get_utc_now()
+    db.commit()
+
+    flash("Platform settings saved successfully!", "success")
+    return redirect(url_for("admin.dashboard") + "#settings")
 
 @admin_bp.route("/trigger-draw", methods=["POST"])
 @admin_required
 def trigger_draw():
     """
     Admin manual trigger to close the active round and draw winners.
-    Strictly calls the same authoritative sync_rounds() engine.
-    Never allows manually selecting winners.
+    Strictly calls authoritative sync_rounds() engine.
     """
     db = db_session()
     current_round = get_current_round(db, Config.ROUND_DURATION_SECONDS)
@@ -156,7 +237,7 @@ def trigger_draw():
     try:
         completed = sync_rounds(db, duration_seconds=Config.ROUND_DURATION_SECONDS, force_close_id=current_round.id)
         if completed:
-            flash(f"Round #{current_round.id} completed! Winners have been selected.", "success")
+            flash(f"Round #{current_round.id} completed! 3 winners randomly selected.", "success")
         else:
             flash(f"Could not complete Round #{current_round.id}.", "warning")
     except Exception as e:
@@ -167,12 +248,12 @@ def trigger_draw():
 @admin_bp.route("/seed-entries", methods=["POST"])
 @admin_required
 def seed_entries():
-    """Adds sample paid creator profiles into the current active round for development demo. Disabled in production."""
+    """Adds sample paid listings into current active round for development demo. Disabled in production."""
     if Config.IS_PRODUCTION:
         flash("Seeding test entries is strictly disabled in production.", "error")
         return redirect(url_for("admin.dashboard"))
 
-    sample_profiles = [
+    sample_listings = [
         ("Vishal Kumar", "twitter", "https://x.com/vishalkumar"),
         ("Sarah Jenkins", "youtube", "https://youtube.com/@sarahbuilds"),
         ("Alex Rivera", "github", "https://github.com/alexrivera"),
@@ -187,30 +268,34 @@ def seed_entries():
 
     db = db_session()
     current_round = get_current_round(db, Config.ROUND_DURATION_SECONDS)
+    settings = SiteSetting.get_settings(db)
 
     added_count = 0
     now = get_utc_now()
-    for name, platform, url in sample_profiles:
-        exists = db.query(Entry).filter_by(round_id=current_round.id, profile_url=url).first()
+    for name, platform, url in sample_listings:
+        exists = db.query(Listing).filter_by(round_id=current_round.id, profile_url=url).first()
         if not exists:
-            entry = Entry(
+            listing = Listing(
                 round_id=current_round.id,
-                display_name=name,
+                username=name,
                 platform=platform,
                 profile_url=url,
+                payment_status="SUCCESS",
+                payment_id=f"pay_demo_{int(time.time())}_{added_count}",
+                click_count=0,
                 status="eligible",
                 created_at=now
             )
-            db.add(entry)
+            db.add(listing)
             db.flush()
 
             payment = Payment(
-                entry_id=entry.id,
+                listing_id=listing.id,
                 provider="razorpay",
                 order_id=f"order_demo_{int(time.time())}_{added_count}",
-                transaction_id=f"pay_demo_{int(time.time())}_{added_count}",
-                amount=Config.ENTRY_FEE_INR,
-                currency="INR",
+                payment_id=listing.payment_id,
+                amount=settings.listing_price,
+                currency=settings.currency,
                 status="paid",
                 created_at=now
             )
@@ -218,19 +303,21 @@ def seed_entries():
             added_count += 1
 
     db.commit()
-    flash(f"Successfully added {added_count} sample paid entries to Round #{current_round.id}!", "success")
+    flash(f"Successfully added {added_count} sample paid listings to Round #{current_round.id}!", "success")
     return redirect(url_for("admin.dashboard"))
 
+@admin_bp.route("/listings/<int:listing_id>/reject", methods=["POST"])
 @admin_bp.route("/entries/<int:entry_id>/reject", methods=["POST"])
 @admin_required
-def reject_entry(entry_id):
-    """Marks an entry as rejected/ineligible."""
+def reject_entry(listing_id=None, entry_id=None):
+    """Marks a listing as rejected/disqualified."""
+    target_id = listing_id or entry_id
     db = db_session()
-    entry = db.query(Entry).filter_by(id=entry_id).first()
-    if entry:
-        entry.status = "rejected"
+    listing = db.query(Listing).filter_by(id=target_id).first()
+    if listing:
+        listing.status = "rejected"
         db.commit()
-        flash(f"Entry '{entry.display_name}' has been disqualified.", "info")
+        flash(f"Listing '{listing.username}' has been disqualified.", "info")
     else:
-        flash("Entry not found.", "error")
+        flash("Listing not found.", "error")
     return redirect(url_for("admin.dashboard"))

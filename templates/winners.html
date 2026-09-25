@@ -1,53 +1,53 @@
 {% extends "base.html" %}
 
-{% block title %}indobid.lol — Winners Archive{% endblock %}
+{% block title %}All Winners — {{ settings.site_name|default('indobid.lol') }}{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-14">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
   
   <!-- Header -->
-  <div class="text-center max-w-2xl mx-auto mb-10">
-    <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-3">
+  <div class="text-center max-w-xl mx-auto mb-8">
+    <div class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700 border border-purple-200 mb-2">
       <span>👑</span>
-      <span>Permanent Historical Archive</span>
+      <span>Permanent Winners Archive</span>
     </div>
-    <h1 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-      Past Hourly Winners
+    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+      All Winners
     </h1>
-    <p class="text-xs sm:text-sm text-slate-500 mt-2">
-      Every creator crowned in an hourly draw is permanently recorded in PostgreSQL.
+    <p class="text-xs text-slate-500 mt-1">
+      Every winner selected from each 60-minute draw is permanently recorded.
     </p>
   </div>
 
   <!-- Rounds List -->
   {% if rounds %}
-    <div class="space-y-6">
+    <div class="space-y-4">
       {% for round in rounds %}
-        <div class="saas-card p-6 sm:p-7 border border-slate-200">
+        <div class="saas-card p-5 border border-slate-200">
           
           <!-- Round Info Header -->
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-5 gap-2">
-            <div class="flex items-center space-x-3">
-              <span class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 font-extrabold text-sm flex items-center justify-center">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-2">
+            <div class="flex items-center space-x-2.5">
+              <span class="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 font-extrabold text-xs flex items-center justify-center">
                 #{{ round.id }}
               </span>
               <div>
-                <h2 class="text-base font-bold text-slate-900">Round #{{ round.id }}</h2>
-                <p class="text-[11px] text-slate-400">
-                  Completed: {{ round.completed_at.strftime('%b %d, %Y • %H:%M UTC') if round.completed_at else 'Completed' }}
+                <h2 class="text-sm font-bold text-slate-900">Round #{{ round.id }}</h2>
+                <p class="text-[10px] text-slate-400">
+                  {{ round.completed_at.strftime('%b %d, %Y • %H:%M UTC') if round.completed_at else 'Completed' }}
                 </p>
               </div>
             </div>
             <div class="text-xs text-slate-500 font-mono-numbers">
-              {{ round.entries|length }} total participants
+              {{ round.listings|length }} paid listings
             </div>
           </div>
 
-          <!-- Winners Podium Grid for this Round -->
+          <!-- Winners Grid -->
           {% if round.winners %}
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               {% for winner in round.winners %}
-                <div class="p-4 rounded-xl border flex flex-col justify-between
+                <div class="p-3.5 rounded-xl border flex flex-col justify-between
                   {% if winner.position == 1 %}
                     card-winner-gold
                   {% elif winner.position == 2 %}
@@ -57,9 +57,9 @@
                   {% endif %}">
                   
                   <div>
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center justify-between mb-1.5">
                       <span class="text-xl">{{ winner.medal_emoji }}</span>
-                      <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full
+                      <span class="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full
                         {% if winner.position == 1 %}badge-gold
                         {% elif winner.position == 2 %}badge-silver
                         {% else %}badge-bronze{% endif %}">
@@ -67,22 +67,22 @@
                       </span>
                     </div>
 
-                    <div class="text-sm font-bold text-slate-900 truncate">
-                      {{ winner.entry.display_name }}
+                    <div class="text-xs font-bold text-slate-900 truncate">
+                      {{ winner.listing.username if winner.listing else 'Winner' }}
                     </div>
-                    <div class="text-xs text-slate-500 capitalize mt-0.5">
-                      {{ winner.entry.platform }}
+                    <div class="text-[11px] text-slate-500 capitalize">
+                      {{ winner.listing.platform if winner.listing else 'Platform' }}
                     </div>
 
-                    <div class="mt-2 text-[11px] font-semibold text-slate-600 flex items-center space-x-1">
+                    <div class="mt-2 text-[10px] font-semibold text-slate-600 flex items-center space-x-1">
                       <span>👆</span>
                       <span>{{ winner.clicks }} clicks recorded</span>
                     </div>
                   </div>
 
-                  <a href="{{ url_for('main.visit_profile', winner_id=winner.id) }}" target="_blank" rel="noopener noreferrer"
-                    class="mt-4 text-center py-2 px-3 rounded-lg text-xs font-bold btn-secondary hover:border-purple-300 hover:text-purple-600 flex items-center justify-center space-x-1.5 transition-colors">
-                    <span>Visit Profile</span>
+                  <a href="{{ url_for('main.visit_listing', listing_id=winner.listing_id) }}" target="_blank" rel="noopener noreferrer"
+                    class="mt-3 text-center py-1.5 px-2.5 rounded-lg text-xs font-bold btn-secondary hover:border-purple-300 hover:text-purple-600 flex items-center justify-center space-x-1 transition-colors">
+                    <span>Visit Link</span>
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
                     </svg>
@@ -92,21 +92,21 @@
               {% endfor %}
             </div>
           {% else %}
-            <p class="text-xs text-slate-400 italic">No eligible entries participated in this round.</p>
+            <p class="text-xs text-slate-400 italic">No eligible listings participated in this round.</p>
           {% endif %}
 
         </div>
       {% endfor %}
     </div>
   {% else %}
-    <div class="text-center py-16 saas-card p-8">
-      <div class="text-4xl mb-3">🏆</div>
-      <h3 class="text-lg font-bold text-slate-800">No Completed Rounds Yet</h3>
+    <div class="text-center py-12 saas-card p-6">
+      <div class="text-3xl mb-2">🏆</div>
+      <h3 class="text-sm font-bold text-slate-800">No Completed Rounds Yet</h3>
       <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-        The initial draw is currently active. Check back once this hour's countdown reaches zero!
+        The first draw is currently running. Enter on the homepage to be among the first winners!
       </p>
-      <a href="{{ url_for('main.index') }}" class="mt-5 inline-block btn-primary px-5 py-2 rounded-xl text-xs font-bold">
-        Return to Live Draw
+      <a href="{{ url_for('main.index') }}" class="mt-4 inline-block btn-primary px-4 py-2 rounded-xl text-xs font-bold">
+        Return to Home
       </a>
     </div>
   {% endif %}

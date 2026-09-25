@@ -60,9 +60,16 @@ def create_app(config_class=Config):
     # Global template context
     @app.context_processor
     def inject_global_data():
+        from models import SiteSetting
+        from database import db_session
+        try:
+            settings = SiteSetting.get_settings(db_session())
+        except Exception:
+            settings = None
         return {
             "current_year": datetime.now(timezone.utc).year,
-            "site_name": "indobid.lol"
+            "site_name": settings.site_name if settings else "indobid.lol",
+            "settings": settings,
         }
 
     return app
