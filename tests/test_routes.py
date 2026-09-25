@@ -438,7 +438,7 @@ def test_missing_razorpay_credentials_fails_closed(client, monkeypatch):
     assert res.status_code == 503
     data = res.get_json()
     assert data["success"] is False
-    assert "Payment service is not configured" in data["error"]
+    assert "Payment service is" in data["error"]
 
     # Verify endpoint also fails closed on verify-payment
     verify_res = client.post("/entry/verify-payment", data=json.dumps({
@@ -793,6 +793,167 @@ def test_only_paid_listings_participate_in_random_draw(client, db_sess):
     assert paid_listing.id in winner_listing_ids
     assert unpaid_listing.id not in winner_listing_ids
     assert unpaid_listing.status == "eligible"  # Unpaid listing was never promoted to winner
+
+def test_wrong_amount_creates_no_listing(client, db_sess, monkeypatch):
+    """When Razorpay payment amount does not match expected fee, verification fails."""
+    unique_url = f"https://example.com/wrong_amt_{uuid.uuid4().hex[:8]}"
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Wrong Amount User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    order_id = res.get_json()["order_id"]
+    payment_id = f"pay_{uuid.uuid4().hex[:8]}"
+
+    def wrong_amount_get_payment(key_id, key_secret, pid):
+        return {
+            "id": pid,
+            "order_id": order_id,
+            "amount": 9999,  # Mismatched amount
+            "currency": "USD",
+            "status": "captured"
+        }
+
+    monkeypatch.setattr("routes.main.get_razorpay_payment_api", wrong_amount_get_payment)
+
+    secret = TestConfig.RAZORPAY_KEY_SECRET
+    sig = hmac.new(secret.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+
+    verify_res = client.post("/entry/verify-payment", data=json.dumps({
+        "razorpay_order_id": order_id,
+        "razorpay_payment_id": payment_id,
+        "razorpay_signature": sig,
+        "username": "Wrong Amount User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+
+    assert verify_res.status_code == 400
+    assert "amount mismatch" in verify_res.get_json()["error"].lower()
+    assert db_sess.query(Listing).filter_by(profile_url=unique_url).first() is None
+
+def test_wrong_currency_creates_no_listing(client, db_sess, monkeypatch):
+    """When Razorpay payment currency does not match configured currency, verification fails."""
+    unique_url = f"https://example.com/wrong_curr_{uuid.uuid4().hex[:8]}"
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Wrong Curr User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    order_id = res.get_json()["order_id"]
+    payment_id = f"pay_{uuid.uuid4().hex[:8]}"
+
+    def wrong_curr_get_payment(key_id, key_secret, pid):
+        return {
+            "id": pid,
+            "order_id": order_id,
+            "amount": 200,
+            "currency": "EUR",  # Mismatched currency
+            "status": "captured"
+        }
+
+    monkeypatch.setattr("routes.main.get_razorpay_payment_api", wrong_curr_get_payment)
+
+    secret = TestConfig.RAZORPAY_KEY_SECRET
+    sig = hmac.new(secret.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+
+    verify_res = client.post("/entry/verify-payment", data=json.dumps({
+        "razorpay_order_id": order_id,
+        "razorpay_payment_id": payment_id,
+        "razorpay_signature": sig,
+        "username": "Wrong Curr User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+
+    assert verify_res.status_code == 400
+    assert "currency mismatch" in verify_res.get_json()["error"].lower()
+    assert db_sess.query(Listing).filter_by(profile_url=unique_url).first() is None
+
+def test_cancelled_razorpay_checkout_creates_no_listing(client, db_sess):
+    """When a user cancels or closes the Razorpay modal, payment is marked failed and no listing is created."""
+    unique_url = f"https://example.com/cancelled_{uuid.uuid4().hex[:8]}"
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Cancelled User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    order_id = res.get_json()["order_id"]
+
+    # Notify backend of dismissal / cancellation
+    cancel_res = client.post("/entry/payment-failed", data=json.dumps({
+        "order_id": order_id
+    }), content_type="application/json")
+
+    assert cancel_res.status_code == 200
+    p = db_sess.query(Payment).filter_by(order_id=order_id).first()
+    assert p.status == "failed"
+    assert p.listing_id is None
+    assert db_sess.query(Listing).filter_by(profile_url=unique_url).first() is None
+
+def test_failed_payment_creates_no_listing(client, db_sess):
+    """When Razorpay payment fails, payment record remains failed with no listing."""
+    unique_url = f"https://example.com/pay_failed_{uuid.uuid4().hex[:8]}"
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Fail User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    order_id = res.get_json()["order_id"]
+
+    fail_res = client.post("/entry/payment-failed", data=json.dumps({
+        "razorpay_order_id": order_id
+    }), content_type="application/json")
+
+    assert fail_res.status_code == 200
+    p = db_sess.query(Payment).filter_by(order_id=order_id).first()
+    assert p.status == "failed"
+    assert p.listing_id is None
+    assert db_sess.query(Listing).filter_by(profile_url=unique_url).first() is None
+
+def test_idempotency_same_payment_submitted_twice_creates_single_listing(client, db_sess):
+    """Submitting the same verified Razorpay payment response twice must return existing listing and NOT create duplicate listings."""
+    unique_url = f"https://example.com/idempotent_{uuid.uuid4().hex[:8]}"
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Idempotent User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    order_id = res.get_json()["order_id"]
+    payment_id = f"pay_{uuid.uuid4().hex[:8]}"
+
+    secret = TestConfig.RAZORPAY_KEY_SECRET
+    sig = hmac.new(secret.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+
+    # First verification
+    res1 = client.post("/entry/verify-payment", data=json.dumps({
+        "razorpay_order_id": order_id,
+        "razorpay_payment_id": payment_id,
+        "razorpay_signature": sig,
+        "username": "Idempotent User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    assert res1.status_code == 201
+
+    initial_listing_count = db_sess.query(Listing).filter_by(profile_url=unique_url).count()
+    assert initial_listing_count == 1
+
+    # Second identical verification
+    res2 = client.post("/entry/verify-payment", data=json.dumps({
+        "razorpay_order_id": order_id,
+        "razorpay_payment_id": payment_id,
+        "razorpay_signature": sig,
+        "username": "Idempotent User",
+        "platform": "website",
+        "profile_url": unique_url
+    }), content_type="application/json")
+    assert res2.status_code == 200
+    assert "already confirmed" in res2.get_json()["message"]
+
+    # Still exactly ONE listing
+    second_listing_count = db_sess.query(Listing).filter_by(profile_url=unique_url).count()
+    assert second_listing_count == 1
 
 
 

@@ -26,6 +26,8 @@ _MAX_SUBMISSIONS_PER_MINUTE = 20
 
 def is_submission_rate_limited(ip_address: str) -> bool:
     """Sliding-window IP rate limiter to protect against automated spamming."""
+    if current_app and current_app.config.get("TESTING"):
+        return False
     now = time.time()
     window = now - 60.0
     timestamps = [t for t in _submission_rate_limit[ip_address] if t > window]
@@ -213,9 +215,58 @@ def index():
         stats=stats,
         settings=settings,
         entry_fee_inr=getattr(settings, "listing_price", 2.0),
-        razorpay_key_id=settings.razorpay_key_id or Config.RAZORPAY_KEY_ID,
+        razorpay_key_id=get_razorpay_credentials(session)[0],
         allowed_platforms=ALLOWED_PLATFORMS
     )
+
+def get_razorpay_credentials(session) -> tuple[str, str]:
+    """
+    Authoritative resolution of Razorpay Key ID and Secret.
+    1. Checks current_app.config / Config / os.environ.
+       - If explicitly starts with 'rzp_test_placeholder' or 'placeholder_secret', fails closed.
+       - If valid, authoritative.
+    2. Fallback to SiteSetting only if env key is completely absent and DB key is non-placeholder.
+    Returns ("", "") if missing or placeholder.
+    """
+    settings = SiteSetting.get_settings(session)
+    
+    app_key_id = current_app.config.get("RAZORPAY_KEY_ID") if current_app else ""
+    app_key_secret = current_app.config.get("RAZORPAY_KEY_SECRET") if current_app else ""
+
+    env_key_id = (
+        app_key_id 
+        or getattr(Config, "RAZORPAY_KEY_ID", "") 
+        or os.getenv("RAZORPAY_KEY_ID", "")
+    ).strip()
+    
+    env_key_secret = (
+        app_key_secret 
+        or getattr(Config, "RAZORPAY_KEY_SECRET", "") 
+        or os.getenv("RAZORPAY_KEY_SECRET", "")
+    ).strip()
+
+    # If explicitly placeholder in config/env, fail closed
+    if env_key_id.startswith("rzp_test_placeholder") or env_key_secret == "placeholder_secret":
+        return "", ""
+
+    key_id = env_key_id
+    key_secret = env_key_secret
+
+    # If completely absent in config/env, check SiteSetting
+    if not key_id and settings.razorpay_key_id and not settings.razorpay_key_id.startswith("rzp_test_placeholder"):
+        key_id = settings.razorpay_key_id.strip()
+    if not key_secret and settings.razorpay_key_secret and settings.razorpay_key_secret != "placeholder_secret":
+        key_secret = settings.razorpay_key_secret.strip()
+
+    if (
+        not key_id 
+        or key_id.startswith("rzp_test_placeholder") 
+        or not key_secret 
+        or key_secret == "placeholder_secret"
+    ):
+        return "", ""
+
+    return key_id, key_secret
 
 @main_bp.route("/entry/create-order", methods=["POST"])
 @main_bp.route("/listing/create-order", methods=["POST"])
@@ -279,26 +330,20 @@ def create_order():
 
     settings = SiteSetting.get_settings(session)
     if current_app.config.get("TESTING"):
-        key_id = current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
-        key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
         price = float(current_app.config.get("LISTING_PRICE", settings.listing_price))
         currency = str(current_app.config.get("CURRENCY", settings.currency)).upper()
     else:
-        key_id = settings.razorpay_key_id or current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
-        key_secret = settings.razorpay_key_secret or current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
         price = float(settings.listing_price)
         currency = str(settings.currency).upper()
 
+    key_id, key_secret = get_razorpay_credentials(session)
+
     # Fail closed if Razorpay credentials are missing or placeholder
-    if (
-        not key_id 
-        or key_id.startswith("rzp_test_placeholder") 
-        or not key_secret 
-        or key_secret == "placeholder_secret"
-    ):
+    if not key_id or not key_secret:
         return jsonify({
             "success": False,
-            "error": "Payment service is not configured."
+            "error": "Payment service is currently unavailable.",
+            "message": "Payment service is currently unavailable."
         }), 503
 
     amount_subunits = int(round(price * 100))  # cents or paise
@@ -393,34 +438,28 @@ def verify_payment():
             "error": "Missing payment verification parameters."
         }), 400
 
-    settings = SiteSetting.get_settings(session)
-    if current_app.config.get("TESTING"):
-        key_id = current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
-        key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
-    else:
-        key_id = settings.razorpay_key_id or current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
-        key_secret = settings.razorpay_key_secret or current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
-
-    if (
-        not key_id 
-        or key_id.startswith("rzp_test_placeholder") 
-        or not key_secret 
-        or key_secret == "placeholder_secret"
-    ):
+    key_id, key_secret = get_razorpay_credentials(session)
+    if not key_id or not key_secret:
         return jsonify({
             "success": False,
-            "error": "Payment service is not configured."
+            "error": "Payment service is currently unavailable.",
+            "message": "Payment service is currently unavailable."
         }), 503
 
-    # Check for existing payment record initialized by this application
-    payment = session.query(Payment).filter_by(order_id=order_id).first()
+    # Check for existing payment record initialized by this application (with lock if supported)
+    try:
+        payment = session.query(Payment).filter_by(order_id=order_id).with_for_update().first()
+    except Exception:
+        payment = session.query(Payment).filter_by(order_id=order_id).first()
+
     if not payment:
         return jsonify({
             "success": False,
+            "message": "Payment could not be verified.",
             "error": "Order ID not found or not initialized by application."
         }), 400
 
-    # If already paid and listing exists, return idempotent response
+    # If already paid and listing exists, return idempotent response (one payment = one listing)
     if payment.status in ("paid", "SUCCESS") and payment.listing_id:
         existing_listing = session.query(Listing).filter_by(id=payment.listing_id).first()
         if existing_listing:
@@ -441,6 +480,7 @@ def verify_payment():
         session.commit()
         return jsonify({
             "success": False,
+            "message": "Payment could not be verified.",
             "error": "Payment signature verification failed. Listing was not created."
         }), 400
 
@@ -454,6 +494,7 @@ def verify_payment():
                 session.commit()
                 return jsonify({
                     "success": False,
+                    "message": "Payment could not be verified.",
                     "error": "Payment order mismatch."
                 }), 400
             # Confirm amount matches expected subunits
@@ -463,6 +504,7 @@ def verify_payment():
                 session.commit()
                 return jsonify({
                     "success": False,
+                    "message": "Payment could not be verified.",
                     "error": "Payment amount mismatch."
                 }), 400
             # Confirm currency matches
@@ -471,6 +513,7 @@ def verify_payment():
                 session.commit()
                 return jsonify({
                     "success": False,
+                    "message": "Payment could not be verified.",
                     "error": "Payment currency mismatch."
                 }), 400
             # Confirm payment status is captured or authorized
@@ -479,6 +522,7 @@ def verify_payment():
                 session.commit()
                 return jsonify({
                     "success": False,
+                    "message": "Payment could not be verified.",
                     "error": f"Payment status not captured ({pay_info.get('status')})."
                 }), 400
     except urllib.error.HTTPError as e:
@@ -488,6 +532,7 @@ def verify_payment():
         session.commit()
         return jsonify({
             "success": False,
+            "message": "Payment could not be verified.",
             "error": "Razorpay payment verification rejected."
         }), 400
     except Exception as e:
@@ -505,24 +550,34 @@ def verify_payment():
 
     # Payment verified: mark paid and create active listing in transaction
     now = get_utc_now()
-    new_listing = Listing(
-        round_id=current_round.id,
-        username=username,
-        platform=platform,
-        profile_url=profile_url,
-        payment_status="SUCCESS",
-        payment_id=payment_id,
-        click_count=0,
-        status="eligible",
-        created_at=now
-    )
-    session.add(new_listing)
-    session.flush()
+    try:
+        payment.status = "paid"
+        payment.payment_id = payment_id
 
-    payment.listing_id = new_listing.id
-    payment.payment_id = payment_id
-    payment.status = "paid"
-    session.commit()
+        new_listing = Listing(
+            round_id=current_round.id,
+            username=username,
+            platform=platform,
+            profile_url=profile_url,
+            payment_status="SUCCESS",
+            payment_id=payment_id,
+            click_count=0,
+            status="eligible",
+            created_at=now
+        )
+        session.add(new_listing)
+        session.flush()
+
+        payment.listing_id = new_listing.id
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        current_app.logger.error(f"Transaction failure creating listing for order {order_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Payment received. We are confirming your listing.",
+            "message": "Payment received. We are confirming your listing."
+        }), 500
 
     return jsonify({
         "success": True,

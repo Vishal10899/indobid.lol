@@ -242,36 +242,43 @@
     const price = payButton.getAttribute('data-price') || '2';
     const numPrice = Number(price);
     const formattedPrice = !isNaN(numPrice) && numPrice % 1 === 0 ? parseInt(numPrice, 10) : price;
-    return `Continue to Pay ${symbol}${formattedPrice}`;
+    return `🔒 Continue to Pay ${symbol}${formattedPrice}`;
   }
 
   function setPayButtonState(state) {
     if (!payButton || !payButtonText) return;
+    const spinnerSvg = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
     switch (state) {
       case 'creating_order':
         payButton.disabled = true;
         payButton.classList.add('opacity-75', 'cursor-not-allowed');
-        payButtonText.textContent = 'Creating secure payment...';
+        payButtonText.innerHTML = `${spinnerSvg}Creating secure payment...`;
         break;
       case 'opened':
         payButton.disabled = true;
         payButton.classList.add('opacity-75', 'cursor-not-allowed');
-        payButtonText.textContent = 'Processing...';
+        payButtonText.innerHTML = `${spinnerSvg}Processing payment...`;
         break;
       case 'verifying':
         payButton.disabled = true;
         payButton.classList.add('opacity-75', 'cursor-not-allowed');
-        payButtonText.textContent = 'Verifying payment...';
+        payButtonText.innerHTML = `${spinnerSvg}🔒 Verifying Payment...`;
         break;
       case 'success':
         payButton.disabled = true;
         payButton.classList.add('opacity-75', 'cursor-not-allowed');
-        payButtonText.textContent = 'Payment successful';
+        payButtonText.textContent = '✓ Payment Successful';
+        break;
+      case 'cancelled':
+        payButton.disabled = false;
+        payButton.classList.remove('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Payment Cancelled';
         break;
       case 'failure':
         payButton.disabled = false;
         payButton.classList.remove('opacity-75', 'cursor-not-allowed');
-        payButtonText.textContent = 'Payment failed';
+        payButtonText.textContent = 'Payment Failed';
         break;
       case 'retry':
         payButton.disabled = false;
@@ -287,22 +294,42 @@
     }
   }
 
-  function showPaymentErrorCard(title, desc, hint) {
+  function showPaymentErrorCard(title, desc, hint, type = 'error') {
     hideFeedback();
     const errTitle = document.getElementById('error-card-title');
     const errDesc = document.getElementById('error-card-desc');
     const errHint = document.getElementById('error-card-hint');
-    if (errTitle) errTitle.textContent = title || "Payment couldn't be completed";
+    const errIcon = document.getElementById('error-card-icon');
+
+    if (errTitle) errTitle.textContent = title || "Payment couldn't be completed.";
     if (errDesc) errDesc.textContent = desc || "Your listing has NOT been added.";
     if (errHint) errHint.textContent = hint || "Please try again.";
 
     if (paymentErrorCard) {
+      if (type === 'cancelled') {
+        paymentErrorCard.className = 'mb-4 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-slate-800 animate-in fade-in duration-150';
+        if (errIcon) {
+          errIcon.className = 'w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-sm shrink-0';
+          errIcon.textContent = 'ℹ️';
+        }
+        if (errTitle) errTitle.className = 'text-xs font-bold text-amber-900';
+        if (errDesc) errDesc.className = 'text-xs text-amber-700 mt-0.5 font-medium';
+        setPayButtonState('cancelled');
+      } else {
+        paymentErrorCard.className = 'mb-4 p-4 rounded-2xl bg-red-50 border border-red-200 text-slate-800 animate-in fade-in duration-150';
+        if (errIcon) {
+          errIcon.className = 'w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm shrink-0';
+          errIcon.textContent = '⚠️';
+        }
+        if (errTitle) errTitle.className = 'text-xs font-bold text-red-900';
+        if (errDesc) errDesc.className = 'text-xs text-red-700 mt-0.5 font-medium';
+        setPayButtonState('failure');
+      }
       paymentErrorCard.classList.remove('hidden');
     }
     if (paymentSuccessCard) {
       paymentSuccessCard.classList.add('hidden');
     }
-    setPayButtonState('failure');
   }
 
   function hidePaymentErrorCard() {
@@ -399,8 +426,13 @@
 
         if (!orderRes.ok || !orderData.success) {
           isPaymentRunning = false;
-          const msg = orderData.error || "Please try again.";
-          showPaymentErrorCard("Payment couldn't be completed", "Your listing has NOT been added.", msg);
+          let hint = "Please try again.";
+          if (orderRes.status === 503) {
+            hint = "Payment service is currently unavailable.";
+          } else if (orderData.error) {
+            hint = orderData.error;
+          }
+          showPaymentErrorCard("Unable to start payment.", "Your listing has NOT been added.", hint, 'error');
           return;
         }
 
@@ -408,9 +440,10 @@
         if (typeof Razorpay === 'undefined') {
           isPaymentRunning = false;
           showPaymentErrorCard(
-            "Payment couldn't be completed",
+            "Unable to open Razorpay.",
             "Your listing has NOT been added.",
-            "Payment gateway failed to load. Please disable ad-blockers or check connection."
+            "Payment gateway failed to load. Please check your connection or ad-blocker.",
+            'error'
           );
           return;
         }
@@ -454,14 +487,16 @@
                 showPaymentErrorCard(
                   "Payment could not be verified.",
                   "Your listing has NOT been added.",
-                  verifyData.error || "Please try again."
+                  verifyData.message || verifyData.error || "Please try again.",
+                  'error'
                 );
               }
             } catch (err) {
               showPaymentErrorCard(
                 "Payment could not be verified.",
                 "Your listing has NOT been added.",
-                "Network error during verification. Please try again."
+                "Network error during verification. Please try again.",
+                'error'
               );
             } finally {
               isPaymentRunning = false;
@@ -471,9 +506,10 @@
             ondismiss: function () {
               isPaymentRunning = false;
               showPaymentErrorCard(
-                "Payment couldn't be completed",
-                "Your listing has NOT been added.",
-                "Payment checkout was closed."
+                "Payment cancelled",
+                "Your listing has not been added.",
+                "You have not been charged.",
+                'cancelled'
               );
               fetch('/entry/payment-failed', {
                 method: 'POST',
@@ -494,9 +530,10 @@
         rzp.on('payment.failed', function (resp) {
           isPaymentRunning = false;
           showPaymentErrorCard(
-            "Payment couldn't be completed",
+            "Payment couldn't be completed.",
             "Your listing has NOT been added.",
-            resp.error?.description || "Payment failed. Please try again."
+            "Please try again.",
+            'error'
           );
           fetch('/entry/payment-failed', {
             method: 'POST',
@@ -509,9 +546,10 @@
       } catch (err) {
         isPaymentRunning = false;
         showPaymentErrorCard(
-          "Payment couldn't be completed",
+          "Unable to start payment.",
           "Your listing has NOT been added.",
-          "Connection error. Please try again."
+          "Connection error. Please try again.",
+          'error'
         );
       }
     });

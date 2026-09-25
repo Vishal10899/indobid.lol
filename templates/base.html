@@ -159,18 +159,18 @@
       <!-- Feedback Alert -->
       <div id="payment-feedback" class="hidden mb-3 p-3 rounded-xl text-xs font-semibold"></div>
 
-      <!-- Section 6: Inline Payment Error Card -->
-      <div id="payment-error-card" class="hidden mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-slate-800 animate-in fade-in duration-150">
+      <!-- Inline Payment Error / Cancellation Card -->
+      <div id="payment-error-card" class="hidden mb-4 p-4 rounded-2xl bg-red-50 border border-red-200 text-slate-800 animate-in fade-in duration-150">
         <div class="flex items-start space-x-3">
-          <div class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm shrink-0">
+          <div id="error-card-icon" class="w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center font-bold text-sm shrink-0">
             ⚠️
           </div>
           <div class="flex-1">
             <h3 class="text-xs font-bold text-red-900" id="error-card-title">Payment couldn't be completed</h3>
-            <p class="text-xs text-red-700 mt-1 font-medium" id="error-card-desc">Your listing has NOT been added.</p>
-            <p class="text-xs text-slate-500 mt-0.5" id="error-card-hint">Please try again.</p>
+            <p class="text-xs text-red-700 mt-0.5 font-medium" id="error-card-desc">Your listing has NOT been added.</p>
+            <p class="text-[11px] text-slate-500 mt-0.5" id="error-card-hint">Please try again.</p>
             <div class="mt-3 flex items-center space-x-2">
-              <button type="button" id="btn-error-retry" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors">
+              <button type="button" id="btn-error-retry" class="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-colors">
                 Try Again
               </button>
               <button type="button" id="btn-error-cancel" onclick="closeEnterModal()" class="px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium transition-colors">
@@ -181,26 +181,50 @@
         </div>
       </div>
 
-      <!-- Section 8: Inline Success Card -->
-      <div id="payment-success-card" class="hidden py-4 text-center animate-in fade-in duration-200">
-        <div class="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
-          ✓
+      <!-- Section 12 & 13: Premium Congratulations Animation Card -->
+      <div id="payment-success-card" class="hidden py-4 text-center animate-in fade-in zoom-in-95 duration-200">
+        <!-- Floating Sparkle Badge -->
+        <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-xs font-bold mb-3 shadow-sm">
+          <span>✨</span>
+          <span class="tracking-wider uppercase text-[10px]">PAYMENT SUCCESSFUL!</span>
         </div>
-        <h3 class="text-base font-extrabold text-slate-900">Payment successful</h3>
-        <p class="text-xs text-slate-600 mt-1">Your listing is now live in the current round.</p>
-        
-        <div class="mt-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200 inline-block text-left w-full">
+
+        <!-- Glowing Checkmark Animation Circle -->
+        <div class="relative w-16 h-16 mx-auto mb-3 flex items-center justify-center">
+          <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 blur-md opacity-30 animate-pulse"></div>
+          <div class="relative w-14 h-14 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center text-2xl font-bold shadow-lg shadow-purple-500/25">
+            <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+        </div>
+
+        <h3 class="text-lg font-black text-slate-900 tracking-tight">Congratulations 🎉</h3>
+        <p class="text-xs text-purple-700 font-bold mt-0.5">Your profile is now live!</p>
+        <p class="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+          You are officially entered into the 60-minute random draw.
+        </p>
+
+        <!-- Current Round & Live Countdown Card -->
+        <div class="mt-4 p-3.5 rounded-2xl bg-gradient-to-br from-purple-50/70 via-white to-slate-50 border border-purple-100 shadow-sm text-left">
           <div class="flex items-center justify-between text-xs font-bold text-slate-800">
-            <span id="success-round-title">Round #--</span>
-            <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
+            <span id="success-round-title" class="text-purple-950 font-extrabold">Round #--</span>
+            <span class="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
               <span class="live-dot"></span>
               <span>LIVE</span>
             </span>
           </div>
-          <div class="mt-2 text-xs text-slate-500 flex items-center justify-between">
-            <span>Ends in:</span>
-            <span id="success-countdown" class="font-mono-numbers font-bold text-slate-900 text-sm">--:--</span>
+          <div class="mt-2.5 pt-2 border-t border-purple-100/60 flex items-center justify-between text-xs">
+            <span class="text-slate-500 font-medium">Ends in:</span>
+            <span id="success-countdown" class="font-mono-numbers font-black text-purple-700 text-sm tracking-wider">59:42</span>
           </div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-center space-x-1.5 text-xs text-emerald-600 font-bold">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>Your listing is now live.</span>
         </div>
       </div>
 
