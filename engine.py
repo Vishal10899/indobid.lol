@@ -88,15 +88,14 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
         return False
 
     # Perform winner selection for this round
-    # Strictly require Payment.status in ('paid', 'SUCCESS') and Listing.payment_status in ('paid', 'SUCCESS')
+    # Strictly require Payment.status == 'paid'
     eligible_listings = (
         session.query(Listing)
         .join(Payment, Listing.id == Payment.listing_id)
         .filter(
             Listing.round_id == active_round.id,
             Listing.status == "eligible",
-            Listing.payment_status.in_(["SUCCESS", "paid"]),
-            Payment.status.in_(["SUCCESS", "paid"])
+            Payment.status == "paid"
         )
         .all()
     )
@@ -142,7 +141,7 @@ def sync_rounds(session: Session, duration_seconds: int = 3600, force_close_id: 
 def get_current_listings(session: Session, round_id: int) -> list[Listing]:
     """
     Returns all paid listings entered into the given round.
-    Only successful paid listings appear here.
+    Only verified paid listings (Payment.status == 'paid') appear here.
     """
     return (
         session.query(Listing)
@@ -150,8 +149,7 @@ def get_current_listings(session: Session, round_id: int) -> list[Listing]:
         .filter(
             Listing.round_id == round_id,
             Listing.status.in_(["eligible", "winner"]),
-            Listing.payment_status.in_(["SUCCESS", "paid"]),
-            Payment.status.in_(["SUCCESS", "paid"])
+            Payment.status == "paid"
         )
         .order_by(desc(Listing.id))
         .all()

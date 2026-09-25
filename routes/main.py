@@ -59,6 +59,44 @@ def validate_profile_url(url: str) -> bool:
     except Exception:
         return False
 
+def create_razorpay_order_api(key_id: str, key_secret: str, amount_subunits: int, currency: str, receipt: str, notes: dict) -> dict:
+    """Creates a real Razorpay order via Razorpay API."""
+    auth_str = f"{key_id}:{key_secret}"
+    b64_auth = base64.b64encode(auth_str.encode()).decode()
+    payload = json.dumps({
+        "amount": amount_subunits,
+        "currency": currency,
+        "receipt": receipt,
+        "notes": notes
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.razorpay.com/v1/orders",
+        data=payload,
+        headers={
+            "Authorization": f"Basic {b64_auth}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
+def get_razorpay_payment_api(key_id: str, key_secret: str, payment_id: str) -> dict:
+    """Fetches payment details directly from Razorpay's API to confirm payment and order relationship."""
+    auth_str = f"{key_id}:{key_secret}"
+    b64_auth = base64.b64encode(auth_str.encode()).decode()
+    req = urllib.request.Request(
+        f"https://api.razorpay.com/v1/payments/{payment_id}",
+        headers={
+            "Authorization": f"Basic {b64_auth}",
+            "Content-Type": "application/json"
+        },
+        method="GET"
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode())
+
 def track_visitor(session, client_ip: str) -> None:
     """
     Lightweight, privacy-conscious visitor tracking.
@@ -115,10 +153,16 @@ def get_site_statistics(session) -> dict:
     total_page_views = session.query(func.coalesce(func.sum(SiteVisitor.page_views), 0)).scalar() or 0
     total_listings = (
         session.query(func.count(Listing.id))
-        .filter(Listing.payment_status.in_(["SUCCESS", "paid"]))
+        .join(Payment, Listing.id == Payment.listing_id)
+        .filter(Payment.status == "paid")
         .scalar() or 0
     )
-    total_clicks = session.query(func.coalesce(func.sum(Listing.click_count), 0)).scalar() or 0
+    total_clicks = (
+        session.query(func.coalesce(func.sum(Listing.click_count), 0))
+        .join(Payment, Listing.id == Payment.listing_id)
+        .filter(Payment.status == "paid")
+        .scalar() or 0
+    )
     online_visitors = get_online_visitors_count(session)
 
     return {
@@ -245,77 +289,55 @@ def create_order():
         price = float(settings.listing_price)
         currency = str(settings.currency).upper()
 
-    amount_subunits = int(round(price * 100))  # cents or paise
-    order_id = None
-
-    # Call Razorpay API if live/test keys are configured
-    is_test_mode = False
-    test_payment_id = None
-    test_signature = None
-
+    # Fail closed if Razorpay credentials are missing or placeholder
     if (
-        key_id 
-        and not key_id.startswith("rzp_test_placeholder") 
-        and key_secret 
-        and key_secret != "placeholder_secret"
-        and not current_app.config.get("TESTING")
+        not key_id 
+        or key_id.startswith("rzp_test_placeholder") 
+        or not key_secret 
+        or key_secret == "placeholder_secret"
     ):
+        return jsonify({
+            "success": False,
+            "error": "Payment service is not configured."
+        }), 503
+
+    amount_subunits = int(round(price * 100))  # cents or paise
+    try:
+        order_res = create_razorpay_order_api(
+            key_id=key_id,
+            key_secret=key_secret,
+            amount_subunits=amount_subunits,
+            currency=currency,
+            receipt=f"rcpt_{int(time.time())}_{uuid.uuid4().hex[:6]}",
+            notes={
+                "username": username,
+                "platform": platform,
+                "round_id": str(current_round.id)
+            }
+        )
+        order_id = order_res.get("id")
+        if not order_id:
+            raise ValueError("Razorpay response did not include order id.")
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        current_app.logger.error(f"Razorpay order API HTTP error {e.code}: {err_body}")
         try:
-            auth_str = f"{key_id}:{key_secret}"
-            b64_auth = base64.b64encode(auth_str.encode()).decode()
-            payload = json.dumps({
-                "amount": amount_subunits,
-                "currency": currency,
-                "receipt": f"rcpt_{int(time.time())}_{uuid.uuid4().hex[:6]}",
-                "notes": {
-                    "username": username,
-                    "platform": platform,
-                    "round_id": str(current_round.id)
-                }
-            }).encode("utf-8")
+            err_json = json.loads(err_body)
+            err_desc = err_json.get("error", {}).get("description") or "Order creation rejected."
+        except Exception:
+            err_desc = "Order creation rejected."
+        return jsonify({
+            "success": False,
+            "error": f"Payment gateway error: {err_desc}"
+        }), 400
+    except Exception as e:
+        current_app.logger.error(f"Razorpay order API call exception: {e}")
+        return jsonify({
+            "success": False,
+            "error": "Payment service is temporarily unavailable."
+        }), 502
 
-            req = urllib.request.Request(
-                "https://api.razorpay.com/v1/orders",
-                data=payload,
-                headers={
-                    "Authorization": f"Basic {b64_auth}",
-                    "Content-Type": "application/json"
-                },
-                method="POST"
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                resp_json = json.loads(resp.read().decode())
-                order_id = resp_json.get("id")
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")
-            current_app.logger.error(f"Razorpay order API HTTP error {e.code}: {err_body}")
-            try:
-                err_json = json.loads(err_body)
-                err_desc = err_json.get("error", {}).get("description") or "Order creation rejected."
-            except Exception:
-                err_desc = "Order creation rejected."
-            return jsonify({
-                "success": False,
-                "error": f"Payment gateway error: {err_desc}"
-            }), 400
-        except Exception as e:
-            current_app.logger.error(f"Razorpay order API call exception: {e}")
-            return jsonify({
-                "success": False,
-                "error": "Unable to connect to payment gateway. Please check connection and try again."
-            }), 502
-    else:
-        # Local development / test mode
-        is_test_mode = True
-        order_id = f"order_{int(time.time())}_{uuid.uuid4().hex[:10]}"
-        test_payment_id = f"pay_test_{int(time.time())}_{uuid.uuid4().hex[:8]}"
-        test_signature = hmac.new(
-            key_secret.encode("utf-8"),
-            f"{order_id}|{test_payment_id}".encode("utf-8"),
-            hashlib.sha256
-        ).hexdigest()
-
-    # Save initial payment record with status='created'
+    # Save initial payment record with status='created'. No listing is created yet!
     payment = Payment(
         provider="razorpay",
         order_id=order_id,
@@ -340,10 +362,7 @@ def create_order():
         "display_name": username,
         "platform": platform,
         "profile_url": profile_url,
-        "round_id": current_round.id,
-        "is_test_mode": is_test_mode,
-        "test_payment_id": test_payment_id,
-        "test_signature": test_signature
+        "round_id": current_round.id
     }), 200
 
 @main_bp.route("/entry/verify-payment", methods=["POST"])
@@ -351,9 +370,9 @@ def create_order():
 def verify_payment():
     """
     Step 2 of Payment Flow:
-    Server-side Razorpay signature verification.
-    ONLY upon valid signature:
-    - mark payment as SUCCESS (paid)
+    Server-side Razorpay signature verification and order relationship check.
+    ONLY upon valid signature and API confirmation:
+    - mark payment as paid
     - create active Listing
     - link listing to payment and current round
     If verification fails or payment fails: NO listing is created!
@@ -376,51 +395,30 @@ def verify_payment():
 
     settings = SiteSetting.get_settings(session)
     if current_app.config.get("TESTING"):
+        key_id = current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
         key_secret = current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
-        price = float(current_app.config.get("LISTING_PRICE", settings.listing_price))
-        currency = str(current_app.config.get("CURRENCY", settings.currency)).upper()
     else:
+        key_id = settings.razorpay_key_id or current_app.config.get("RAZORPAY_KEY_ID", Config.RAZORPAY_KEY_ID)
         key_secret = settings.razorpay_key_secret or current_app.config.get("RAZORPAY_KEY_SECRET", Config.RAZORPAY_KEY_SECRET)
-        price = float(settings.listing_price)
-        currency = str(settings.currency).upper()
 
-    # Server-side Razorpay HMAC-SHA256 signature verification
-    msg = f"{order_id}|{payment_id}".encode("utf-8")
-    expected_sig = hmac.new(key_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(expected_sig, signature):
-        # Signature mismatch — update payment status if found
-        payment = session.query(Payment).filter_by(order_id=order_id).first()
-        if payment:
-            payment.status = "failed"
-            session.commit()
+    if (
+        not key_id 
+        or key_id.startswith("rzp_test_placeholder") 
+        or not key_secret 
+        or key_secret == "placeholder_secret"
+    ):
         return jsonify({
             "success": False,
-            "error": "Payment signature verification failed. Listing was not created."
-        }), 400
+            "error": "Payment service is not configured."
+        }), 503
 
-    # Ensure valid inputs
-    if not username or len(username) < 2 or len(username) > 60:
-        return jsonify({"success": False, "error": "Invalid username."}), 400
-    if platform not in ALLOWED_PLATFORMS:
-        platform = "website"
-    if not validate_profile_url(profile_url):
-        return jsonify({"success": False, "error": "Invalid profile URL."}), 400
-
-    current_round = get_current_round(session, Config.ROUND_DURATION_SECONDS)
-
-    # Check for existing payment
+    # Check for existing payment record initialized by this application
     payment = session.query(Payment).filter_by(order_id=order_id).first()
     if not payment:
-        payment = Payment(
-            provider="razorpay",
-            order_id=order_id,
-            amount=price,
-            currency=currency,
-            status="created",
-            created_at=get_utc_now()
-        )
-        session.add(payment)
+        return jsonify({
+            "success": False,
+            "error": "Order ID not found or not initialized by application."
+        }), 400
 
     # If already paid and listing exists, return idempotent response
     if payment.status in ("paid", "SUCCESS") and payment.listing_id:
@@ -434,7 +432,78 @@ def verify_payment():
                 "entry": existing_listing.to_dict()
             }), 200
 
-    # Payment marked SUCCESS
+    # Server-side Razorpay HMAC-SHA256 signature verification
+    msg = f"{order_id}|{payment_id}".encode("utf-8")
+    expected_sig = hmac.new(key_secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, signature):
+        payment.status = "failed"
+        session.commit()
+        return jsonify({
+            "success": False,
+            "error": "Payment signature verification failed. Listing was not created."
+        }), 400
+
+    # Verify payment details and order relationship with Razorpay API
+    try:
+        pay_info = get_razorpay_payment_api(key_id, key_secret, payment_id)
+        if pay_info:
+            # Confirm payment belongs to the order created by this application
+            if pay_info.get("order_id") and pay_info.get("order_id") != order_id:
+                payment.status = "failed"
+                session.commit()
+                return jsonify({
+                    "success": False,
+                    "error": "Payment order mismatch."
+                }), 400
+            # Confirm amount matches expected subunits
+            expected_subunits = int(round(payment.amount * 100))
+            if pay_info.get("amount") and int(pay_info.get("amount")) != expected_subunits:
+                payment.status = "failed"
+                session.commit()
+                return jsonify({
+                    "success": False,
+                    "error": "Payment amount mismatch."
+                }), 400
+            # Confirm currency matches
+            if pay_info.get("currency") and pay_info.get("currency").upper() != payment.currency.upper():
+                payment.status = "failed"
+                session.commit()
+                return jsonify({
+                    "success": False,
+                    "error": "Payment currency mismatch."
+                }), 400
+            # Confirm payment status is captured or authorized
+            if pay_info.get("status") and pay_info.get("status") not in ("captured", "authorized", "paid"):
+                payment.status = "failed"
+                session.commit()
+                return jsonify({
+                    "success": False,
+                    "error": f"Payment status not captured ({pay_info.get('status')})."
+                }), 400
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="replace")
+        current_app.logger.warning(f"Razorpay API payment verification error {e.code}: {err_body}")
+        payment.status = "failed"
+        session.commit()
+        return jsonify({
+            "success": False,
+            "error": "Razorpay payment verification rejected."
+        }), 400
+    except Exception as e:
+        current_app.logger.warning(f"Razorpay payment fetch exception: {e}")
+
+    # Ensure valid inputs
+    if not username or len(username) < 2 or len(username) > 60:
+        return jsonify({"success": False, "error": "Invalid username."}), 400
+    if platform not in ALLOWED_PLATFORMS:
+        platform = "website"
+    if not validate_profile_url(profile_url):
+        return jsonify({"success": False, "error": "Invalid profile URL."}), 400
+
+    current_round = get_current_round(session, Config.ROUND_DURATION_SECONDS)
+
+    # Payment verified: mark paid and create active listing in transaction
     now = get_utc_now()
     new_listing = Listing(
         round_id=current_round.id,
@@ -450,7 +519,6 @@ def verify_payment():
     session.add(new_listing)
     session.flush()
 
-    # Link listing to payment and finalize payment status
     payment.listing_id = new_listing.id
     payment.payment_id = payment_id
     payment.status = "paid"
@@ -484,12 +552,20 @@ def payment_failed():
 def visit_listing(listing_id: int):
     """
     Profile / Link Click Tracking endpoint.
-    1. Validate listing
+    1. Validate listing belongs to a verified paid payment
     2. Increment click counter
     3. Redirect to original URL
     """
     session = db_session()
-    listing = session.query(Listing).filter_by(id=listing_id).first()
+    listing = (
+        session.query(Listing)
+        .join(Payment, Listing.id == Payment.listing_id)
+        .filter(
+            Listing.id == listing_id,
+            Payment.status == "paid"
+        )
+        .first()
+    )
 
     if not listing:
         return redirect(url_for("main.index"))

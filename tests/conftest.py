@@ -62,3 +62,32 @@ def db_sess(app):
     yield session
     session.rollback()
     session.close()
+
+import uuid
+
+@pytest.fixture(autouse=True)
+def mock_razorpay_gateway(monkeypatch):
+    """
+    Default mock for Razorpay API calls in test suite.
+    Mocked Razorpay responses ONLY exist inside the test suite.
+    """
+    def default_create_order(key_id, key_secret, amount_subunits, currency, receipt, notes):
+        return {
+            "id": f"order_{uuid.uuid4().hex[:14]}",
+            "amount": amount_subunits,
+            "currency": currency,
+            "status": "created",
+            "receipt": receipt
+        }
+
+    def default_get_payment(key_id, key_secret, payment_id):
+        return {
+            "id": payment_id,
+            "amount": 200,
+            "currency": "USD",
+            "status": "captured"
+        }
+
+    monkeypatch.setattr("routes.main.create_razorpay_order_api", default_create_order)
+    monkeypatch.setattr("routes.main.get_razorpay_payment_api", default_get_payment)
+

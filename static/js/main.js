@@ -287,8 +287,15 @@
     }
   }
 
-  function showPaymentErrorCard() {
+  function showPaymentErrorCard(title, desc, hint) {
     hideFeedback();
+    const errTitle = document.getElementById('error-card-title');
+    const errDesc = document.getElementById('error-card-desc');
+    const errHint = document.getElementById('error-card-hint');
+    if (errTitle) errTitle.textContent = title || "Payment couldn't be completed";
+    if (errDesc) errDesc.textContent = desc || "Your listing has NOT been added.";
+    if (errHint) errHint.textContent = hint || "Please try again.";
+
     if (paymentErrorCard) {
       paymentErrorCard.classList.remove('hidden');
     }
@@ -392,51 +399,19 @@
 
         if (!orderRes.ok || !orderData.success) {
           isPaymentRunning = false;
-          showPaymentErrorCard();
+          const msg = orderData.error || "Please try again.";
+          showPaymentErrorCard("Payment couldn't be completed", "Your listing has NOT been added.", msg);
           return;
         }
 
-        // Test Mode (Local development simulation)
-        if (orderData.is_test_mode) {
-          setPayButtonState('verifying');
-          try {
-            const verifyRes = await fetch('/entry/verify-payment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: orderData.order_id,
-                razorpay_payment_id: orderData.test_payment_id,
-                razorpay_signature: orderData.test_signature,
-                username: orderData.username,
-                display_name: orderData.username,
-                platform: orderData.platform,
-                profile_url: orderData.profile_url
-              })
-            });
-
-            const verifyData = await verifyRes.json();
-
-            if (verifyRes.ok && verifyData.success) {
-              showPaymentSuccessCard(verifyData.round_id || orderData.round_id);
-              setTimeout(async () => {
-                if (typeof closeEnterModal === 'function') closeEnterModal();
-                await fetchRoundStatus();
-              }, 2500);
-            } else {
-              showPaymentErrorCard();
-            }
-          } catch (err) {
-            showPaymentErrorCard();
-          } finally {
-            isPaymentRunning = false;
-          }
-          return;
-        }
-
-        // Real Razorpay Checkout flow
+        // Real Razorpay Checkout flow - NO local simulation
         if (typeof Razorpay === 'undefined') {
           isPaymentRunning = false;
-          showPaymentErrorCard();
+          showPaymentErrorCard(
+            "Payment couldn't be completed",
+            "Your listing has NOT been added.",
+            "Payment gateway failed to load. Please disable ad-blockers or check connection."
+          );
           return;
         }
 
@@ -476,10 +451,18 @@
                   await fetchRoundStatus();
                 }, 2500);
               } else {
-                showPaymentErrorCard();
+                showPaymentErrorCard(
+                  "Payment could not be verified.",
+                  "Your listing has NOT been added.",
+                  verifyData.error || "Please try again."
+                );
               }
             } catch (err) {
-              showPaymentErrorCard();
+              showPaymentErrorCard(
+                "Payment could not be verified.",
+                "Your listing has NOT been added.",
+                "Network error during verification. Please try again."
+              );
             } finally {
               isPaymentRunning = false;
             }
@@ -487,7 +470,11 @@
           modal: {
             ondismiss: function () {
               isPaymentRunning = false;
-              showPaymentErrorCard();
+              showPaymentErrorCard(
+                "Payment couldn't be completed",
+                "Your listing has NOT been added.",
+                "Payment checkout was closed."
+              );
               fetch('/entry/payment-failed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -506,7 +493,11 @@
         const rzp = new Razorpay(options);
         rzp.on('payment.failed', function (resp) {
           isPaymentRunning = false;
-          showPaymentErrorCard();
+          showPaymentErrorCard(
+            "Payment couldn't be completed",
+            "Your listing has NOT been added.",
+            resp.error?.description || "Payment failed. Please try again."
+          );
           fetch('/entry/payment-failed', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -517,7 +508,11 @@
         rzp.open();
       } catch (err) {
         isPaymentRunning = false;
-        showPaymentErrorCard();
+        showPaymentErrorCard(
+          "Payment couldn't be completed",
+          "Your listing has NOT been added.",
+          "Connection error. Please try again."
+        );
       }
     });
   }

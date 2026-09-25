@@ -96,15 +96,6 @@
             <span>Draw Round #{{ current_round.id }} Now</span>
           </button>
         </form>
-
-        {% if not is_production %}
-          <form method="POST" action="{{ url_for('admin.seed_entries') }}">
-            <button type="submit" class="btn-secondary px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1">
-              <span>🌱</span>
-              <span>Seed 10 Entries (Dev)</span>
-            </button>
-          </form>
-        {% endif %}
       </div>
     </div>
 

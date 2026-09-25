@@ -97,14 +97,24 @@ def dashboard():
     # Active round listings
     active_listings = get_current_listings(db, current_round.id)
 
-    # Overview Metrics from real database
+    # Overview Metrics from real database (enforcing verified paid status)
     total_listings_count = db.query(Listing).count()
-    total_paid_listings = db.query(Listing).filter(Listing.payment_status.in_(["SUCCESS", "paid"])).count()
+    total_paid_listings = (
+        db.query(Listing)
+        .join(Payment, Listing.id == Payment.listing_id)
+        .filter(Payment.status == "paid")
+        .count()
+    )
     total_payments_count = db.query(Payment).count()
-    total_successful_payments = db.query(Payment).filter(Payment.status.in_(["SUCCESS", "paid"])).count()
-    total_revenue = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(Payment.status.in_(["SUCCESS", "paid"])).scalar() or 0.0
+    total_successful_payments = db.query(Payment).filter(Payment.status == "paid").count()
+    total_revenue = db.query(func.coalesce(func.sum(Payment.amount), 0.0)).filter(Payment.status == "paid").scalar() or 0.0
     total_visitors_count = db.query(SiteVisitor).count()
-    total_link_clicks = db.query(func.coalesce(func.sum(Listing.click_count), 0)).scalar() or 0
+    total_link_clicks = (
+        db.query(func.coalesce(func.sum(Listing.click_count), 0))
+        .join(Payment, Listing.id == Payment.listing_id)
+        .filter(Payment.status == "paid")
+        .scalar() or 0
+    )
     total_completed_rounds = db.query(Round).filter_by(status="completed").count()
 
     # All Listings (most recent 50)
@@ -245,66 +255,6 @@ def trigger_draw():
 
     return redirect(url_for("admin.dashboard"))
 
-@admin_bp.route("/seed-entries", methods=["POST"])
-@admin_required
-def seed_entries():
-    """Adds sample paid listings into current active round for development demo. Disabled in production."""
-    if Config.IS_PRODUCTION:
-        flash("Seeding test entries is strictly disabled in production.", "error")
-        return redirect(url_for("admin.dashboard"))
-
-    sample_listings = [
-        ("Vishal Kumar", "twitter", "https://x.com/vishalkumar"),
-        ("Sarah Jenkins", "youtube", "https://youtube.com/@sarahbuilds"),
-        ("Alex Rivera", "github", "https://github.com/alexrivera"),
-        ("Daniel Wu", "tiktok", "https://tiktok.com/@danielcreates"),
-        ("Elena Rostova", "instagram", "https://instagram.com/elenarostova"),
-        ("Marcus Vance", "website", "https://marcusvance.design"),
-        ("Chloe Bennett", "twitter", "https://x.com/chloebenn"),
-        ("Liam Patel", "linkedin", "https://linkedin.com/in/liampatel"),
-        ("Aria Stark", "github", "https://github.com/ariastark"),
-        ("Neo Anderson", "website", "https://neoanderson.dev")
-    ]
-
-    db = db_session()
-    current_round = get_current_round(db, Config.ROUND_DURATION_SECONDS)
-    settings = SiteSetting.get_settings(db)
-
-    added_count = 0
-    now = get_utc_now()
-    for name, platform, url in sample_listings:
-        exists = db.query(Listing).filter_by(round_id=current_round.id, profile_url=url).first()
-        if not exists:
-            listing = Listing(
-                round_id=current_round.id,
-                username=name,
-                platform=platform,
-                profile_url=url,
-                payment_status="SUCCESS",
-                payment_id=f"pay_demo_{int(time.time())}_{added_count}",
-                click_count=0,
-                status="eligible",
-                created_at=now
-            )
-            db.add(listing)
-            db.flush()
-
-            payment = Payment(
-                listing_id=listing.id,
-                provider="razorpay",
-                order_id=f"order_demo_{int(time.time())}_{added_count}",
-                payment_id=listing.payment_id,
-                amount=settings.listing_price,
-                currency=settings.currency,
-                status="paid",
-                created_at=now
-            )
-            db.add(payment)
-            added_count += 1
-
-    db.commit()
-    flash(f"Successfully added {added_count} sample paid listings to Round #{current_round.id}!", "success")
-    return redirect(url_for("admin.dashboard"))
 
 @admin_bp.route("/listings/<int:listing_id>/reject", methods=["POST"])
 @admin_bp.route("/entries/<int:entry_id>/reject", methods=["POST"])
