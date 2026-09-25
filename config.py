@@ -67,8 +67,8 @@ class Config:
     LISTING_PRICE = float(os.getenv("LISTING_PRICE", "2.0"))
     CURRENCY = os.getenv("CURRENCY", "USD").upper()
     ENTRY_FEE_INR = float(os.getenv("ENTRY_FEE_INR", "49.0"))
-    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder")
-    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "placeholder_secret")
+    RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
+    RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
 
 class TestConfig(Config):
     """Configuration for automated testing."""

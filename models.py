@@ -265,8 +265,8 @@ class SiteSetting(Base):
                 hero_heading="Get Your Link On Top.",
                 hero_description="A simple hourly paid link discovery platform. 3 listings are randomly selected every hour.",
                 homepage_text="Every paid listing has an equal chance of being selected.",
-                razorpay_key_id=key_id,
-                razorpay_key_secret=key_sec,
+                razorpay_key_id="",
+                razorpay_key_secret="",
                 updated_at=get_utc_now()
             )
             session.add(settings)

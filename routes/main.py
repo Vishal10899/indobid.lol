@@ -1,3 +1,4 @@
+import os
 import time
 import uuid
 import hmac
@@ -219,54 +220,60 @@ def index():
         allowed_platforms=ALLOWED_PLATFORMS
     )
 
+def is_valid_credential(val: str, is_key_id: bool = False) -> bool:
+    """Checks whether a credential string is real and not a placeholder."""
+    if not val:
+        return False
+    v = str(val).strip()
+    if not v:
+        return False
+    lower = v.lower()
+    if "placeholder" in lower or lower in ("none", "null", "undefined", "••••••••", "xxxxxxxxxxxxxxxx"):
+        return False
+    if is_key_id:
+        if not (lower.startswith("rzp_test_") or lower.startswith("rzp_live_")):
+            return False
+        if lower.startswith("rzp_test_xxxx") or lower.startswith("rzp_live_xxxx"):
+            return False
+    return True
+
 def get_razorpay_credentials(session) -> tuple[str, str]:
     """
     Authoritative resolution of Razorpay Key ID and Secret.
-    1. Checks current_app.config / Config / os.environ.
-       - If explicitly starts with 'rzp_test_placeholder' or 'placeholder_secret', fails closed.
-       - If valid, authoritative.
-    2. Fallback to SiteSetting only if env key is completely absent and DB key is non-placeholder.
-    Returns ("", "") if missing or placeholder.
+    Required Precedence:
+      1. REAL environment variables (os.environ, current_app.config, Config)
+      2. Valid database settings (SiteSetting)
+      3. Otherwise unavailable (returns "", "")
+    Never allow database placeholders to override real environment credentials.
+    Rejects placeholder values like 'rzp_test_placeholder', 'placeholder_secret'.
     """
+    # 1. Real environment variables check
+    app_key_id = ""
+    app_key_secret = ""
+    try:
+        from flask import has_app_context
+        if has_app_context():
+            app_key_id = str(current_app.config.get("RAZORPAY_KEY_ID") or "")
+            app_key_secret = str(current_app.config.get("RAZORPAY_KEY_SECRET") or "")
+    except Exception:
+        pass
+
+    env_key_id = (app_key_id or os.getenv("RAZORPAY_KEY_ID", "") or getattr(Config, "RAZORPAY_KEY_ID", "")).strip()
+    env_key_secret = (app_key_secret or os.getenv("RAZORPAY_KEY_SECRET", "") or getattr(Config, "RAZORPAY_KEY_SECRET", "")).strip()
+
+    if is_valid_credential(env_key_id, is_key_id=True) and is_valid_credential(env_key_secret, is_key_id=False):
+        return env_key_id, env_key_secret
+
+    # 2. Valid database settings check (fallback only when env variables are not configured)
     settings = SiteSetting.get_settings(session)
-    
-    app_key_id = current_app.config.get("RAZORPAY_KEY_ID") if current_app else ""
-    app_key_secret = current_app.config.get("RAZORPAY_KEY_SECRET") if current_app else ""
+    db_key_id = (getattr(settings, "razorpay_key_id", "") or "").strip()
+    db_key_secret = (getattr(settings, "razorpay_key_secret", "") or "").strip()
 
-    env_key_id = (
-        app_key_id 
-        or getattr(Config, "RAZORPAY_KEY_ID", "") 
-        or os.getenv("RAZORPAY_KEY_ID", "")
-    ).strip()
-    
-    env_key_secret = (
-        app_key_secret 
-        or getattr(Config, "RAZORPAY_KEY_SECRET", "") 
-        or os.getenv("RAZORPAY_KEY_SECRET", "")
-    ).strip()
+    if is_valid_credential(db_key_id, is_key_id=True) and is_valid_credential(db_key_secret, is_key_id=False):
+        return db_key_id, db_key_secret
 
-    # If explicitly placeholder in config/env, fail closed
-    if env_key_id.startswith("rzp_test_placeholder") or env_key_secret == "placeholder_secret":
-        return "", ""
-
-    key_id = env_key_id
-    key_secret = env_key_secret
-
-    # If completely absent in config/env, check SiteSetting
-    if not key_id and settings.razorpay_key_id and not settings.razorpay_key_id.startswith("rzp_test_placeholder"):
-        key_id = settings.razorpay_key_id.strip()
-    if not key_secret and settings.razorpay_key_secret and settings.razorpay_key_secret != "placeholder_secret":
-        key_secret = settings.razorpay_key_secret.strip()
-
-    if (
-        not key_id 
-        or key_id.startswith("rzp_test_placeholder") 
-        or not key_secret 
-        or key_secret == "placeholder_secret"
-    ):
-        return "", ""
-
-    return key_id, key_secret
+    # 3. Otherwise unavailable
+    return "", ""
 
 @main_bp.route("/entry/create-order", methods=["POST"])
 @main_bp.route("/listing/create-order", methods=["POST"])
@@ -340,10 +347,11 @@ def create_order():
 
     # Fail closed if Razorpay credentials are missing or placeholder
     if not key_id or not key_secret:
+        current_app.logger.warning("Razorpay credentials not configured or placeholder detected.")
         return jsonify({
             "success": False,
-            "error": "Payment service is currently unavailable.",
-            "message": "Payment service is currently unavailable."
+            "error": "Payment service is not configured.",
+            "message": "Payment service is not configured."
         }), 503
 
     amount_subunits = int(round(price * 100))  # cents or paise
@@ -361,25 +369,22 @@ def create_order():
             }
         )
         order_id = order_res.get("id")
-        if not order_id:
-            raise ValueError("Razorpay response did not include order id.")
+        if not order_id or not str(order_id).startswith("order_"):
+            raise ValueError(f"Razorpay response did not include a valid order id: {order_res}")
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         current_app.logger.error(f"Razorpay order API HTTP error {e.code}: {err_body}")
-        try:
-            err_json = json.loads(err_body)
-            err_desc = err_json.get("error", {}).get("description") or "Order creation rejected."
-        except Exception:
-            err_desc = "Order creation rejected."
         return jsonify({
             "success": False,
-            "error": f"Payment gateway error: {err_desc}"
+            "error": "Unable to create payment order.",
+            "message": "Unable to create payment order."
         }), 400
     except Exception as e:
         current_app.logger.error(f"Razorpay order API call exception: {e}")
         return jsonify({
             "success": False,
-            "error": "Payment service is temporarily unavailable."
+            "error": "Unable to create payment order.",
+            "message": "Unable to create payment order."
         }), 502
 
     # Save initial payment record with status='created'. No listing is created yet!
@@ -442,8 +447,8 @@ def verify_payment():
     if not key_id or not key_secret:
         return jsonify({
             "success": False,
-            "error": "Payment service is currently unavailable.",
-            "message": "Payment service is currently unavailable."
+            "error": "Payment service is not configured.",
+            "message": "Payment service is not configured."
         }), 503
 
     # Check for existing payment record initialized by this application (with lock if supported)

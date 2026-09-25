@@ -242,7 +242,7 @@
     const price = payButton.getAttribute('data-price') || '2';
     const numPrice = Number(price);
     const formattedPrice = !isNaN(numPrice) && numPrice % 1 === 0 ? parseInt(numPrice, 10) : price;
-    return `🔒 Continue to Pay ${symbol}${formattedPrice}`;
+    return `Continue to Pay ${symbol}${formattedPrice}`;
   }
 
   function setPayButtonState(state) {
@@ -263,7 +263,7 @@
       case 'verifying':
         payButton.disabled = true;
         payButton.classList.add('opacity-75', 'cursor-not-allowed');
-        payButtonText.innerHTML = `${spinnerSvg}🔒 Verifying Payment...`;
+        payButtonText.innerHTML = `${spinnerSvg}Verifying Payment...`;
         break;
       case 'success':
         payButton.disabled = true;
@@ -274,6 +274,11 @@
         payButton.disabled = false;
         payButton.classList.remove('opacity-75', 'cursor-not-allowed');
         payButtonText.textContent = 'Payment Cancelled';
+        break;
+      case 'not_configured':
+        payButton.disabled = false;
+        payButton.classList.remove('opacity-75', 'cursor-not-allowed');
+        payButtonText.textContent = 'Payment Not Configured';
         break;
       case 'failure':
         payButton.disabled = false;
@@ -323,7 +328,11 @@
         }
         if (errTitle) errTitle.className = 'text-xs font-bold text-red-900';
         if (errDesc) errDesc.className = 'text-xs text-red-700 mt-0.5 font-medium';
-        setPayButtonState('failure');
+        if (title === "Payment service is not configured." || hint === "Payment service is not configured.") {
+          setPayButtonState('not_configured');
+        } else {
+          setPayButtonState('failure');
+        }
       }
       paymentErrorCard.classList.remove('hidden');
     }
@@ -410,6 +419,8 @@
       setPayButtonState('creating_order');
 
       try {
+        console.log("Razorpay loaded:", typeof Razorpay);
+
         // Step 1: Create Order on backend
         const orderRes = await fetch('/entry/create-order', {
           method: 'POST',
@@ -422,127 +433,83 @@
           })
         });
 
-        const orderData = await orderRes.json();
+        const data = await orderRes.json();
+        console.log("Create order response:", data);
 
-        if (!orderRes.ok || !orderData.success) {
+        if (!orderRes.ok || !data.success) {
           isPaymentRunning = false;
-          let hint = "Please try again.";
-          if (orderRes.status === 503) {
-            hint = "Payment service is currently unavailable.";
-          } else if (orderData.error) {
-            hint = orderData.error;
+          if (orderRes.status === 503 || data.error === "Payment service is not configured.") {
+            showPaymentErrorCard(
+              "Payment service is not configured.",
+              "Your listing has NOT been added.",
+              "Payment service is not configured.",
+              'error'
+            );
+            return;
           }
-          showPaymentErrorCard("Unable to start payment.", "Your listing has NOT been added.", hint, 'error');
+          const safeError = data.error || data.message || "Unable to start payment.";
+          showPaymentErrorCard("Unable to start payment.", "Your listing has NOT been added.", safeError, 'error');
           return;
         }
 
-        // Real Razorpay Checkout flow - NO local simulation
-        if (typeof Razorpay === 'undefined') {
+        // Verify Razorpay Checkout script is loaded
+        if (typeof Razorpay !== 'function') {
+          console.error("Razorpay script not loaded: typeof Razorpay =", typeof Razorpay);
           isPaymentRunning = false;
           showPaymentErrorCard(
-            "Unable to open Razorpay.",
+            "Payment service is not configured.",
             "Your listing has NOT been added.",
-            "Payment gateway failed to load. Please check your connection or ad-blocker.",
+            "Payment gateway script failed to load. Please check your connection or ad-blocker.",
             'error'
           );
           return;
         }
 
+        // Verify required fields exist in order response
+        if (!data.order_id || !data.key_id || !data.amount || !data.currency) {
+          console.error("Missing required order fields in response:", data);
+          isPaymentRunning = false;
+          showPaymentErrorCard(
+            "Unable to start payment.",
+            "Your listing has NOT been added.",
+            "Incomplete payment order details received from server.",
+            'error'
+          );
+          return;
+        }
+
+        console.log("Opening Razorpay with order:", data.order_id);
         setPayButtonState('opened');
 
         const options = {
-          key: orderData.key_id,
-          amount: orderData.amount, // subunits
-          currency: orderData.currency || 'USD',
-          name: 'indobid.lol',
-          description: `Hourly Round #${orderData.round_id} Listing`,
-          order_id: orderData.order_id,
-          handler: async function (response) {
-            // Step 3: Server-side Razorpay signature verification
-            setPayButtonState('verifying');
-            try {
-              const verifyRes = await fetch('/entry/verify-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  razorpay_order_id: response.razorpay_order_id || orderData.order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                  username: orderData.username,
-                  display_name: orderData.username,
-                  platform: orderData.platform,
-                  profile_url: orderData.profile_url
-                })
-              });
-
-              const verifyData = await verifyRes.json();
-
-              if (verifyRes.ok && verifyData.success) {
-                showPaymentSuccessCard(verifyData.round_id || orderData.round_id);
-                setTimeout(async () => {
-                  if (typeof closeEnterModal === 'function') closeEnterModal();
-                  await fetchRoundStatus();
-                }, 2500);
-              } else {
-                showPaymentErrorCard(
-                  "Payment could not be verified.",
-                  "Your listing has NOT been added.",
-                  verifyData.message || verifyData.error || "Please try again.",
-                  'error'
-                );
-              }
-            } catch (err) {
-              showPaymentErrorCard(
-                "Payment could not be verified.",
-                "Your listing has NOT been added.",
-                "Network error during verification. Please try again.",
-                'error'
-              );
-            } finally {
-              isPaymentRunning = false;
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              isPaymentRunning = false;
-              showPaymentErrorCard(
-                "Payment cancelled",
-                "Your listing has not been added.",
-                "You have not been charged.",
-                'cancelled'
-              );
-              fetch('/entry/payment-failed', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order_id: orderData.order_id })
-              }).catch(() => {});
-            }
-          },
+          key: data.key_id,
+          amount: data.amount,
+          currency: data.currency,
+          order_id: data.order_id,
+          name: "indobid.lol",
+          description: "60-minute profile listing",
           prefill: {
-            name: orderData.username
+            name: data.username || username
           },
           theme: {
             color: '#7c3aed'
+          },
+          handler: async function (paymentResponse) {
+            await verifyPayment(paymentResponse, data);
+          },
+          modal: {
+            ondismiss: function () {
+              handlePaymentCancelled(data);
+            }
           }
         };
 
-        const rzp = new Razorpay(options);
-        rzp.on('payment.failed', function (resp) {
-          isPaymentRunning = false;
-          showPaymentErrorCard(
-            "Payment couldn't be completed.",
-            "Your listing has NOT been added.",
-            "Please try again.",
-            'error'
-          );
-          fetch('/entry/payment-failed', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderData.order_id })
-          }).catch(() => {});
+        const razorpay = new Razorpay(options);
+        razorpay.on('payment.failed', function (resp) {
+          handlePaymentFailed(resp, data);
         });
 
-        rzp.open();
+        razorpay.open();
       } catch (err) {
         isPaymentRunning = false;
         showPaymentErrorCard(
@@ -553,6 +520,86 @@
         );
       }
     });
+
+    async function verifyPayment(paymentResponse, orderData) {
+      // Server-side Razorpay signature verification
+      setPayButtonState('verifying');
+      try {
+        const verifyRes = await fetch('/entry/verify-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            razorpay_order_id: paymentResponse.razorpay_order_id || (orderData ? orderData.order_id : ''),
+            razorpay_payment_id: paymentResponse.razorpay_payment_id,
+            razorpay_signature: paymentResponse.razorpay_signature,
+            username: (orderData && orderData.username) || '',
+            display_name: (orderData && orderData.username) || '',
+            platform: (orderData && orderData.platform) || 'website',
+            profile_url: (orderData && orderData.profile_url) || ''
+          })
+        });
+
+        const verifyData = await verifyRes.json();
+
+        if (verifyRes.ok && verifyData.success) {
+          showPaymentSuccessCard(verifyData.round_id || (orderData && orderData.round_id));
+          setTimeout(async () => {
+            if (typeof closeEnterModal === 'function') closeEnterModal();
+            await fetchRoundStatus();
+          }, 2500);
+        } else {
+          showPaymentErrorCard(
+            "Payment could not be verified.",
+            "Your listing has NOT been added.",
+            verifyData.message || verifyData.error || "Please try again.",
+            'error'
+          );
+        }
+      } catch (err) {
+        showPaymentErrorCard(
+          "Payment could not be verified.",
+          "Your listing has NOT been added.",
+          "Network error during verification. Please try again.",
+          'error'
+        );
+      } finally {
+        isPaymentRunning = false;
+      }
+    }
+
+    function handlePaymentCancelled(orderData) {
+      isPaymentRunning = false;
+      showPaymentErrorCard(
+        "Payment cancelled",
+        "Your listing has not been added.",
+        "You have not been charged.",
+        'cancelled'
+      );
+      if (orderData && orderData.order_id) {
+        fetch('/entry/payment-failed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderData.order_id })
+        }).catch(() => {});
+      }
+    }
+
+    function handlePaymentFailed(resp, orderData) {
+      isPaymentRunning = false;
+      showPaymentErrorCard(
+        "Payment couldn't be completed.",
+        "Your listing has NOT been added.",
+        "Please try again.",
+        'error'
+      );
+      if (orderData && orderData.order_id) {
+        fetch('/entry/payment-failed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: orderData.order_id })
+        }).catch(() => {});
+      }
+    }
   }
 
   function showFeedback(type, message) {

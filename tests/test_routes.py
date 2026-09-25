@@ -3,7 +3,7 @@ import uuid
 import hmac
 import hashlib
 from config import Config, TestConfig
-from models import Winner, Entry, Listing, Round, Payment, SiteVisitor, get_utc_now
+from models import Winner, Entry, Listing, Round, Payment, SiteVisitor, SiteSetting, get_utc_now
 
 def test_homepage_renders(client):
     response = client.get("/")
@@ -423,10 +423,14 @@ def test_create_order_creates_no_listing(client, db_sess):
     assert payment.status == "created"
     assert payment.listing_id is None
 
-def test_missing_razorpay_credentials_fails_closed(client, monkeypatch):
+def test_missing_razorpay_credentials_fails_closed(client, monkeypatch, db_sess):
     """Fail closed rule: If Razorpay credentials are missing or placeholder, reject with 503."""
     monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "rzp_test_placeholder")
     monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "placeholder_secret")
+    settings = SiteSetting.get_settings(db_sess)
+    settings.razorpay_key_id = ""
+    settings.razorpay_key_secret = ""
+    db_sess.commit()
 
     unique_url = f"https://example.com/unconfigured_{uuid.uuid4().hex[:8]}"
     res = client.post("/entry/create-order", data=json.dumps({
@@ -954,6 +958,84 @@ def test_idempotency_same_payment_submitted_twice_creates_single_listing(client,
     # Still exactly ONE listing
     second_listing_count = db_sess.query(Listing).filter_by(profile_url=unique_url).count()
     assert second_listing_count == 1
+
+def test_credential_precedence_env_over_db(client, monkeypatch, db_sess):
+    """Real environment variables must take precedence over database settings."""
+    from routes.main import get_razorpay_credentials
+
+    # Set real environment credentials
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "rzp_test_env_key")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "env_secret_123")
+
+    # Set different credentials in database
+    settings = SiteSetting.get_settings(db_sess)
+    settings.razorpay_key_id = "rzp_test_db_key"
+    settings.razorpay_key_secret = "db_secret_456"
+    db_sess.commit()
+
+    with client.application.app_context():
+        key_id, key_sec = get_razorpay_credentials(db_sess)
+        assert key_id == "rzp_test_env_key"
+        assert key_sec == "env_secret_123"
+
+def test_credential_precedence_db_fallback(client, monkeypatch, db_sess):
+    """When environment variables are missing or placeholder, valid database settings are used."""
+    from routes.main import get_razorpay_credentials
+
+    # Set placeholder in environment
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "rzp_test_placeholder")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "placeholder_secret")
+
+    # Set valid credentials in database
+    settings = SiteSetting.get_settings(db_sess)
+    settings.razorpay_key_id = "rzp_test_db_real_key"
+    settings.razorpay_key_secret = "db_real_secret_789"
+    db_sess.commit()
+
+    with client.application.app_context():
+        key_id, key_sec = get_razorpay_credentials(db_sess)
+        assert key_id == "rzp_test_db_real_key"
+        assert key_sec == "db_real_secret_789"
+
+def test_credential_precedence_rejects_db_placeholder(client, monkeypatch, db_sess):
+    """Database placeholder credentials must never be accepted."""
+    from routes.main import get_razorpay_credentials
+
+    # Empty env
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "")
+
+    # Placeholder in database
+    settings = SiteSetting.get_settings(db_sess)
+    settings.razorpay_key_id = "rzp_test_placeholder"
+    settings.razorpay_key_secret = "placeholder_secret"
+    db_sess.commit()
+
+    with client.application.app_context():
+        key_id, key_sec = get_razorpay_credentials(db_sess)
+        assert key_id == ""
+        assert key_sec == ""
+
+def test_create_order_safe_error_on_api_rejection(client, monkeypatch):
+    """When Razorpay rejects order creation, return exact safe error 'Unable to create payment order.'."""
+    import urllib.error
+
+    def rejecting_create_order(*args, **kwargs):
+        raise urllib.error.HTTPError("https://api.razorpay.com/v1/orders", 400, "Bad Request", {}, None)
+
+    monkeypatch.setattr("routes.main.create_razorpay_order_api", rejecting_create_order)
+
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Safe Error User",
+        "platform": "website",
+        "profile_url": "https://example.com/safe_error"
+    }), content_type="application/json")
+
+    assert res.status_code == 400
+    data = res.get_json()
+    assert data["success"] is False
+    assert data["error"] == "Unable to create payment order."
+
 
 
 
