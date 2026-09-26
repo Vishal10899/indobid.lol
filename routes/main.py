@@ -229,8 +229,16 @@ RAZORPAY_KEY_ID_VAR_NAMES = [
     "RAZORPAY_KEY",
     "RAZORPAY_ID",
     "RAZORPAY_API_KEY",
+    "RAZORPAY_LIVE_KEY_ID",
+    "RAZORPAY_LIVE_KEY",
+    "RAZORPAYKEYID",
+    "RAZORPAYKEY",
+    "RAZOR_PAY_KEY_ID",
+    "RAZOR_PAY_KEY",
     "RZP_KEY_ID",
-    "RZP_KEY"
+    "RZP_KEY",
+    "RZP_LIVE_KEY_ID",
+    "RZP_LIVE_KEY"
 ]
 
 RAZORPAY_SECRET_VAR_NAMES = [
@@ -238,8 +246,20 @@ RAZORPAY_SECRET_VAR_NAMES = [
     "RAZORPAY_SECRET",
     "RAZORPAY_SECRET_KEY",
     "RAZORPAY_API_SECRET",
+    "RAZORPAY_LIVE_SECRET",
+    "RAZORPAY_LIVE_KEY_SECRET",
+    "RAZORPAYKEYSECRET",
+    "RAZORPAYSECRET",
+    "RAZOR_PAY_KEY_SECRET",
+    "RAZOR_PAY_SECRET",
+    "RAZOR_PAY_SECRET_KEY",
     "RZP_KEY_SECRET",
-    "RZP_SECRET"
+    "RZP_SECRET",
+    "RZP_SECRET_KEY",
+    "RZP_LIVE_KEY_SECRET",
+    "RZP_LIVE_SECRET",
+    "RAZORPAY_PRIVATE_KEY",
+    "RAZORPAY_API_KEY_SECRET"
 ]
 
 def clean_credential(val) -> str:
@@ -314,24 +334,57 @@ def get_razorpay_config(session=None) -> dict:
     """
     candidate_key_id = ""
     candidate_key_secret = ""
+    detected_key_var = None
+    detected_secret_var = None
+    matching_env_names = []
 
-    # 1. Live os.environ scan (case-insensitive across aliases and whitespace-tolerant)
-    env_items = {k.strip().upper(): v for k, v in os.environ.items()}
+    # 1. Live os.environ scan across all aliases (case-insensitive and whitespace-tolerant)
+    env_items = {k.strip().upper(): (k, v) for k, v in os.environ.items()}
+    for orig_k in os.environ.keys():
+        uk = orig_k.strip().upper()
+        if "RAZOR" in uk or "RZP" in uk:
+            matching_env_names.append(orig_k)
+
     for alias in RAZORPAY_KEY_ID_VAR_NAMES:
         if alias in env_items:
-            val = clean_credential(env_items[alias])
+            orig_name, raw_val = env_items[alias]
+            val = clean_credential(raw_val)
             if is_valid_key_id(val):
                 candidate_key_id = val
+                detected_key_var = orig_name
                 break
 
     for alias in RAZORPAY_SECRET_VAR_NAMES:
         if alias in env_items:
-            val = clean_credential(env_items[alias])
+            orig_name, raw_val = env_items[alias]
+            val = clean_credential(raw_val)
             if is_valid_key_secret(val):
                 candidate_key_secret = val
+                detected_secret_var = orig_name
                 break
 
-    # 2. current_app.config (for test fixtures / app config)
+    # 2. Dynamic scan of any os.environ variable containing RAZOR/RZP and SEC
+    if not candidate_key_secret:
+        for orig_k, orig_v in os.environ.items():
+            uk = orig_k.strip().upper().replace("-", "_")
+            if ("RAZOR" in uk or "RZP" in uk) and ("SEC" in uk or "PASS" in uk):
+                val = clean_credential(orig_v)
+                if is_valid_key_secret(val):
+                    candidate_key_secret = val
+                    detected_secret_var = orig_k
+                    break
+
+    if not candidate_key_id:
+        for orig_k, orig_v in os.environ.items():
+            uk = orig_k.strip().upper().replace("-", "_")
+            if ("RAZOR" in uk or "RZP" in uk) and ("KEY" in uk or "ID" in uk) and ("SEC" not in uk):
+                val = clean_credential(orig_v)
+                if is_valid_key_id(val):
+                    candidate_key_id = val
+                    detected_key_var = orig_k
+                    break
+
+    # 3. current_app.config (for test fixtures / app config)
     if not candidate_key_id or not candidate_key_secret:
         try:
             from flask import has_app_context, current_app
@@ -341,17 +394,19 @@ def get_razorpay_config(session=None) -> dict:
                         val = clean_credential(current_app.config.get(alias, ""))
                         if is_valid_key_id(val):
                             candidate_key_id = val
+                            detected_key_var = f"app.config[{alias}]"
                             break
                 for alias in RAZORPAY_SECRET_VAR_NAMES:
                     if not candidate_key_secret and alias in current_app.config:
                         val = clean_credential(current_app.config.get(alias, ""))
                         if is_valid_key_secret(val):
                             candidate_key_secret = val
+                            detected_secret_var = f"app.config[{alias}]"
                             break
         except Exception:
             pass
 
-    # 3. Config class attributes
+    # 4. Config class attributes
     if not candidate_key_id or not candidate_key_secret:
         try:
             from config import Config
@@ -360,17 +415,19 @@ def get_razorpay_config(session=None) -> dict:
                     val = clean_credential(getattr(Config, alias, ""))
                     if is_valid_key_id(val):
                         candidate_key_id = val
+                        detected_key_var = f"Config.{alias}"
                         break
             for alias in RAZORPAY_SECRET_VAR_NAMES:
                 if not candidate_key_secret and hasattr(Config, alias):
                     val = clean_credential(getattr(Config, alias, ""))
                     if is_valid_key_secret(val):
                         candidate_key_secret = val
+                        detected_secret_var = f"Config.{alias}"
                         break
         except Exception:
             pass
 
-    # 4. Database fallback (SiteSetting)
+    # 5. Database fallback (SiteSetting)
     if (not candidate_key_id or not candidate_key_secret) and session:
         try:
             settings = SiteSetting.get_settings(session)
@@ -379,8 +436,10 @@ def get_razorpay_config(session=None) -> dict:
                 db_sec = clean_credential(getattr(settings, "razorpay_key_secret", ""))
                 if not candidate_key_id and is_valid_key_id(db_id):
                     candidate_key_id = db_id
+                    detected_key_var = "SiteSetting.razorpay_key_id"
                 if not candidate_key_secret and is_valid_key_secret(db_sec):
                     candidate_key_secret = db_sec
+                    detected_secret_var = "SiteSetting.razorpay_key_secret"
         except Exception:
             pass
 
@@ -418,6 +477,9 @@ def get_razorpay_config(session=None) -> dict:
         "key_secret_present": key_secret_present,
         "key_id_prefix": prefix,
         "mode": mode,
+        "detected_key_var": detected_key_var,
+        "detected_secret_var": detected_secret_var,
+        "env_keys_detected": matching_env_names,
         "rejection_reason": rejection_reason
     }
 
@@ -469,8 +531,8 @@ def get_pricing_config(session=None) -> tuple[float, str, str]:
     raw_env_curr = clean_credential(os.environ.get("CURRENCY", ""))
     raw_env_price = clean_credential(os.environ.get("ENTRY_FEE_INR", "") if (raw_env_curr.upper() == "INR") else "") or clean_credential(os.environ.get("LISTING_PRICE", "")) or clean_credential(os.environ.get("ENTRY_FEE_INR", ""))
 
-    # Check if DB settings exist and whether they are the legacy default (USD 2.0)
-    is_legacy_default = (db_curr == "USD" and db_price == 2.0)
+    # In production, indobid.lol defaults to INR unless explicitly overridden by CURRENCY in env
+    is_legacy_default = (str(db_curr).upper() == "USD") if (db_curr and raw_env_curr.upper() != "USD") else False
 
     if raw_env_curr:
         currency = raw_env_curr.upper()
@@ -1018,17 +1080,25 @@ def health_payment():
         "key_id_present": true/false,
         "key_id_prefix": "rzp_live_",
         "key_secret_present": true/false,
-        "currency": "INR"
+        "currency": "INR",
+        "price": 49.0
       }
     """
     session = db_session()
     cfg = get_razorpay_config(session)
-    _, currency, _ = get_pricing_config(session)
+    price, currency, _ = get_pricing_config(session)
     return jsonify({
         "payment_provider": "razorpay",
         "configured": cfg["configured"],
         "key_id_present": cfg["key_id_present"],
         "key_id_prefix": cfg["key_id_prefix"],
         "key_secret_present": cfg["key_secret_present"],
-        "currency": currency
+        "currency": currency,
+        "price": price,
+        "diagnostics": {
+            "key_var": cfg.get("detected_key_var"),
+            "secret_var": cfg.get("detected_secret_var"),
+            "env_names": cfg.get("env_keys_detected", []),
+            "rejection_reason": cfg.get("rejection_reason")
+        }
     }), 200
