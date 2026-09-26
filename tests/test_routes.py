@@ -1577,31 +1577,36 @@ def test_website_metadata_and_open_graph(client):
     html = res.get_data(as_text=True)
 
     # Title & Meta Description
-    assert "<title>IndoBid — List Your Product. Trust Your Luck. Get On Top.</title>" in html
-    assert '<meta name="description" content="List your product for $2 and take your chance. Every hour, 3 listings are randomly picked and featured at the top. Your product could be next.">' in html
+    assert "<title>IndoBid — List Your Product. Take Your Chance. 🍀</title>" in html
+    assert """<meta name="description" content="List your product for $2. Every hour, 3 listings are randomly picked and featured at the top. Didn't get picked? Try again next round.">""" in html
 
     # Canonical URL
-    assert '<link rel="canonical" href="https://indobid.lol">' in html
+    assert '<link rel="canonical" href="https://indobid.lol/">' in html
 
     # Open Graph Tags
     assert '<meta property="og:type" content="website">' in html
-    assert '<meta property="og:url" content="https://indobid.lol">' in html
+    assert '<meta property="og:url" content="https://indobid.lol/">' in html
     assert '<meta property="og:site_name" content="IndoBid">' in html
-    assert '<meta property="og:title" content="IndoBid — Your Product Could Be Next.">' in html
-    assert '<meta property="og:description" content="List for $2. Every hour, 3 random listings get the top spot. No bidding. Just one shot and a little luck.">' in html
+    assert '<meta property="og:title" content="$2. One Hour. 3 Chances to Get On Top. 🍀">' in html
+    assert '<meta property="og:description" content="List your product, take your chance, and let luck decide. 3 random listings get the top spot every hour.">' in html
     assert '<meta property="og:image" content="https://indobid.lol/static/img/og-preview.png">' in html
 
     # Twitter Card Tags
     assert '<meta name="twitter:card" content="summary_large_image">' in html
-    assert '<meta name="twitter:url" content="https://indobid.lol">' in html
-    assert '<meta name="twitter:title" content="IndoBid — Your Product Could Be Next.">' in html
-    assert '<meta name="twitter:description" content="List for $2. 3 random listings get the top spot every hour. Your product could be next.">' in html
+    assert '<meta name="twitter:url" content="https://indobid.lol/">' in html
+    assert '<meta name="twitter:title" content="$2. One Hour. 3 Chances to Get On Top. 🍀">' in html
+    assert '<meta name="twitter:description" content="List your product, take your chance, and let luck decide. 3 random listings get the top spot every hour.">' in html
     assert '<meta name="twitter:image" content="https://indobid.lol/static/img/og-preview.png">' in html
 
     # Favicon
     assert '/static/img/favicon.svg' in html
 
-    # Legacy strings must NEVER appear anywhere in the output
+    # OG Image endpoint verification
+    res_img = client.get("/static/img/og-preview.png")
+    assert res_img.status_code == 200
+    assert len(res_img.data) > 1000
+
+    # Purity: Legacy strings must NEVER appear anywhere in the output
     legacy_strings = [
         "Put Value Behind Your Opinion",
         "Share opinions",
