@@ -20,6 +20,7 @@
   const timerCard = document.getElementById('timer-card');
   const timerStageLabel = document.getElementById('timer-stage-label');
   const timerUrgencyBadge = document.getElementById('timer-urgency-badge');
+  const timerCopyText = document.getElementById('timer-copy-text');
   const timerMinutesEl = document.getElementById('timer-minutes');
   const timerSecondsEl = document.getElementById('timer-seconds');
   const activePoolCount = document.getElementById('active-pool-count');
@@ -74,12 +75,15 @@
       timerCard.classList.add('timer-card-final');
       timerCard.classList.remove('timer-card-near');
       if (timerStageLabel) {
-        timerStageLabel.textContent = 'DRAW CLOSES IN';
+        timerStageLabel.textContent = 'FINAL COUNTDOWN';
       }
       if (timerUrgencyBadge) {
         timerUrgencyBadge.textContent = '⚡ FINAL COUNTDOWN';
         timerUrgencyBadge.className = 'inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold uppercase border border-purple-300 shadow-sm animate-pulse';
         timerUrgencyBadge.classList.remove('hidden');
+      }
+      if (timerCopyText) {
+        timerCopyText.textContent = '60 seconds left. Three winners are about to be picked.';
       }
       if (progressBar) {
         progressBar.classList.add('glow-progress');
@@ -92,9 +96,12 @@
         timerStageLabel.textContent = 'THE DRAW IS GETTING CLOSE';
       }
       if (timerUrgencyBadge) {
-        timerUrgencyBadge.textContent = '10 MINUTES LEFT';
+        timerUrgencyBadge.textContent = '⚡ DRAW GETTING CLOSE';
         timerUrgencyBadge.className = 'inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-extrabold uppercase border border-purple-200 shadow-sm';
         timerUrgencyBadge.classList.remove('hidden');
+      }
+      if (timerCopyText) {
+        timerCopyText.textContent = 'Only 10 minutes left. Your link could still be picked.';
       }
       if (progressBar) {
         progressBar.classList.add('glow-progress');
@@ -103,10 +110,13 @@
       // Normal state (> 10 minutes)
       timerCard.classList.remove('timer-card-near', 'timer-card-final');
       if (timerStageLabel) {
-        timerStageLabel.textContent = 'DRAW IN';
+        timerStageLabel.textContent = 'DRAW CLOSES IN';
       }
       if (timerUrgencyBadge) {
         timerUrgencyBadge.classList.add('hidden');
+      }
+      if (timerCopyText) {
+        timerCopyText.textContent = '3 winners will be picked when the hour ends.';
       }
       if (progressBar) {
         progressBar.classList.remove('glow-progress');
@@ -249,10 +259,10 @@
     if (!listings || listings.length === 0) {
       currentEntriesContainer.innerHTML = `
         <div class="col-span-full saas-card p-6 text-center text-slate-400">
-          <p class="text-xs font-bold text-slate-700">No one has entered this round yet.</p>
-          <p class="text-[11px] text-slate-400 mt-1">Be the first to put your link in the draw.</p>
+          <p class="text-xs font-bold text-slate-700">No entries yet.</p>
+          <p class="text-[11px] text-slate-400 mt-1">Be the first to put your link in this hour's draw.</p>
           <button type="button" onclick="openEnterModal()" class="mt-3.5 btn-primary px-4 py-1.5 rounded-xl text-xs font-bold inline-flex items-center space-x-1.5 cursor-pointer">
-            <span>Enter Round</span>
+            <span>Enter for $2 →</span>
           </button>
         </div>
       `;

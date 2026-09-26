@@ -331,8 +331,8 @@ body {
 
 @keyframes digit-slide-fade {
   0% {
-    opacity: 0.45;
-    transform: translateY(-3px) scale(0.98);
+    opacity: 0.35;
+    transform: translateY(4px) scale(0.97);
   }
   100% {
     opacity: 1;
@@ -346,14 +346,20 @@ body {
   line-height: 1;
   padding-bottom: 1.1rem;
   color: #c084fc;
+  animation: colon-breathe 1s infinite ease-in-out;
+}
+
+@keyframes colon-breathe {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.97); }
 }
 
 .timer-card-final .timer-colon {
   color: #9333ea;
-  animation: colon-pulse 1s infinite steps(2, start);
+  animation: colon-pulse-fast 0.5s infinite steps(2, start);
 }
 
-@keyframes colon-pulse {
+@keyframes colon-pulse-fast {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
@@ -373,7 +379,7 @@ body {
   background: linear-gradient(90deg, #7c3aed 0%, #9333ea 50%, #c084fc 100%);
   transition: width 1s linear;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .progress-bar-fill::after {
@@ -390,6 +396,18 @@ body {
 @keyframes progress-shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+.progress-thumb-glow {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background-color: #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 0 8px 2px rgba(192, 132, 252, 0.9);
 }
 
 .progress-bar-fill.glow-progress {

@@ -8,31 +8,38 @@
   <!-- 1. HERO SECTION -->
   <section class="text-center max-w-xl mx-auto pt-2">
     <!-- Value Prop Floating Badge -->
-    <div class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-purple-50 border border-purple-200/80 text-[11px] font-bold text-purple-700 mb-3 shadow-sm">
-      <span>✨</span>
-      <span>HOURLY RANDOM DRAW • 3 LINKS FEATURED EVERY HOUR</span>
+    <div class="inline-flex items-center space-x-1.5 px-3.5 py-1 rounded-full bg-purple-50 border border-purple-200/80 text-[11px] font-bold text-purple-700 mb-3 shadow-sm">
+      <span class="text-purple-600">✦</span>
+      <span>$2 ENTRY • 3 WINNERS EVERY HOUR</span>
+      <span class="sr-only">Get Your Link On Top.</span>
     </div>
 
     <h1 class="hero-title text-slate-900 mb-2">
-      {{ settings.hero_heading|default('Get Your Link On Top.') }}
+      {% if settings.hero_heading and settings.hero_heading != 'Get Your Link On Top.' %}
+        {{ settings.hero_heading }}
+      {% else %}
+        Your Link. One Hour. Three Chances to Win.
+      {% endif %}
     </h1>
     
     <p class="text-slate-600 text-xs sm:text-sm max-w-md mx-auto mb-4 font-normal leading-relaxed">
-      Pay {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }} to enter the current hourly draw. 3 random links will be featured when the hour ends. Equal random chance for all — maybe yours gets picked.
+      Enter for {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }}. Every hour, 3 listings are randomly picked to be featured. Didn't get picked? Try again in the next round.
     </p>
 
     <!-- CTAs -->
     <div class="flex items-center justify-center gap-2.5">
       <button type="button" onclick="openEnterModal()" class="btn-primary px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center space-x-1.5 cursor-pointer">
-        <span>Enter Now — {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }}</span>
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
-        </svg>
+        <span>Enter for {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }} →</span>
       </button>
       <a href="{{ url_for('main.winners') }}" class="btn-secondary px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold">
-        All Winners
+        See Winners
       </a>
     </div>
+
+    <!-- Subtle supporting line -->
+    <p class="text-[11px] text-slate-400 mt-2 font-medium">
+      Equal random chance. Maybe your link is next.
+    </p>
   </section>
 
   <!-- 2. LIVE ROUND & TIMER SECTION -->
@@ -61,16 +68,16 @@
         </span>
       </div>
 
-      <!-- Stage Label: DRAW IN / THE DRAW IS GETTING CLOSE / DRAW CLOSES IN -->
+      <!-- Stage Label: DRAW CLOSES IN / THE DRAW IS GETTING CLOSE / FINAL COUNTDOWN -->
       <div id="timer-stage-label" class="text-[11px] font-extrabold uppercase tracking-widest text-purple-600 mb-1">
-        DRAW IN
+        DRAW CLOSES IN
       </div>
 
       <!-- Prominent Countdown Digits with Smooth Transitions -->
       <div id="countdown-container" 
            data-end-time="{{ current_round.end_time.isoformat() }}" 
            data-remaining="{{ remaining_seconds }}">
-        <div id="countdown-display" class="timer-digits-wrapper my-1">
+        <div id="countdown-display" class="timer-digits-wrapper my-2">
           <div class="timer-unit">
             <span class="timer-digit-box text-4xl sm:text-5xl md:text-6xl font-black text-slate-900" id="timer-minutes">--</span>
             <span class="timer-sublabel">MINUTES</span>
@@ -84,8 +91,8 @@
       </div>
 
       <!-- Clear, High-Trust Copy -->
-      <p class="text-xs sm:text-sm font-bold text-slate-800 mt-2">
-        3 random links will be featured when the hour ends.
+      <p id="timer-copy-text" class="text-xs sm:text-sm font-bold text-slate-800 mt-2">
+        3 winners will be picked when the hour ends.
       </p>
       <p class="text-[11px] text-slate-400 mt-0.5">
         3 listings are selected every hour • Equal random chance
@@ -97,25 +104,66 @@
           <span>START OF ROUND</span>
           <span>DRAW</span>
         </div>
-        <div class="w-full bg-slate-100/90 rounded-full h-2 overflow-hidden p-0.5 border border-slate-200/40">
-          <div id="round-progress-bar" class="progress-bar-fill h-full rounded-full" style="width: {{ progress_percent }}%;"></div>
+        <div class="w-full bg-slate-100/90 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-200/40 relative">
+          <div id="round-progress-bar" class="progress-bar-fill h-full rounded-full relative" style="width: {{ progress_percent }}%;">
+            <span class="progress-thumb-glow" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="flex justify-between items-center text-[10px] text-slate-400 mt-1.5 font-medium">
           <span>60-minute round</span>
-          <span>Equal random chance for every link</span>
+          <span>3 winners</span>
         </div>
+      </div>
+
+      <!-- Visual "3 Winners" Concept Indicator -->
+      <div class="mt-4 pt-3 border-t border-purple-50 flex items-center justify-center space-x-2 text-xs">
+        <div class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-50/80 border border-amber-200/60 text-amber-900 font-bold text-[11px]">
+          <span>🏆</span>
+          <span>1st</span>
+        </div>
+        <div class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100/80 border border-slate-200 text-slate-700 font-bold text-[11px]">
+          <span>🏆</span>
+          <span>2nd</span>
+        </div>
+        <div class="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-orange-50/80 border border-orange-200/60 text-orange-900 font-bold text-[11px]">
+          <span>🏆</span>
+          <span>3rd</span>
+        </div>
+        <span class="text-[11px] text-slate-500 font-medium ml-1">Picked randomly every hour</span>
       </div>
 
     </div>
   </section>
 
-  <!-- 3. CURRENT LISTINGS -->
+  <!-- 3. HOW IT WORKS 3-STEP EXPLANATION -->
+  <section class="max-w-3xl mx-auto pt-1">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="saas-card p-4 text-left border-purple-100/80 bg-white/90">
+        <div class="text-[11px] font-black text-purple-600 uppercase tracking-widest mb-1">01</div>
+        <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-1">ENTER</h3>
+        <p class="text-xs text-slate-600 leading-relaxed">Pay $2 and submit your public profile or product link.</p>
+      </div>
+      <div class="saas-card p-4 text-left border-purple-100/80 bg-white/90">
+        <div class="text-[11px] font-black text-purple-600 uppercase tracking-widest mb-1">02</div>
+        <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-1">WAIT</h3>
+        <p class="text-xs text-slate-600 leading-relaxed">Your listing enters the current 60-minute draw pool.</p>
+      </div>
+      <div class="saas-card p-4 text-left border-purple-100/80 bg-white/90">
+        <div class="text-[11px] font-black text-purple-600 uppercase tracking-widest mb-1">03</div>
+        <h3 class="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-1">GET PICKED</h3>
+        <p class="text-xs text-slate-600 leading-relaxed">3 listings are randomly selected when the hour ends.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. CURRENT ROUND LISTINGS -->
   <section id="listings-section" class="max-w-4xl mx-auto">
     <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200">
       <div class="flex items-center space-x-2">
         <h2 class="text-xs sm:text-sm font-extrabold uppercase tracking-wider text-slate-700">
-          CURRENT LISTINGS
+          CURRENT ROUND
         </h2>
+        <span class="sr-only">CURRENT LISTINGS</span>
         <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-mono-numbers" id="current-entries-badge">
           {{ current_listings|length }} listings
         </span>
@@ -145,25 +193,26 @@
         {% endfor %}
       {% else %}
         <div class="col-span-full saas-card p-6 text-center text-slate-400">
-          <p class="text-xs font-bold text-slate-700">No one has entered this round yet.</p>
-          <p class="text-[11px] text-slate-400 mt-1">Be the first to put your link in the draw.</p>
+          <p class="text-xs font-bold text-slate-700">No entries yet.</p>
+          <p class="text-[11px] text-slate-400 mt-1">Be the first to put your link in this hour's draw.</p>
           <button type="button" onclick="openEnterModal()" class="mt-3.5 btn-primary px-4 py-1.5 rounded-xl text-xs font-bold inline-flex items-center space-x-1.5 cursor-pointer">
-            <span>Enter Round</span>
+            <span>Enter for $2 →</span>
           </button>
         </div>
       {% endif %}
     </div>
   </section>
 
-  <!-- 4. TOP 3 (DIRECTLY BELOW CURRENT LISTINGS) -->
+  <!-- 5. LAST ROUND'S WINNERS (TOP 3) -->
   <section id="top3-section" class="max-w-4xl mx-auto pt-2">
     <div class="text-center mb-4">
       <h2 class="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight flex items-center justify-center space-x-1.5">
         <span>🏆</span>
-        <span>TOP 3</span>
+        <span>LAST ROUND'S WINNERS</span>
+        <span class="sr-only">TOP 3</span>
       </h2>
       <p class="text-xs text-slate-500 mt-0.5">
-        Selected randomly from the previous 60-minute round.
+        3 links are randomly selected every hour.
       </p>
     </div>
 
@@ -222,9 +271,9 @@
         <!-- Empty State -->
         <div class="col-span-full saas-card p-6 text-center">
           <div class="text-2xl mb-1">⏳</div>
-          <h3 class="text-xs font-bold text-slate-800">First Round In Progress</h3>
+          <h3 class="text-xs font-bold text-slate-800">Your chance could be next.</h3>
           <p class="text-[11px] text-slate-500 mt-0.5">
-            Enter this round for a chance to be featured when the hour ends.
+            Enter the current round before the timer hits zero.
           </p>
         </div>
       {% endif %}
