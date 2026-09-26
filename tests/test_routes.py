@@ -1273,6 +1273,33 @@ def test_fake_order_and_payment_id_rejected(client):
     assert res.status_code == 400
     assert "not found" in res.get_json()["error"].lower()
 
+def test_normalize_database_url_postgresql_psycopg2_driver():
+    """Verify that postgres:// and postgresql:// are normalized to postgresql+psycopg2:// driver."""
+    from config import normalize_database_url
+    from sqlalchemy.engine.url import make_url
+
+    # postgres:// to postgresql+psycopg2://
+    u1 = normalize_database_url("postgres://user:pass@dpg-abc-a:5432/indobid_db")
+    assert u1.startswith("postgresql+psycopg2://")
+    parsed1 = make_url(u1)
+    assert parsed1.get_driver_name() == "psycopg2"
+    assert parsed1.get_backend_name() == "postgresql"
+
+    # postgresql:// to postgresql+psycopg2://
+    u2 = normalize_database_url("postgresql://user:pass@dpg-abc-a:5432/indobid_db?sslmode=require")
+    assert u2.startswith("postgresql+psycopg2://")
+    parsed2 = make_url(u2)
+    assert parsed2.get_driver_name() == "psycopg2"
+    assert parsed2.get_backend_name() == "postgresql"
+
+    # already explicit postgresql+psycopg2://
+    u3 = normalize_database_url("postgresql+psycopg2://user:pass@dpg-abc-a:5432/indobid_db")
+    assert u3 == "postgresql+psycopg2://user:pass@dpg-abc-a:5432/indobid_db"
+
+    # sqlite is preserved untouched
+    u4 = normalize_database_url("sqlite:///instance/indobid.db")
+    assert u4 == "sqlite:///instance/indobid.db"
+
 
 
 

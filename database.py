@@ -1,7 +1,7 @@
 import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
-from config import Config
+from config import Config, normalize_database_url
 from models import Base, AdminUser, SiteSetting
 
 engine = create_engine(
@@ -17,8 +17,12 @@ def init_db(app=None):
     global engine
 
     if app and app.config.get("SQLALCHEMY_DATABASE_URI"):
-        db_uri = app.config["SQLALCHEMY_DATABASE_URI"]
-        if db_uri != str(engine.url):
+        db_uri = normalize_database_url(app.config["SQLALCHEMY_DATABASE_URI"])
+        try:
+            current_url = engine.url.render_as_string(hide_password=False)
+        except Exception:
+            current_url = str(engine.url)
+        if db_uri != current_url:
             engine_options = app.config.get("SQLALCHEMY_ENGINE_OPTIONS", {})
             if db_uri.startswith("sqlite"):
                 engine_options = {"connect_args": {"check_same_thread": False}}

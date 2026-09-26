@@ -7,6 +7,21 @@ BASE_DIR = Path(__file__).resolve().parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / ".env")
 
+def normalize_database_url(url: str) -> str:
+    """
+    Normalizes PostgreSQL database URLs for SQLAlchemy 2.x and Render.
+    Ensures 'postgres://' or 'postgresql://' is converted to 'postgresql+psycopg2://'
+    so SQLAlchemy explicitly loads the psycopg2 driver without dialect ambiguity.
+    """
+    if not url:
+        return url
+    url = url.strip()
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
 class Config:
     """Base application configuration."""
     SECRET_KEY = os.getenv("SECRET_KEY", "indobid-secret-key-change-in-production-2026")
@@ -40,9 +55,8 @@ class Config:
         else:
             db_url = f"sqlite:///{BASE_DIR / 'instance' / 'indobid.db'}"
 
-    # Normalize Render postgresql connection string
-    if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    # Normalize Render postgresql connection string to explicit postgresql+psycopg2 driver
+    db_url = normalize_database_url(db_url)
     
     SQLALCHEMY_DATABASE_URI = db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
