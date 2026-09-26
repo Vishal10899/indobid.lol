@@ -288,19 +288,26 @@
   </div>
 
   <!-- Compact Modern Footer -->
-  <footer class="border-t border-slate-200 bg-white py-6 mt-12 z-20">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-      <div class="flex items-center space-x-2">
-        <span class="font-extrabold text-slate-900">{{ settings.site_name|default('indobid.lol') }}</span>
-        <span>•</span>
-        <span>Hourly Paid Link Discovery</span>
+  <footer class="border-t border-slate-200/80 bg-white/95 backdrop-blur-sm py-6 mt-12 z-20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+      <div class="flex flex-col sm:flex-row items-center sm:space-x-2 text-center sm:text-left gap-1">
+        <div class="flex items-center space-x-1.5 font-bold text-slate-800">
+          <span>{{ settings.site_name|default('indobid.lol') }}</span>
+          <span class="text-slate-300">•</span>
+          <span class="font-medium text-slate-600">Hourly Paid Link Discovery</span>
+        </div>
+        <span class="hidden sm:inline text-slate-300">•</span>
+        <div class="text-[11px] text-slate-400 flex items-center space-x-1.5">
+          <span>Deadline: Every hour</span>
+          <span class="text-slate-300">•</span>
+          <span>Developed by Vishal Chaudhry <span class="text-rose-500 font-sans">♥</span></span>
+        </div>
       </div>
 
       <div class="flex items-center space-x-5 font-medium">
         <a href="{{ url_for('main.index') }}" class="hover:text-purple-600 transition-colors">Home</a>
         <a href="{{ url_for('main.about') }}" class="hover:text-purple-600 transition-colors">About</a>
         <a href="{{ url_for('main.winners') }}" class="hover:text-purple-600 transition-colors">All Winners</a>
-        <a href="{{ url_for('admin.login') }}" class="text-slate-400 hover:text-slate-600 transition-colors">Admin</a>
       </div>
     </div>
   </footer>

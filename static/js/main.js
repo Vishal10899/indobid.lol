@@ -17,6 +17,11 @@
   const countdownBox = document.getElementById('countdown-container');
   const progressBar = document.getElementById('round-progress-bar');
   const liveRoundTitle = document.getElementById('live-round-title');
+  const timerCard = document.getElementById('timer-card');
+  const timerStageLabel = document.getElementById('timer-stage-label');
+  const timerUrgencyBadge = document.getElementById('timer-urgency-badge');
+  const timerMinutesEl = document.getElementById('timer-minutes');
+  const timerSecondsEl = document.getElementById('timer-seconds');
   const activePoolCount = document.getElementById('active-pool-count');
   const currentEntriesBadge = document.getElementById('current-entries-badge');
   const currentEntriesContainer = document.getElementById('current-entries-container');
@@ -51,6 +56,64 @@
     }
   }
 
+  function triggerDigitTick(element) {
+    if (!element) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    element.classList.remove('digit-tick');
+    void element.offsetWidth; // Force reflow to re-trigger smooth transition
+    element.classList.add('digit-tick');
+  }
+
+  function updateUrgencyState(totalSeconds) {
+    if (!timerCard) return;
+
+    if (totalSeconds <= 60) {
+      // LAST 60 SECONDS: Special final countdown state
+      timerCard.classList.add('timer-card-final');
+      timerCard.classList.remove('timer-card-near');
+      if (timerStageLabel) {
+        timerStageLabel.textContent = 'DRAW CLOSES IN';
+      }
+      if (timerUrgencyBadge) {
+        timerUrgencyBadge.textContent = '⚡ FINAL COUNTDOWN';
+        timerUrgencyBadge.className = 'inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[10px] font-extrabold uppercase border border-purple-300 shadow-sm animate-pulse';
+        timerUrgencyBadge.classList.remove('hidden');
+      }
+      if (progressBar) {
+        progressBar.classList.add('glow-progress');
+      }
+    } else if (totalSeconds <= 600) {
+      // LAST 10 MINUTES (<= 600s): Excitement state in brand purple
+      timerCard.classList.add('timer-card-near');
+      timerCard.classList.remove('timer-card-final');
+      if (timerStageLabel) {
+        timerStageLabel.textContent = 'THE DRAW IS GETTING CLOSE';
+      }
+      if (timerUrgencyBadge) {
+        timerUrgencyBadge.textContent = '10 MINUTES LEFT';
+        timerUrgencyBadge.className = 'inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[10px] font-extrabold uppercase border border-purple-200 shadow-sm';
+        timerUrgencyBadge.classList.remove('hidden');
+      }
+      if (progressBar) {
+        progressBar.classList.add('glow-progress');
+      }
+    } else {
+      // Normal state (> 10 minutes)
+      timerCard.classList.remove('timer-card-near', 'timer-card-final');
+      if (timerStageLabel) {
+        timerStageLabel.textContent = 'DRAW IN';
+      }
+      if (timerUrgencyBadge) {
+        timerUrgencyBadge.classList.add('hidden');
+      }
+      if (progressBar) {
+        progressBar.classList.remove('glow-progress');
+      }
+    }
+  }
+
   function startCountdownTimer() {
     if (countdownInterval) clearInterval(countdownInterval);
 
@@ -61,7 +124,11 @@
       const diff = targetEndTime - now;
 
       if (diff <= 0) {
-        countdownEl.textContent = '00 : 00';
+        if (timerMinutesEl) timerMinutesEl.textContent = '00';
+        if (timerSecondsEl) timerSecondsEl.textContent = '00';
+        if (countdownEl && (!timerMinutesEl || !timerSecondsEl)) {
+          countdownEl.textContent = '00 : 00';
+        }
         if (successCountdown) successCountdown.textContent = '00:00';
         if (progressBar) progressBar.style.width = '100%';
         if (!isResolvingRound) {
@@ -75,10 +142,35 @@
       const seconds = totalSeconds % 60;
 
       const pad = (n) => String(n).padStart(2, '0');
-      countdownEl.textContent = `${pad(minutes)} : ${pad(seconds)}`;
-      if (successCountdown) {
-        successCountdown.textContent = `${pad(minutes)}:${pad(seconds)}`;
+      const minStr = pad(minutes);
+      const secStr = pad(seconds);
+
+      // Smoothly update minute and second digits with tick transition
+      if (timerMinutesEl) {
+        if (timerMinutesEl.textContent !== minStr) {
+          timerMinutesEl.textContent = minStr;
+          triggerDigitTick(timerMinutesEl);
+        }
       }
+
+      if (timerSecondsEl) {
+        if (timerSecondsEl.textContent !== secStr) {
+          timerSecondsEl.textContent = secStr;
+          triggerDigitTick(timerSecondsEl);
+        }
+      }
+
+      // Backward compatibility fallback
+      if (countdownEl && (!timerMinutesEl || !timerSecondsEl)) {
+        countdownEl.textContent = `${minStr} : ${secStr}`;
+      }
+
+      if (successCountdown) {
+        successCountdown.textContent = `${minStr}:${secStr}`;
+      }
+
+      // Update visual urgency states based on remaining time
+      updateUrgencyState(totalSeconds);
 
       // Update progress bar for 60-minute (3600s) round
       if (progressBar) {
@@ -94,8 +186,11 @@
 
   async function handleRoundEnded() {
     isResolvingRound = true;
+    if (timerStageLabel) {
+      timerStageLabel.textContent = 'DRAWING WINNERS...';
+    }
     if (countdownEl) {
-      countdownEl.innerHTML = '<span class="text-purple-600 animate-pulse text-xl sm:text-2xl font-extrabold">DRAWING WINNERS...</span>';
+      countdownEl.innerHTML = '<span class="text-purple-600 animate-pulse text-xl sm:text-2xl font-black uppercase">DRAWING WINNERS...</span>';
     }
 
     // Wait 2.5 seconds, then sync with backend
@@ -121,7 +216,7 @@
 
       // Update Round Title
       if (liveRoundTitle && data.round_id) {
-        liveRoundTitle.textContent = `Round #${data.round_id}`;
+        liveRoundTitle.textContent = `LIVE ROUND #${data.round_id}`;
       }
 
       // Update Active Counts
@@ -154,9 +249,9 @@
     if (!listings || listings.length === 0) {
       currentEntriesContainer.innerHTML = `
         <div class="col-span-full saas-card p-6 text-center text-slate-400">
-          <p class="text-xs font-medium text-slate-600">No listings yet in Round #${roundId || ''}</p>
-          <p class="text-[11px] text-slate-400 mt-0.5">Be the first to enter this round!</p>
-          <button type="button" onclick="openEnterModal()" class="mt-3 btn-primary px-4 py-1.5 rounded-xl text-xs font-bold inline-flex items-center space-x-1">
+          <p class="text-xs font-bold text-slate-700">No one has entered this round yet.</p>
+          <p class="text-[11px] text-slate-400 mt-1">Be the first to put your link in the draw.</p>
+          <button type="button" onclick="openEnterModal()" class="mt-3.5 btn-primary px-4 py-1.5 rounded-xl text-xs font-bold inline-flex items-center space-x-1.5 cursor-pointer">
             <span>Enter Round</span>
           </button>
         </div>

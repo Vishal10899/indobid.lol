@@ -176,10 +176,224 @@ body {
   animation: live-pulse 2s infinite;
 }
 
-/* Progress bar */
+/* Live Pulsing Dot - Purple for Round Status */
+@keyframes live-pulse-purple {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 5px rgba(124, 58, 237, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
+}
+
+.live-dot-purple {
+  width: 7px;
+  height: 7px;
+  background-color: var(--primary);
+  border-radius: 9999px;
+  animation: live-pulse-purple 2s infinite;
+}
+
+/* ==============================================================
+   TIMER CARD & AMBIENT MICRO-ANIMATIONS
+   ============================================================== */
+.timer-card-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Ambient soft purple glow behind the timer card */
+.timer-card-ambient-glow {
+  position: absolute;
+  inset: -14px;
+  background: radial-gradient(circle at 50% 50%, rgba(124, 58, 237, 0.12) 0%, rgba(192, 132, 252, 0.05) 55%, transparent 75%);
+  filter: blur(20px);
+  pointer-events: none;
+  z-index: 0;
+  transition: opacity 0.5s ease, filter 0.5s ease;
+}
+
+/* 2-3 Decorative subtle floating sparkles */
+.decorative-sparkle {
+  position: absolute;
+  color: #c084fc;
+  font-size: 0.85rem;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.6;
+  animation: sparkle-float 4s ease-in-out infinite alternate;
+}
+
+.sparkle-top-right {
+  top: -8px;
+  right: 12px;
+  animation-delay: 0s;
+}
+
+.sparkle-bottom-left {
+  bottom: -6px;
+  left: 10px;
+  animation-delay: 2s;
+}
+
+@keyframes sparkle-float {
+  0% { transform: translateY(0) scale(0.9); opacity: 0.35; }
+  100% { transform: translateY(-5px) scale(1.15); opacity: 0.8; }
+}
+
+/* Main Timer Card */
+.timer-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  box-shadow: 0 4px 18px -2px rgba(124, 58, 237, 0.07), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.timer-card:hover {
+  border-color: #ddd6fe;
+  box-shadow: 0 8px 24px -2px rgba(124, 58, 237, 0.12);
+}
+
+/* LAST 10 MINUTES STATE (Remaining <= 600s) */
+.timer-card.timer-card-near {
+  border-color: #c084fc;
+  box-shadow: 0 0 24px -2px rgba(124, 58, 237, 0.22), 0 4px 12px -1px rgba(0, 0, 0, 0.04);
+}
+
+.timer-card.timer-card-near .timer-card-ambient-glow {
+  opacity: 1;
+  filter: blur(24px);
+}
+
+/* LAST 60 SECONDS FINAL COUNTDOWN STATE (Remaining <= 60s) */
+.timer-card.timer-card-final {
+  border-color: #a855f7;
+  box-shadow: 0 0 32px 0 rgba(168, 85, 247, 0.3), 0 4px 14px -1px rgba(0, 0, 0, 0.05);
+  animation: timer-gentle-pulse 1s infinite ease-in-out;
+}
+
+@keyframes timer-gentle-pulse {
+  0% {
+    box-shadow: 0 0 20px 0 rgba(168, 85, 247, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 34px 4px rgba(168, 85, 247, 0.42);
+  }
+  100% {
+    box-shadow: 0 0 20px 0 rgba(168, 85, 247, 0.25);
+  }
+}
+
+/* ==============================================================
+   TIMER DIGITS & SMOOTH TRANSITION
+   ============================================================== */
+.timer-digits-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  user-select: none;
+}
+
+@media (min-width: 640px) {
+  .timer-digits-wrapper {
+    gap: 0.75rem;
+  }
+}
+
+.timer-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.75rem;
+}
+
+@media (min-width: 640px) {
+  .timer-unit {
+    min-width: 5.25rem;
+  }
+}
+
+.timer-digit-box {
+  display: inline-block;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #0f172a;
+}
+
+/* Smooth Second/Minute Digit Tick (fade + subtle 3px vertical motion) */
+.timer-digit-box.digit-tick {
+  animation: digit-slide-fade 0.28s cubic-bezier(0.2, 0.8, 0.4, 1);
+}
+
+@keyframes digit-slide-fade {
+  0% {
+    opacity: 0.45;
+    transform: translateY(-3px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.timer-colon {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding-bottom: 1.1rem;
+  color: #c084fc;
+}
+
+.timer-card-final .timer-colon {
+  color: #9333ea;
+  animation: colon-pulse 1s infinite steps(2, start);
+}
+
+@keyframes colon-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.timer-sublabel {
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+/* ==============================================================
+   PROGRESS BAR
+   ============================================================== */
 .progress-bar-fill {
-  background: linear-gradient(90deg, var(--primary) 0%, #a855f7 100%);
+  background: linear-gradient(90deg, #7c3aed 0%, #9333ea 50%, #c084fc 100%);
   transition: width 1s linear;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: progress-shimmer 3s infinite linear;
+}
+
+@keyframes progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.progress-bar-fill.glow-progress {
+  box-shadow: 0 0 10px 0 rgba(168, 85, 247, 0.55);
 }
 
 /* Compact Listing Card */
@@ -223,4 +437,32 @@ body {
 .modal-overlay {
   background-color: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(4px);
+}
+
+/* ==============================================================
+   ACCESSIBILITY: PREFERS-REDUCED-MOTION
+   ============================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .timer-digit-box.digit-tick {
+    animation: none !important;
+  }
+  .progress-bar-fill::after {
+    display: none !important;
+  }
+  .timer-card.timer-card-final {
+    animation: none !important;
+  }
+  .decorative-sparkle {
+    display: none !important;
+  }
+  .timer-card-ambient-glow {
+    animation: none !important;
+  }
 }
