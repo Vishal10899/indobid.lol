@@ -10,16 +10,23 @@ load_dotenv(BASE_DIR / ".env")
 def normalize_database_url(url: str) -> str:
     """
     Normalizes PostgreSQL database URLs for SQLAlchemy 2.x and Render.
-    Ensures 'postgres://' or 'postgresql://' is converted to 'postgresql+psycopg2://'
-    so SQLAlchemy explicitly loads the psycopg2 driver without dialect ambiguity.
+    Ensures 'postgres://', 'postgresql://', 'postgresql+psycopg://', or 'postgresql+psycopg3://'
+    are converted to 'postgresql+psycopg2://' so SQLAlchemy explicitly loads the psycopg2 driver
+    (provided by psycopg2-binary) without dialect ambiguity or psycopg3 ModuleNotFoundError.
     """
     if not url:
         return url
     url = url.strip()
-    if url.startswith("postgres://"):
-        return url.replace("postgres://", "postgresql+psycopg2://", 1)
-    if url.startswith("postgresql://") and not url.startswith("postgresql+"):
-        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql+psycopg2://"):
+        return url
+    elif url.startswith("postgresql+psycopg://"):
+        return "postgresql+psycopg2://" + url[len("postgresql+psycopg://"):]
+    elif url.startswith("postgresql+psycopg3://"):
+        return "postgresql+psycopg2://" + url[len("postgresql+psycopg3://"):]
+    elif url.startswith("postgresql://"):
+        return "postgresql+psycopg2://" + url[len("postgresql://"):]
+    elif url.startswith("postgres://"):
+        return "postgresql+psycopg2://" + url[len("postgres://"):]
     return url
 
 class Config:
