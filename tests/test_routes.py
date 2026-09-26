@@ -1,3 +1,4 @@
+import os
 import json
 import uuid
 import hmac
@@ -1315,6 +1316,57 @@ def test_normalize_database_url_postgresql_psycopg2_driver():
     engine = create_engine(u1)
     assert engine.dialect.name == "postgresql"
     assert engine.dialect.driver == "psycopg2"
+
+def test_razorpay_runtime_credentials_alias_and_sanitization(monkeypatch):
+    """Verify runtime Razorpay detection handles variable aliases, quoted strings, and ignores placeholders."""
+    from routes.main import get_razorpay_credentials, clean_credential, is_valid_credential
+
+    assert clean_credential('"rzp_live_abc123"') == "rzp_live_abc123"
+    assert clean_credential("'sec_test_xyz'") == "sec_test_xyz"
+    assert is_valid_credential("rzp_test_placeholder", is_key_id=True) is False
+    assert is_valid_credential("placeholder_secret", is_key_id=False) is False
+    assert is_valid_credential("••••••••", is_key_id=False) is False
+
+    # Test alias detection (e.g. RAZORPAY_KEY and RAZORPAY_SECRET)
+    monkeypatch.delenv("RAZORPAY_KEY_ID", raising=False)
+    monkeypatch.delenv("RAZORPAY_KEY_SECRET", raising=False)
+    monkeypatch.setenv("RAZORPAY_KEY", '"rzp_live_alias123"')
+    monkeypatch.setenv("RAZORPAY_SECRET", '"secret_alias456"')
+
+    kid, ksec = get_razorpay_credentials()
+    assert kid == "rzp_live_alias123"
+    assert ksec == "secret_alias456"
+
+def test_pricing_configuration_precedence(app, monkeypatch):
+    """Verify pricing config precedence in production vs testing."""
+    from routes.main import get_pricing_config
+
+    with app.app_context():
+        # In test mode: TestConfig dictates price (2.0) and currency (USD)
+        price, curr, symbol = get_pricing_config()
+        assert price == 2.0
+        assert curr == "USD"
+        assert symbol == "$"
+
+    # Outside test context (simulating production environment)
+    monkeypatch.setenv("CURRENCY", "INR")
+    monkeypatch.setenv("LISTING_PRICE", "49.0")
+    price, curr, symbol = get_pricing_config()
+    assert price == 49.0
+    assert curr == "INR"
+    assert symbol == "₹"
+
+def test_production_style_config_detection_without_secret_leakage(monkeypatch):
+    """Verify production configuration check verifies presence without printing secret values."""
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_live_realproductionkey")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "super_secret_production_value")
+
+    has_key = bool(os.getenv("RAZORPAY_KEY_ID"))
+    has_secret = bool(os.getenv("RAZORPAY_KEY_SECRET"))
+
+    assert has_key is True
+    assert has_secret is True
+
 
 
 

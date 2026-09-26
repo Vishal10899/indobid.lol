@@ -84,9 +84,10 @@ class Config:
     ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@indobid.lol")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "IndoBidAdmin2026!")
 
-    # Listing price and currency configuration (defaults to $2 USD)
-    LISTING_PRICE = float(os.getenv("LISTING_PRICE", "2.0"))
-    CURRENCY = os.getenv("CURRENCY", "USD").upper()
+    # Listing price and currency configuration (defaults to INR 49 in production)
+    CURRENCY = os.getenv("CURRENCY", "INR").upper()
+    default_price = "49.0" if CURRENCY == "INR" else "2.0"
+    LISTING_PRICE = float(os.getenv("LISTING_PRICE", default_price))
     ENTRY_FEE_INR = float(os.getenv("ENTRY_FEE_INR", "49.0"))
     RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "").strip()
     RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "").strip()

@@ -26,9 +26,9 @@ services:
       - key: ROUND_DURATION_SECONDS
         value: "3600"
       - key: LISTING_PRICE
-        value: "2.0"
+        value: "49.0"
       - key: CURRENCY
-        value: "USD"
+        value: "INR"
       - key: ENTRY_FEE_INR
         value: "49.0"
       - key: RAZORPAY_KEY_ID

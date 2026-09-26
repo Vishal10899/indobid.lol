@@ -204,6 +204,10 @@ def index():
     elapsed_seconds = max(0, Config.ROUND_DURATION_SECONDS - remaining_seconds)
     progress_percent = min(100.0, max(0.0, (elapsed_seconds / float(Config.ROUND_DURATION_SECONDS)) * 100.0))
 
+    price, currency, symbol = get_pricing_config(session)
+    settings = SiteSetting.get_settings(session)
+    razorpay_key, _ = get_razorpay_credentials(session)
+
     return render_template(
         "index.html",
         current_round=current_round,
@@ -215,65 +219,214 @@ def index():
         progress_percent=round(progress_percent, 1),
         stats=stats,
         settings=settings,
-        entry_fee_inr=getattr(settings, "listing_price", 2.0),
-        razorpay_key_id=get_razorpay_credentials(session)[0],
+        entry_fee_inr=price,
+        razorpay_key_id=razorpay_key,
         allowed_platforms=ALLOWED_PLATFORMS
     )
 
+RAZORPAY_KEY_ID_VAR_NAMES = [
+    "RAZORPAY_KEY_ID",
+    "RAZORPAY_KEY",
+    "RAZORPAY_ID",
+    "RAZORPAY_API_KEY",
+    "RZP_KEY_ID",
+    "RZP_KEY"
+]
+
+RAZORPAY_SECRET_VAR_NAMES = [
+    "RAZORPAY_KEY_SECRET",
+    "RAZORPAY_SECRET",
+    "RAZORPAY_SECRET_KEY",
+    "RAZORPAY_API_SECRET",
+    "RZP_KEY_SECRET",
+    "RZP_SECRET"
+]
+
+def clean_credential(val) -> str:
+    """Strips whitespace, enclosing quotes, and newlines."""
+    if val is None:
+        return ""
+    v = str(val).strip()
+    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+        v = v[1:-1].strip()
+    return v
+
 def is_valid_credential(val: str, is_key_id: bool = False) -> bool:
     """Checks whether a credential string is real and not a placeholder."""
-    if not val:
-        return False
-    v = str(val).strip()
+    v = clean_credential(val)
     if not v:
         return False
     lower = v.lower()
     if "placeholder" in lower or lower in ("none", "null", "undefined", "••••••••", "xxxxxxxxxxxxxxxx"):
         return False
     if is_key_id:
-        if not (lower.startswith("rzp_test_") or lower.startswith("rzp_live_")):
-            return False
         if lower.startswith("rzp_test_xxxx") or lower.startswith("rzp_live_xxxx"):
+            return False
+        if not (lower.startswith("rzp_test_") or lower.startswith("rzp_live_") or len(v) >= 14):
+            return False
+    else:
+        if len(v) < 8:
             return False
     return True
 
-def get_razorpay_credentials(session) -> tuple[str, str]:
+def get_razorpay_credentials(session=None) -> tuple[str, str]:
     """
-    Authoritative resolution of Razorpay Key ID and Secret.
-    Required Precedence:
-      1. REAL environment variables (os.environ, current_app.config, Config)
-      2. Valid database settings (SiteSetting)
-      3. Otherwise unavailable (returns "", "")
-    Never allow database placeholders to override real environment credentials.
-    Rejects placeholder values like 'rzp_test_placeholder', 'placeholder_secret'.
+    Authoritative resolution of Razorpay Key ID and Secret at RUNTIME.
+    Priority:
+      1. Live os.environ / os.getenv across all common naming conventions
+      2. Flask current_app.config (especially for test fixtures)
+      3. Config class attributes
+      4. Database settings (SiteSetting)
+    Returns ("", "") if not configured. Never returns placeholders.
     """
-    # 1. Real environment variables check
-    app_key_id = ""
-    app_key_secret = ""
+    env_key_id = ""
+    env_key_secret = ""
+
+    # 1. Live os.environ across all naming conventions
+    for var in RAZORPAY_KEY_ID_VAR_NAMES:
+        val = clean_credential(os.getenv(var, ""))
+        if is_valid_credential(val, is_key_id=True):
+            env_key_id = val
+            break
+
+    for var in RAZORPAY_SECRET_VAR_NAMES:
+        val = clean_credential(os.getenv(var, ""))
+        if is_valid_credential(val, is_key_id=False):
+            env_key_secret = val
+            break
+
+    # 2. current_app.config (for tests)
+    if not env_key_id or not env_key_secret:
+        try:
+            from flask import has_app_context
+            if has_app_context():
+                for var in RAZORPAY_KEY_ID_VAR_NAMES:
+                    if not env_key_id:
+                        val = clean_credential(current_app.config.get(var, ""))
+                        if is_valid_credential(val, is_key_id=True):
+                            env_key_id = val
+                            break
+                for var in RAZORPAY_SECRET_VAR_NAMES:
+                    if not env_key_secret:
+                        val = clean_credential(current_app.config.get(var, ""))
+                        if is_valid_credential(val, is_key_id=False):
+                            env_key_secret = val
+                            break
+        except Exception:
+            pass
+
+    # 3. Config class attributes
+    if not env_key_id or not env_key_secret:
+        try:
+            from config import Config
+            for var in RAZORPAY_KEY_ID_VAR_NAMES:
+                if not env_key_id:
+                    val = clean_credential(getattr(Config, var, ""))
+                    if is_valid_credential(val, is_key_id=True):
+                        env_key_id = val
+                        break
+            for var in RAZORPAY_SECRET_VAR_NAMES:
+                if not env_key_secret:
+                    val = clean_credential(getattr(Config, var, ""))
+                    if is_valid_credential(val, is_key_id=False):
+                        env_key_secret = val
+                        break
+        except Exception:
+            pass
+
+    if env_key_id and env_key_secret:
+        return env_key_id, env_key_secret
+
+    # 4. Database fallback (SiteSetting)
+    if session:
+        try:
+            settings = SiteSetting.get_settings(session)
+            db_key_id = clean_credential(getattr(settings, "razorpay_key_id", ""))
+            db_key_secret = clean_credential(getattr(settings, "razorpay_key_secret", ""))
+            final_id = env_key_id or (db_key_id if is_valid_credential(db_key_id, is_key_id=True) else "")
+            final_sec = env_key_secret or (db_key_secret if is_valid_credential(db_key_secret, is_key_id=False) else "")
+            if final_id and final_sec:
+                return final_id, final_sec
+        except Exception:
+            pass
+
+    return "", ""
+
+def get_pricing_config(session=None) -> tuple[float, str, str]:
+    """
+    Returns (price, currency, symbol) dynamically at runtime.
+    In testing: respects current_app.config (TestConfig).
+    In production: respects explicit environment variables (CURRENCY, LISTING_PRICE, ENTRY_FEE_INR),
+    or SiteSetting if customized, defaulting to INR / 49.0.
+    """
+    is_testing = False
     try:
-        from flask import has_app_context
+        from flask import current_app, has_app_context
         if has_app_context():
-            app_key_id = str(current_app.config.get("RAZORPAY_KEY_ID") or "")
-            app_key_secret = str(current_app.config.get("RAZORPAY_KEY_SECRET") or "")
+            is_testing = bool(current_app.config.get("TESTING"))
     except Exception:
         pass
 
-    env_key_id = (app_key_id or os.getenv("RAZORPAY_KEY_ID", "") or getattr(Config, "RAZORPAY_KEY_ID", "")).strip()
-    env_key_secret = (app_key_secret or os.getenv("RAZORPAY_KEY_SECRET", "") or getattr(Config, "RAZORPAY_KEY_SECRET", "")).strip()
+    if is_testing:
+        curr = str(current_app.config.get("CURRENCY", "USD")).upper()
+        price = float(current_app.config.get("LISTING_PRICE", 2.0))
+        symbols = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "CAD": "C$", "AUD": "A$"}
+        return price, curr, symbols.get(curr, "$")
 
-    if is_valid_credential(env_key_id, is_key_id=True) and is_valid_credential(env_key_secret, is_key_id=False):
-        return env_key_id, env_key_secret
+    db_price = None
+    db_curr = None
+    settings = None
+    if session:
+        try:
+            settings = SiteSetting.get_settings(session)
+            if settings:
+                db_price = settings.listing_price
+                db_curr = settings.currency
+        except Exception:
+            pass
 
-    # 2. Valid database settings check (fallback only when env variables are not configured)
-    settings = SiteSetting.get_settings(session)
-    db_key_id = (getattr(settings, "razorpay_key_id", "") or "").strip()
-    db_key_secret = (getattr(settings, "razorpay_key_secret", "") or "").strip()
+    # Production / non-testing:
+    # 1. Explicit environment variables take highest precedence
+    raw_env_curr = clean_credential(os.environ.get("CURRENCY", ""))
+    raw_env_price = clean_credential(os.environ.get("LISTING_PRICE", "") or os.environ.get("ENTRY_FEE_INR", ""))
 
-    if is_valid_credential(db_key_id, is_key_id=True) and is_valid_credential(db_key_secret, is_key_id=False):
-        return db_key_id, db_key_secret
+    # Check if DB settings exist and whether they are the legacy default (USD 2.0)
+    is_legacy_default = (db_curr == "USD" and db_price == 2.0)
 
-    # 3. Otherwise unavailable
-    return "", ""
+    if raw_env_curr:
+        currency = raw_env_curr.upper()
+    elif db_curr and not is_legacy_default:
+        currency = db_curr.upper()
+    else:
+        currency = str(getattr(Config, "CURRENCY", "INR")).upper()
+
+    if raw_env_price:
+        try:
+            price = float(raw_env_price)
+        except (ValueError, TypeError):
+            price = None
+    elif db_price is not None and not is_legacy_default:
+        price = float(db_price)
+    else:
+        price = float(getattr(Config, "LISTING_PRICE", 49.0 if currency == "INR" else 2.0))
+
+    if price is None:
+        price = 49.0 if currency == "INR" else 2.0
+
+    symbols = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "CAD": "C$", "AUD": "A$"}
+    symbol = symbols.get(currency, currency + " ")
+
+    # Sync to SiteSetting if it was legacy default or explicitly overridden by env vars
+    if session and settings:
+        try:
+            if is_legacy_default or (raw_env_curr and settings.currency != currency) or (raw_env_price and settings.listing_price != price):
+                settings.currency = currency
+                settings.listing_price = price
+                session.commit()
+        except Exception:
+            session.rollback()
+
+    return price, currency, symbol
 
 @main_bp.route("/entry/create-order", methods=["POST"])
 @main_bp.route("/listing/create-order", methods=["POST"])
@@ -335,13 +488,8 @@ def create_order():
             "error": f"This link is already entered in Round #{current_round.id}!"
         }), 400
 
+    price, currency, symbol = get_pricing_config(session)
     settings = SiteSetting.get_settings(session)
-    if current_app.config.get("TESTING"):
-        price = float(current_app.config.get("LISTING_PRICE", settings.listing_price))
-        currency = str(current_app.config.get("CURRENCY", settings.currency)).upper()
-    else:
-        price = float(settings.listing_price)
-        currency = str(settings.currency).upper()
 
     key_id, key_secret = get_razorpay_credentials(session)
 
@@ -404,7 +552,7 @@ def create_order():
         "order_id": order_id,
         "amount": amount_subunits,
         "currency": currency,
-        "currency_symbol": settings.currency_symbol,
+        "currency_symbol": symbol,
         "key_id": key_id,
         "price": price,
         "fee_inr": price,  # backward compatibility alias
