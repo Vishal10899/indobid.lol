@@ -3,8 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ settings.site_name|default('indobid.lol') }} — Hourly Link Discovery{% endblock %}</title>
-  <meta name="description" content="Hourly paid profile and link discovery platform. 3 listings are randomly selected every hour. Equal chance for all.">
+  <title>{% block title %}IndoBid — List Your Product. Trust Your Luck. Get On Top.{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}List your product for $2 and take your chance. Every hour, 3 listings are randomly picked and featured at the top. Your product could be next.{% endblock %}">
+  <link rel="canonical" href="{% block canonical_url %}https://indobid.lol{{ request.path if request is defined and request and request.path != '/' else '' }}{% endblock %}">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://indobid.lol{{ request.path if request is defined and request and request.path != '/' else '' }}">
+  <meta property="og:site_name" content="IndoBid">
+  <meta property="og:title" content="{% block og_title %}IndoBid — Your Product Could Be Next.{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}List for $2. Every hour, 3 random listings get the top spot. No bidding. Just one shot and a little luck.{% endblock %}">
+  <meta property="og:image" content="https://indobid.lol/static/img/og-preview.png">
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://indobid.lol{{ request.path if request is defined and request and request.path != '/' else '' }}">
+  <meta name="twitter:title" content="{% block twitter_title %}IndoBid — Your Product Could Be Next.{% endblock %}">
+  <meta name="twitter:description" content="{% block twitter_description %}List for $2. 3 random listings get the top spot every hour. Your product could be next.{% endblock %}">
+  <meta name="twitter:image" content="https://indobid.lol/static/img/og-preview.png">
+
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
 
   <!-- Tailwind CSS CDN -->

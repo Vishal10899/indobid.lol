@@ -225,7 +225,7 @@ class SiteSetting(Base):
     background_color = Column(String(32), nullable=False, default="#f8fafc")
     button_color = Column(String(32), nullable=False, default="#7c3aed")
     hero_heading = Column(String(255), nullable=False, default="Get Your Link On Top.")
-    hero_description = Column(Text, nullable=False, default="A simple hourly paid link discovery platform. 3 listings are randomly selected every hour.")
+    hero_description = Column(Text, nullable=False, default="List your product for $2 and take your chance. Every hour, 3 listings are randomly picked and featured at the top. Your product could be next.")
     homepage_text = Column(Text, nullable=False, default="Every paid listing has an equal chance of being selected.")
     razorpay_key_id = Column(String(255), nullable=True, default="")
     razorpay_key_secret = Column(String(255), nullable=True, default="")
@@ -263,7 +263,7 @@ class SiteSetting(Base):
                 background_color="#f8fafc",
                 button_color="#7c3aed",
                 hero_heading="Get Your Link On Top.",
-                hero_description="A simple hourly paid link discovery platform. 3 listings are randomly selected every hour.",
+                hero_description="List your product for $2 and take your chance. Every hour, 3 listings are randomly picked and featured at the top. Your product could be next.",
                 homepage_text="Every paid listing has an equal chance of being selected.",
                 razorpay_key_id="",
                 razorpay_key_secret="",

@@ -1570,6 +1570,50 @@ def test_razorpay_auth_error_not_masked_as_unconfigured(client, monkeypatch):
     assert data["error"] != "Payment service is not configured."
 
 
+def test_website_metadata_and_open_graph(client):
+    """Verify HTML title, description, Open Graph, Twitter card, canonical URL, and favicon."""
+    res = client.get("/")
+    assert res.status_code == 200
+    html = res.get_data(as_text=True)
+
+    # Title & Meta Description
+    assert "<title>IndoBid — List Your Product. Trust Your Luck. Get On Top.</title>" in html
+    assert '<meta name="description" content="List your product for $2 and take your chance. Every hour, 3 listings are randomly picked and featured at the top. Your product could be next.">' in html
+
+    # Canonical URL
+    assert '<link rel="canonical" href="https://indobid.lol">' in html
+
+    # Open Graph Tags
+    assert '<meta property="og:type" content="website">' in html
+    assert '<meta property="og:url" content="https://indobid.lol">' in html
+    assert '<meta property="og:site_name" content="IndoBid">' in html
+    assert '<meta property="og:title" content="IndoBid — Your Product Could Be Next.">' in html
+    assert '<meta property="og:description" content="List for $2. Every hour, 3 random listings get the top spot. No bidding. Just one shot and a little luck.">' in html
+    assert '<meta property="og:image" content="https://indobid.lol/static/img/og-preview.png">' in html
+
+    # Twitter Card Tags
+    assert '<meta name="twitter:card" content="summary_large_image">' in html
+    assert '<meta name="twitter:url" content="https://indobid.lol">' in html
+    assert '<meta name="twitter:title" content="IndoBid — Your Product Could Be Next.">' in html
+    assert '<meta name="twitter:description" content="List for $2. 3 random listings get the top spot every hour. Your product could be next.">' in html
+    assert '<meta name="twitter:image" content="https://indobid.lol/static/img/og-preview.png">' in html
+
+    # Favicon
+    assert '/static/img/favicon.svg' in html
+
+    # Legacy strings must NEVER appear anywhere in the output
+    legacy_strings = [
+        "Put Value Behind Your Opinion",
+        "Share opinions",
+        "discover perspectives",
+        "join conversations",
+        "back ideas with conviction"
+    ]
+    for s in legacy_strings:
+        assert s.lower() not in html.lower()
+
+
+
 
 
 
