@@ -18,12 +18,12 @@
       {% if settings.hero_heading and settings.hero_heading != 'Get Your Link On Top.' %}
         {{ settings.hero_heading }}
       {% else %}
-        Your Link. One Hour. Three Chances to Win.
+        List It. Trust Your Luck. Get on Top.
       {% endif %}
     </h1>
     
     <p class="text-slate-600 text-xs sm:text-sm max-w-md mx-auto mb-4 font-normal leading-relaxed">
-      Enter for {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }}. Every hour, 3 listings are randomly picked to be featured. Didn't get picked? Try again in the next round.
+      {{ settings.currency_symbol|default('$') }}{{ settings.listing_price|int if settings.listing_price.is_integer() else settings.listing_price }} to enter. 3 listings are randomly picked every hour. Didn't get picked? Try again next round.
     </p>
 
     <!-- CTAs -->
