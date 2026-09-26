@@ -328,7 +328,7 @@
         }
         if (errTitle) errTitle.className = 'text-xs font-bold text-red-900';
         if (errDesc) errDesc.className = 'text-xs text-red-700 mt-0.5 font-medium';
-        if (title === "Payment service is not configured." || hint === "Payment service is not configured.") {
+        if (title === "Payment service is not configured.") {
           setPayButtonState('not_configured');
         } else {
           setPayButtonState('failure');
@@ -438,7 +438,7 @@
 
         if (!orderRes.ok || !data.success) {
           isPaymentRunning = false;
-          if (orderRes.status === 503 || data.error === "Payment service is not configured.") {
+          if (data.error_type === "CONFIGURATION_ERROR" || data.error === "Payment service is not configured.") {
             showPaymentErrorCard(
               "Payment service is not configured.",
               "Your listing has NOT been added.",
@@ -457,7 +457,7 @@
           console.error("Razorpay script not loaded: typeof Razorpay =", typeof Razorpay);
           isPaymentRunning = false;
           showPaymentErrorCard(
-            "Payment service is not configured.",
+            "Payment Gateway Unavailable",
             "Your listing has NOT been added.",
             "Payment gateway script failed to load. Please check your connection or ad-blocker.",
             'error'

@@ -243,113 +243,189 @@ RAZORPAY_SECRET_VAR_NAMES = [
 ]
 
 def clean_credential(val) -> str:
-    """Strips whitespace, enclosing quotes, and newlines."""
+    """Strips whitespace, enclosing quotes, newlines, and carriage returns."""
     if val is None:
         return ""
     v = str(val).strip()
-    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+    # Strip quotes (including smart quotes)
+    quote_chars = ('"', "'", '“', '”', '‘', '’', '`')
+    while len(v) >= 2 and v[0] in quote_chars and v[-1] in quote_chars:
         v = v[1:-1].strip()
     return v
 
-def is_valid_credential(val: str, is_key_id: bool = False) -> bool:
-    """Checks whether a credential string is real and not a placeholder."""
+def is_placeholder_value(val: str) -> bool:
+    """Checks whether a value is an obvious placeholder rather than a real credential."""
     v = clean_credential(val)
     if not v:
+        return True
+    # Enclosed in brackets: <configured live key>, <key_id>, {YOUR_KEY}, [your_key]
+    if (v.startswith("<") and v.endswith(">")) or (v.startswith("[") and v.endswith("]")) or (v.startswith("{") and v.endswith("}")):
+        return True
+
+    lower = v.lower()
+    if lower in ("none", "null", "undefined", "xxxx", "xxxxxxxx", "••••", "••••••••", "change_me", "placeholder", "your_key_id", "your_key_secret"):
+        return True
+    if "placeholder" in lower or "your_key" in lower or "your_secret" in lower or "change_me" in lower or "configured live" in lower or "insert_here" in lower:
+        return True
+    return False
+
+def is_valid_key_id(val: str) -> bool:
+    """Checks whether a Razorpay Key ID string is valid and not a placeholder."""
+    v = clean_credential(val)
+    if not v or is_placeholder_value(v):
         return False
     lower = v.lower()
-    if "placeholder" in lower or lower in ("none", "null", "undefined", "••••••••", "xxxxxxxxxxxxxxxx"):
-        return False
-    if is_key_id:
-        if lower.startswith("rzp_test_xxxx") or lower.startswith("rzp_live_xxxx"):
-            return False
-        if not (lower.startswith("rzp_test_") or lower.startswith("rzp_live_") or len(v) >= 14):
-            return False
-    else:
-        if len(v) < 8:
-            return False
-    return True
+    # Legitimate Razorpay keys start with rzp_live_ or rzp_test_
+    if lower.startswith("rzp_live_") or lower.startswith("rzp_test_"):
+        return len(v) > 9
+    return len(v) >= 12
 
-def get_razorpay_credentials(session=None) -> tuple[str, str]:
+def is_valid_key_secret(val: str) -> bool:
+    """Checks whether a Razorpay Key Secret string is valid and not a placeholder."""
+    v = clean_credential(val)
+    if not v or is_placeholder_value(v):
+        return False
+    # Accept any non-placeholder secret with reasonable length (>= 8 chars)
+    return len(v) >= 8
+
+def is_valid_credential(val: str, is_key_id: bool = False) -> bool:
+    """Backward compatibility wrapper for credential validation."""
+    return is_valid_key_id(val) if is_key_id else is_valid_key_secret(val)
+
+def get_razorpay_config(session=None) -> dict:
     """
-    Authoritative resolution of Razorpay Key ID and Secret at RUNTIME.
+    Canonical, production-safe resolution of Razorpay Key ID and Secret at RUNTIME.
     Priority:
-      1. Live os.environ / os.getenv across all common naming conventions
+      1. Live os.environ across all common naming conventions (case-insensitive)
       2. Flask current_app.config (especially for test fixtures)
       3. Config class attributes
       4. Database settings (SiteSetting)
-    Returns ("", "") if not configured. Never returns placeholders.
+    Returns:
+      {
+        "configured": bool,
+        "key_id": str,
+        "key_secret": str,
+        "key_id_present": bool,
+        "key_secret_present": bool,
+        "key_id_prefix": str,
+        "mode": str,
+        "rejection_reason": str or None
+      }
     """
-    env_key_id = ""
-    env_key_secret = ""
+    candidate_key_id = ""
+    candidate_key_secret = ""
 
-    # 1. Live os.environ across all naming conventions
-    for var in RAZORPAY_KEY_ID_VAR_NAMES:
-        val = clean_credential(os.getenv(var, ""))
-        if is_valid_credential(val, is_key_id=True):
-            env_key_id = val
-            break
+    # 1. Live os.environ scan (case-insensitive across aliases and whitespace-tolerant)
+    env_items = {k.strip().upper(): v for k, v in os.environ.items()}
+    for alias in RAZORPAY_KEY_ID_VAR_NAMES:
+        if alias in env_items:
+            val = clean_credential(env_items[alias])
+            if is_valid_key_id(val):
+                candidate_key_id = val
+                break
 
-    for var in RAZORPAY_SECRET_VAR_NAMES:
-        val = clean_credential(os.getenv(var, ""))
-        if is_valid_credential(val, is_key_id=False):
-            env_key_secret = val
-            break
+    for alias in RAZORPAY_SECRET_VAR_NAMES:
+        if alias in env_items:
+            val = clean_credential(env_items[alias])
+            if is_valid_key_secret(val):
+                candidate_key_secret = val
+                break
 
-    # 2. current_app.config (for tests)
-    if not env_key_id or not env_key_secret:
+    # 2. current_app.config (for test fixtures / app config)
+    if not candidate_key_id or not candidate_key_secret:
         try:
-            from flask import has_app_context
+            from flask import has_app_context, current_app
             if has_app_context():
-                for var in RAZORPAY_KEY_ID_VAR_NAMES:
-                    if not env_key_id:
-                        val = clean_credential(current_app.config.get(var, ""))
-                        if is_valid_credential(val, is_key_id=True):
-                            env_key_id = val
+                for alias in RAZORPAY_KEY_ID_VAR_NAMES:
+                    if not candidate_key_id and alias in current_app.config:
+                        val = clean_credential(current_app.config.get(alias, ""))
+                        if is_valid_key_id(val):
+                            candidate_key_id = val
                             break
-                for var in RAZORPAY_SECRET_VAR_NAMES:
-                    if not env_key_secret:
-                        val = clean_credential(current_app.config.get(var, ""))
-                        if is_valid_credential(val, is_key_id=False):
-                            env_key_secret = val
+                for alias in RAZORPAY_SECRET_VAR_NAMES:
+                    if not candidate_key_secret and alias in current_app.config:
+                        val = clean_credential(current_app.config.get(alias, ""))
+                        if is_valid_key_secret(val):
+                            candidate_key_secret = val
                             break
         except Exception:
             pass
 
     # 3. Config class attributes
-    if not env_key_id or not env_key_secret:
+    if not candidate_key_id or not candidate_key_secret:
         try:
             from config import Config
-            for var in RAZORPAY_KEY_ID_VAR_NAMES:
-                if not env_key_id:
-                    val = clean_credential(getattr(Config, var, ""))
-                    if is_valid_credential(val, is_key_id=True):
-                        env_key_id = val
+            for alias in RAZORPAY_KEY_ID_VAR_NAMES:
+                if not candidate_key_id and hasattr(Config, alias):
+                    val = clean_credential(getattr(Config, alias, ""))
+                    if is_valid_key_id(val):
+                        candidate_key_id = val
                         break
-            for var in RAZORPAY_SECRET_VAR_NAMES:
-                if not env_key_secret:
-                    val = clean_credential(getattr(Config, var, ""))
-                    if is_valid_credential(val, is_key_id=False):
-                        env_key_secret = val
+            for alias in RAZORPAY_SECRET_VAR_NAMES:
+                if not candidate_key_secret and hasattr(Config, alias):
+                    val = clean_credential(getattr(Config, alias, ""))
+                    if is_valid_key_secret(val):
+                        candidate_key_secret = val
                         break
         except Exception:
             pass
-
-    if env_key_id and env_key_secret:
-        return env_key_id, env_key_secret
 
     # 4. Database fallback (SiteSetting)
-    if session:
+    if (not candidate_key_id or not candidate_key_secret) and session:
         try:
             settings = SiteSetting.get_settings(session)
-            db_key_id = clean_credential(getattr(settings, "razorpay_key_id", ""))
-            db_key_secret = clean_credential(getattr(settings, "razorpay_key_secret", ""))
-            final_id = env_key_id or (db_key_id if is_valid_credential(db_key_id, is_key_id=True) else "")
-            final_sec = env_key_secret or (db_key_secret if is_valid_credential(db_key_secret, is_key_id=False) else "")
-            if final_id and final_sec:
-                return final_id, final_sec
+            if settings:
+                db_id = clean_credential(getattr(settings, "razorpay_key_id", ""))
+                db_sec = clean_credential(getattr(settings, "razorpay_key_secret", ""))
+                if not candidate_key_id and is_valid_key_id(db_id):
+                    candidate_key_id = db_id
+                if not candidate_key_secret and is_valid_key_secret(db_sec):
+                    candidate_key_secret = db_sec
         except Exception:
             pass
 
+    key_id_present = bool(candidate_key_id)
+    key_secret_present = bool(candidate_key_secret)
+    configured = bool(key_id_present and key_secret_present)
+
+    prefix = "none"
+    mode = "unknown"
+    if candidate_key_id:
+        lower_id = candidate_key_id.lower()
+        if lower_id.startswith("rzp_live_"):
+            prefix = "rzp_live_"
+            mode = "live"
+        elif lower_id.startswith("rzp_test_"):
+            prefix = "rzp_test_"
+            mode = "test"
+        else:
+            prefix = candidate_key_id[:8]
+
+    rejection_reason = None
+    if not configured:
+        if not key_id_present and not key_secret_present:
+            rejection_reason = "Both RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are missing."
+        elif not key_id_present:
+            rejection_reason = "RAZORPAY_KEY_ID is missing or an invalid placeholder."
+        else:
+            rejection_reason = "RAZORPAY_KEY_SECRET is missing or an invalid placeholder."
+
+    return {
+        "configured": configured,
+        "key_id": candidate_key_id,
+        "key_secret": candidate_key_secret,
+        "key_id_present": key_id_present,
+        "key_secret_present": key_secret_present,
+        "key_id_prefix": prefix,
+        "mode": mode,
+        "rejection_reason": rejection_reason
+    }
+
+def get_razorpay_credentials(session=None) -> tuple[str, str]:
+    """Canonical function returning (key_id, key_secret) or ('', '')."""
+    cfg = get_razorpay_config(session)
+    if cfg["configured"]:
+        return cfg["key_id"], cfg["key_secret"]
     return "", ""
 
 def get_pricing_config(session=None) -> tuple[float, str, str]:
@@ -368,9 +444,9 @@ def get_pricing_config(session=None) -> tuple[float, str, str]:
         pass
 
     if is_testing:
-        curr = str(current_app.config.get("CURRENCY", "USD")).upper()
+        curr = str(os.environ.get("CURRENCY") or current_app.config.get("CURRENCY", "USD")).upper()
         if curr == "INR":
-            price = float(current_app.config.get("ENTRY_FEE_INR", current_app.config.get("LISTING_PRICE", 49.0)))
+            price = float(os.environ.get("ENTRY_FEE_INR") or os.environ.get("LISTING_PRICE") or current_app.config.get("ENTRY_FEE_INR", current_app.config.get("LISTING_PRICE", 49.0)))
         else:
             price = float(current_app.config.get("LISTING_PRICE", 2.0))
         symbols = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "CAD": "C$", "AUD": "A$"}
@@ -494,16 +570,18 @@ def create_order():
     price, currency, symbol = get_pricing_config(session)
     settings = SiteSetting.get_settings(session)
 
-    key_id, key_secret = get_razorpay_credentials(session)
-
-    # Fail closed if Razorpay credentials are missing or placeholder
-    if not key_id or not key_secret:
-        current_app.logger.warning("Razorpay credentials not configured or placeholder detected.")
+    rzp_cfg = get_razorpay_config(session)
+    if not rzp_cfg["configured"]:
+        current_app.logger.warning(f"Payment configuration check failed: {rzp_cfg.get('rejection_reason')}")
         return jsonify({
             "success": False,
+            "error_type": "CONFIGURATION_ERROR",
             "error": "Payment service is not configured.",
             "message": "Payment service is not configured."
         }), 503
+
+    key_id = rzp_cfg["key_id"]
+    key_secret = rzp_cfg["key_secret"]
 
     amount_subunits = int(round(price * 100))  # cents or paise
     try:
@@ -525,15 +603,35 @@ def create_order():
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8", errors="replace")
         current_app.logger.error(f"Razorpay order API HTTP error {e.code}: {err_body}")
+        
+        rzp_desc = "Unable to create payment order."
+        try:
+            err_json = json.loads(err_body)
+            if "error" in err_json and isinstance(err_json["error"], dict):
+                rzp_desc = err_json["error"].get("description", rzp_desc)
+        except Exception:
+            pass
+
+        if e.code in (401, 403):
+            user_msg = "Payment gateway authentication failed. Please check configured credentials."
+            err_type = "RAZORPAY_AUTH_ERROR"
+            ret_err = user_msg
+        else:
+            err_type = "RAZORPAY_API_ERROR"
+            ret_err = "Unable to create payment order." if rzp_desc == "Unable to create payment order." else f"Payment order creation failed: {rzp_desc}"
+            user_msg = ret_err
+
         return jsonify({
             "success": False,
-            "error": "Unable to create payment order.",
-            "message": "Unable to create payment order."
+            "error_type": err_type,
+            "error": ret_err,
+            "message": user_msg
         }), 400
     except Exception as e:
         current_app.logger.error(f"Razorpay order API call exception: {e}")
         return jsonify({
             "success": False,
+            "error_type": "RAZORPAY_API_ERROR",
             "error": "Unable to create payment order.",
             "message": "Unable to create payment order."
         }), 502
@@ -594,13 +692,17 @@ def verify_payment():
             "error": "Missing payment verification parameters."
         }), 400
 
-    key_id, key_secret = get_razorpay_credentials(session)
-    if not key_id or not key_secret:
+    rzp_cfg = get_razorpay_config(session)
+    if not rzp_cfg["configured"]:
         return jsonify({
             "success": False,
+            "error_type": "CONFIGURATION_ERROR",
             "error": "Payment service is not configured.",
             "message": "Payment service is not configured."
         }), 503
+
+    key_id = rzp_cfg["key_id"]
+    key_secret = rzp_cfg["key_secret"]
 
     # Check for existing payment record initialized by this application (with lock if supported)
     try:
@@ -902,3 +1004,31 @@ def refunds():
 def health():
     """Health check endpoint for Render."""
     return jsonify({"status": "ok", "service": "indobid.lol"}), 200
+
+@main_bp.route("/health/payment")
+@main_bp.route("/api/health/payment")
+def health_payment():
+    """
+    Safe production diagnostic endpoint for payment configuration.
+    NEVER logs or exposes RAZORPAY_KEY_SECRET.
+    Returns:
+      {
+        "payment_provider": "razorpay",
+        "configured": true/false,
+        "key_id_present": true/false,
+        "key_id_prefix": "rzp_live_",
+        "key_secret_present": true/false,
+        "currency": "INR"
+      }
+    """
+    session = db_session()
+    cfg = get_razorpay_config(session)
+    _, currency, _ = get_pricing_config(session)
+    return jsonify({
+        "payment_provider": "razorpay",
+        "configured": cfg["configured"],
+        "key_id_present": cfg["key_id_present"],
+        "key_id_prefix": cfg["key_id_prefix"],
+        "key_secret_present": cfg["key_secret_present"],
+        "currency": currency
+    }), 200

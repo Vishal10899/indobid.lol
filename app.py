@@ -11,9 +11,22 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Initialize Database & Admin
+    # Initialize Database & Admin with Safe Startup Diagnostics
     with app.app_context():
         init_db(app)
+        try:
+            from routes.main import get_razorpay_config, get_pricing_config
+            rzp_cfg = get_razorpay_config()
+            _, curr, _ = get_pricing_config()
+            app.logger.info(
+                f"Razorpay startup: configured={rzp_cfg['configured']}, "
+                f"mode={rzp_cfg['mode']}, "
+                f"key_id_present={rzp_cfg['key_id_present']}, "
+                f"key_secret_present={rzp_cfg['key_secret_present']}, "
+                f"currency={curr}"
+            )
+        except Exception as e:
+            app.logger.warning(f"Startup diagnostic check error: {e}")
 
     # Register Blueprints
     app.register_blueprint(main_bp)
@@ -62,14 +75,23 @@ def create_app(config_class=Config):
     def inject_global_data():
         from models import SiteSetting
         from database import db_session
+        from routes.main import get_razorpay_config, get_pricing_config
         try:
-            settings = SiteSetting.get_settings(db_session())
+            sess = db_session()
+            settings = SiteSetting.get_settings(sess)
+            price, curr, symbol = get_pricing_config(sess)
+            rzp_cfg = get_razorpay_config(sess)
         except Exception:
             settings = None
+            price, curr, symbol = 49.0, "INR", "₹"
+            rzp_cfg = {"configured": False, "key_id": ""}
         return {
             "current_year": datetime.now(timezone.utc).year,
             "site_name": settings.site_name if settings else "indobid.lol",
             "settings": settings,
+            "entry_fee_inr": price,
+            "razorpay_key_id": rzp_cfg["key_id"] if rzp_cfg["configured"] else "",
+            "razorpay_configured": rzp_cfg["configured"]
         }
 
     return app

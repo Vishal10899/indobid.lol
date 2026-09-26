@@ -1459,6 +1459,116 @@ def test_dynamic_inr_custom_amount_paise_conversion(client, monkeypatch):
     assert data["amount"] == 7550
     assert data["currency"] == "INR"
 
+def test_health_payment_endpoint(client, monkeypatch):
+    """Verify /health/payment returns expected safe diagnostics without exposing secrets."""
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_live_testdummy1234")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "super_secret_diagnostic_val")
+    monkeypatch.setenv("CURRENCY", "INR")
+
+    res = client.get("/health/payment")
+    assert res.status_code == 200
+    data = res.get_json()
+
+    assert data["payment_provider"] == "razorpay"
+    assert data["configured"] is True
+    assert data["key_id_present"] is True
+    assert data["key_id_prefix"] == "rzp_live_"
+    assert data["key_secret_present"] is True
+    assert data["currency"] == "INR"
+
+    # Verify secret is NEVER leaked
+    raw_text = res.get_data(as_text=True)
+    assert "super_secret_diagnostic_val" not in raw_text
+    assert "key_secret" not in data
+
+def test_razorpay_configuration_matrix(monkeypatch):
+    """Test full configuration matrix: valid keys, placeholders, whitespace stripping, and bracket detection."""
+    from routes.main import get_razorpay_config
+
+    # Clear env
+    for k in ["RAZORPAY_KEY_ID", "RAZORPAY_KEY", "RAZORPAY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_SECRET"]:
+        monkeypatch.delenv(k, raising=False)
+
+    # 1. Valid rzp_live_ key + secret => configured=True
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_live_abc1234567")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "live_secret_val_123")
+    cfg = get_razorpay_config()
+    assert cfg["configured"] is True
+    assert cfg["mode"] == "live"
+    assert cfg["key_id_prefix"] == "rzp_live_"
+
+    # 2. Valid rzp_test_ key + secret => configured=True
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_test_xyz9876543")
+    cfg = get_razorpay_config()
+    assert cfg["configured"] is True
+    assert cfg["mode"] == "test"
+    assert cfg["key_id_prefix"] == "rzp_test_"
+
+    # 3. Empty key ID => configured=False
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "")
+    cfg = get_razorpay_config()
+    assert cfg["configured"] is False
+    assert cfg["key_id_present"] is False
+
+    # 4. Empty secret => configured=False
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_live_abc1234567")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "")
+    cfg = get_razorpay_config()
+    assert cfg["configured"] is False
+    assert cfg["key_secret_present"] is False
+
+    # 5. Placeholder key ID => configured=False
+    for ph in ["YOUR_KEY_ID", "<configured live key>", "rzp_test_placeholder", "change_me", "••••••••"]:
+        monkeypatch.setenv("RAZORPAY_KEY_ID", ph)
+        monkeypatch.setenv("RAZORPAY_KEY_SECRET", "live_secret_val_123")
+        cfg = get_razorpay_config()
+        assert cfg["configured"] is False
+
+    # 6. Placeholder secret => configured=False
+    for ph in ["YOUR_KEY_SECRET", "<configured live secret>", "placeholder_secret", "change_me", "{your_secret}"]:
+        monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_live_abc1234567")
+        monkeypatch.setenv("RAZORPAY_KEY_SECRET", ph)
+        cfg = get_razorpay_config()
+        assert cfg["configured"] is False
+
+    # 7. Whitespace and smart quotes around values are stripped
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "  \"rzp_live_abc1234567\"  \n")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", " ‘secret_with_quotes_123’ \r\n")
+    cfg = get_razorpay_config()
+    assert cfg["configured"] is True
+    assert cfg["key_id"] == "rzp_live_abc1234567"
+    assert cfg["key_secret"] == "secret_with_quotes_123"
+
+def test_razorpay_auth_error_not_masked_as_unconfigured(client, monkeypatch):
+    """When Razorpay API rejects credentials (401), error must NOT be masked as 'Payment service is not configured'."""
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "rzp_live_validformat123")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "bad_secret_value_123")
+
+    import urllib.error
+    def mock_401_create_order(*args, **kwargs):
+        err_fp = urllib.response.addinfourl(
+            io.BytesIO(b'{"error":{"code":"BAD_REQUEST_ERROR","description":"The id provided does not exist"}}'),
+            {}, "https://api.razorpay.com/v1/orders"
+        )
+        raise urllib.error.HTTPError("https://api.razorpay.com/v1/orders", 401, "Unauthorized", {}, err_fp)
+
+    import io
+    monkeypatch.setattr("routes.main.create_razorpay_order_api", mock_401_create_order)
+
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Auth Tester",
+        "platform": "website",
+        "profile_url": f"https://example.com/auth_{uuid.uuid4().hex[:6]}"
+    }), content_type="application/json")
+
+    assert res.status_code == 400
+    data = res.get_json()
+    assert data["success"] is False
+    assert data["error_type"] == "RAZORPAY_AUTH_ERROR"
+    assert "authentication failed" in data["error"].lower()
+    # Crucial: MUST NOT say 'Payment service is not configured'
+    assert data["error"] != "Payment service is not configured."
+
 
 
 
