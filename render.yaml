@@ -7,7 +7,7 @@ databases:
 
 services:
   - type: web
-    name: indobid
+    name: indobid-flask
     runtime: python
     plan: free
     region: ohio
