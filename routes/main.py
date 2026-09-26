@@ -1087,6 +1087,13 @@ def health_payment():
     session = db_session()
     cfg = get_razorpay_config(session)
     price, currency, _ = get_pricing_config(session)
+    settings = None
+    if session:
+        try:
+            settings = SiteSetting.get_settings(session)
+        except Exception:
+            pass
+
     return jsonify({
         "payment_provider": "razorpay",
         "configured": cfg["configured"],
@@ -1099,6 +1106,12 @@ def health_payment():
             "key_var": cfg.get("detected_key_var"),
             "secret_var": cfg.get("detected_secret_var"),
             "env_names": cfg.get("env_keys_detected", []),
-            "rejection_reason": cfg.get("rejection_reason")
+            "rejection_reason": cfg.get("rejection_reason"),
+            "env_currency": os.environ.get("CURRENCY"),
+            "env_entry_fee_inr": os.environ.get("ENTRY_FEE_INR"),
+            "env_listing_price": os.environ.get("LISTING_PRICE"),
+            "db_currency": getattr(settings, "currency", None) if settings else None,
+            "db_price": getattr(settings, "listing_price", None) if settings else None,
+            "config_currency": getattr(Config, "CURRENCY", None)
         }
     }), 200
