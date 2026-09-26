@@ -1036,6 +1036,244 @@ def test_create_order_safe_error_on_api_rejection(client, monkeypatch):
     assert data["success"] is False
     assert data["error"] == "Unable to create payment order."
 
+def test_application_startup():
+    """Verify application startup and WSGI entrypoint."""
+    from app import app, create_app
+    assert app is not None
+    assert hasattr(app, "wsgi_app")
+    test_app = create_app(TestConfig)
+    assert test_app is not None
+    assert test_app.config["TESTING"] is True
+
+def test_database_connection(db_sess):
+    """Verify database connection and query execution."""
+    from sqlalchemy import text
+    result = db_sess.execute(text("SELECT 1")).scalar()
+    assert result == 1
+
+def test_zero_listings_round_draw(db_sess):
+    """Verify round expiration with zero listings produces 0 winners and creates next round."""
+    from datetime import timedelta
+    from engine import sync_rounds
+    now = get_utc_now()
+    r = Round(
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=5),
+        status="active",
+        created_at=now - timedelta(hours=2)
+    )
+    db_sess.add(r)
+    db_sess.commit()
+
+    completed = sync_rounds(db_sess, duration_seconds=3600)
+    assert completed is True
+    db_sess.refresh(r)
+    assert r.status == "completed"
+    winners = db_sess.query(Winner).filter_by(round_id=r.id).all()
+    assert len(winners) == 0
+
+    next_r = db_sess.query(Round).filter_by(status="active").order_by(Round.id.desc()).first()
+    assert next_r is not None
+    assert next_r.id != r.id
+
+def test_one_listing_round_draw(db_sess):
+    """Verify round expiration with one listing produces exactly 1 winner."""
+    from datetime import timedelta
+    from engine import sync_rounds
+    now = get_utc_now()
+    r = Round(
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=5),
+        status="active",
+        created_at=now - timedelta(hours=2)
+    )
+    db_sess.add(r)
+    db_sess.flush()
+
+    listing = Listing(
+        round_id=r.id,
+        username="Solo User",
+        platform="website",
+        profile_url="https://example.com/solo",
+        status="eligible",
+        created_at=now - timedelta(hours=1)
+    )
+    db_sess.add(listing)
+    db_sess.flush()
+
+    payment = Payment(
+        listing_id=listing.id,
+        order_id="order_solo_1",
+        payment_id="pay_solo_1",
+        amount=2.0,
+        currency="USD",
+        status="paid",
+        created_at=now - timedelta(hours=1)
+    )
+    db_sess.add(payment)
+    db_sess.commit()
+
+    completed = sync_rounds(db_sess, duration_seconds=3600)
+    assert completed is True
+    winners = db_sess.query(Winner).filter_by(round_id=r.id).all()
+    assert len(winners) == 1
+    assert winners[0].position == 1
+    assert winners[0].listing_id == listing.id
+
+def test_two_listings_round_draw(db_sess):
+    """Verify round expiration with two listings produces exactly 2 winners."""
+    from datetime import timedelta
+    from engine import sync_rounds
+    now = get_utc_now()
+    r = Round(
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=5),
+        status="active",
+        created_at=now - timedelta(hours=2)
+    )
+    db_sess.add(r)
+    db_sess.flush()
+
+    for i in range(1, 3):
+        listing = Listing(
+            round_id=r.id,
+            username=f"Duo User {i}",
+            platform="website",
+            profile_url=f"https://example.com/duo_{i}",
+            status="eligible",
+            created_at=now - timedelta(hours=1)
+        )
+        db_sess.add(listing)
+        db_sess.flush()
+        payment = Payment(
+            listing_id=listing.id,
+            order_id=f"order_duo_{i}",
+            payment_id=f"pay_duo_{i}",
+            amount=2.0,
+            currency="USD",
+            status="paid",
+            created_at=now - timedelta(hours=1)
+        )
+        db_sess.add(payment)
+
+    db_sess.commit()
+
+    completed = sync_rounds(db_sess, duration_seconds=3600)
+    assert completed is True
+    winners = db_sess.query(Winner).filter_by(round_id=r.id).order_by(Winner.position.asc()).all()
+    assert len(winners) == 2
+    assert [w.position for w in winners] == [1, 2]
+
+def test_three_listings_round_draw(db_sess):
+    """Verify round expiration with three listings produces exactly 3 winners."""
+    from datetime import timedelta
+    from engine import sync_rounds
+    now = get_utc_now()
+    r = Round(
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=5),
+        status="active",
+        created_at=now - timedelta(hours=2)
+    )
+    db_sess.add(r)
+    db_sess.flush()
+
+    for i in range(1, 4):
+        listing = Listing(
+            round_id=r.id,
+            username=f"Trio User {i}",
+            platform="website",
+            profile_url=f"https://example.com/trio_{i}",
+            status="eligible",
+            created_at=now - timedelta(hours=1)
+        )
+        db_sess.add(listing)
+        db_sess.flush()
+        payment = Payment(
+            listing_id=listing.id,
+            order_id=f"order_trio_{i}",
+            payment_id=f"pay_trio_{i}",
+            amount=2.0,
+            currency="USD",
+            status="paid",
+            created_at=now - timedelta(hours=1)
+        )
+        db_sess.add(payment)
+
+    db_sess.commit()
+
+    completed = sync_rounds(db_sess, duration_seconds=3600)
+    assert completed is True
+    winners = db_sess.query(Winner).filter_by(round_id=r.id).order_by(Winner.position.asc()).all()
+    assert len(winners) == 3
+    assert [w.position for w in winners] == [1, 2, 3]
+
+def test_random_winner_selection_distribution(db_sess):
+    """Verify random selection from multiple paid listings never selects duplicates."""
+    from datetime import timedelta
+    from engine import sync_rounds
+    now = get_utc_now()
+    r = Round(
+        start_time=now - timedelta(hours=2),
+        end_time=now - timedelta(minutes=5),
+        status="active",
+        created_at=now - timedelta(hours=2)
+    )
+    db_sess.add(r)
+    db_sess.flush()
+
+    listing_ids = []
+    for i in range(1, 11):
+        listing = Listing(
+            round_id=r.id,
+            username=f"Pool User {i}",
+            platform="website",
+            profile_url=f"https://example.com/pool_{i}",
+            status="eligible",
+            created_at=now - timedelta(hours=1)
+        )
+        db_sess.add(listing)
+        db_sess.flush()
+        listing_ids.append(listing.id)
+        payment = Payment(
+            listing_id=listing.id,
+            order_id=f"order_pool_{i}",
+            payment_id=f"pay_pool_{i}",
+            amount=2.0,
+            currency="USD",
+            status="paid",
+            created_at=now - timedelta(hours=1)
+        )
+        db_sess.add(payment)
+
+    db_sess.commit()
+
+    completed = sync_rounds(db_sess, duration_seconds=3600)
+    assert completed is True
+    winners = db_sess.query(Winner).filter_by(round_id=r.id).order_by(Winner.position.asc()).all()
+    assert len(winners) == 3
+    winner_listing_ids = [w.listing_id for w in winners]
+    # Unique winners
+    assert len(set(winner_listing_ids)) == 3
+    # All winners are from the eligible pool
+    for w_id in winner_listing_ids:
+        assert w_id in listing_ids
+
+def test_fake_order_and_payment_id_rejected(client):
+    """Payment verification with fake order ID or nonexistent payment fails."""
+    sig = hmac.new(b"secret", b"fake_order|fake_pay", hashlib.sha256).hexdigest()
+    res = client.post("/entry/verify-payment", data=json.dumps({
+        "razorpay_order_id": "fake_order_id_12345",
+        "razorpay_payment_id": "fake_payment_id_67890",
+        "razorpay_signature": sig,
+        "username": "Fake Order User",
+        "platform": "website",
+        "profile_url": "https://example.com/fake"
+    }), content_type="application/json")
+    assert res.status_code == 400
+    assert "not found" in res.get_json()["error"].lower()
+
+
 
 
 
