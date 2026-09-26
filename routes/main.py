@@ -369,7 +369,10 @@ def get_pricing_config(session=None) -> tuple[float, str, str]:
 
     if is_testing:
         curr = str(current_app.config.get("CURRENCY", "USD")).upper()
-        price = float(current_app.config.get("LISTING_PRICE", 2.0))
+        if curr == "INR":
+            price = float(current_app.config.get("ENTRY_FEE_INR", current_app.config.get("LISTING_PRICE", 49.0)))
+        else:
+            price = float(current_app.config.get("LISTING_PRICE", 2.0))
         symbols = {"INR": "₹", "USD": "$", "EUR": "€", "GBP": "£", "CAD": "C$", "AUD": "A$"}
         return price, curr, symbols.get(curr, "$")
 
@@ -388,7 +391,7 @@ def get_pricing_config(session=None) -> tuple[float, str, str]:
     # Production / non-testing:
     # 1. Explicit environment variables take highest precedence
     raw_env_curr = clean_credential(os.environ.get("CURRENCY", ""))
-    raw_env_price = clean_credential(os.environ.get("LISTING_PRICE", "") or os.environ.get("ENTRY_FEE_INR", ""))
+    raw_env_price = clean_credential(os.environ.get("ENTRY_FEE_INR", "") if (raw_env_curr.upper() == "INR") else "") or clean_credential(os.environ.get("LISTING_PRICE", "")) or clean_credential(os.environ.get("ENTRY_FEE_INR", ""))
 
     # Check if DB settings exist and whether they are the legacy default (USD 2.0)
     is_legacy_default = (db_curr == "USD" and db_price == 2.0)
@@ -408,7 +411,7 @@ def get_pricing_config(session=None) -> tuple[float, str, str]:
     elif db_price is not None and not is_legacy_default:
         price = float(db_price)
     else:
-        price = float(getattr(Config, "LISTING_PRICE", 49.0 if currency == "INR" else 2.0))
+        price = float(getattr(Config, "ENTRY_FEE_INR", 49.0) if currency == "INR" else getattr(Config, "LISTING_PRICE", 2.0))
 
     if price is None:
         price = 49.0 if currency == "INR" else 2.0

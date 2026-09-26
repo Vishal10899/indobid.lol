@@ -1367,6 +1367,99 @@ def test_production_style_config_detection_without_secret_leakage(monkeypatch):
     assert has_key is True
     assert has_secret is True
 
+def test_missing_razorpay_key_id_fails_closed(client, monkeypatch, db_sess):
+    """When RAZORPAY_KEY_ID is missing but SECRET is set, order creation must fail closed with 503."""
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "valid_secret_123")
+    monkeypatch.delenv("RAZORPAY_KEY_ID", raising=False)
+    monkeypatch.delenv("RAZORPAY_KEY", raising=False)
+    settings = SiteSetting.get_settings(db_sess)
+    settings.razorpay_key_id = ""
+    settings.razorpay_key_secret = ""
+    db_sess.commit()
+
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "NoKeyUser",
+        "platform": "website",
+        "profile_url": f"https://example.com/nokey_{uuid.uuid4().hex[:6]}"
+    }), content_type="application/json")
+
+    assert res.status_code == 503
+    data = res.get_json()
+    assert data["success"] is False
+    assert "Payment service is not configured" in data["error"]
+
+def test_missing_razorpay_key_secret_fails_closed(client, monkeypatch, db_sess):
+    """When RAZORPAY_KEY_SECRET is missing but KEY_ID is set, order creation must fail closed with 503."""
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "rzp_test_validkey")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "")
+    monkeypatch.delenv("RAZORPAY_KEY_SECRET", raising=False)
+    monkeypatch.delenv("RAZORPAY_SECRET", raising=False)
+    settings = SiteSetting.get_settings(db_sess)
+    settings.razorpay_key_id = ""
+    settings.razorpay_key_secret = ""
+    db_sess.commit()
+
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "NoSecretUser",
+        "platform": "website",
+        "profile_url": f"https://example.com/nosecret_{uuid.uuid4().hex[:6]}"
+    }), content_type="application/json")
+
+    assert res.status_code == 503
+    data = res.get_json()
+    assert data["success"] is False
+    assert "Payment service is not configured" in data["error"]
+
+def test_create_order_inr_paise_conversion_and_no_secret_leak(client, monkeypatch):
+    """Verify INR entry fee converts properly to paise subunits and NEVER exposes Razorpay secret to frontend."""
+    monkeypatch.setitem(client.application.config, "CURRENCY", "INR")
+    monkeypatch.setitem(client.application.config, "ENTRY_FEE_INR", 49.0)
+    monkeypatch.setitem(client.application.config, "LISTING_PRICE", 49.0)
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_ID", "rzp_test_inr_key")
+    monkeypatch.setitem(client.application.config, "RAZORPAY_KEY_SECRET", "super_secret_never_leak_this")
+
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "INR Tester",
+        "platform": "website",
+        "profile_url": f"https://example.com/inr_{uuid.uuid4().hex[:6]}"
+    }), content_type="application/json")
+
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    assert data["currency"] == "INR"
+    assert data["currency_symbol"] == "₹"
+    # ₹49 = 4900 paise
+    assert data["amount"] == 4900
+    assert data["price"] == 49.0
+    assert data["key_id"] == "rzp_test_inr_key"
+
+    # Security check: secret MUST NEVER be returned in JSON response
+    response_text = res.get_data(as_text=True)
+    assert "super_secret_never_leak_this" not in response_text
+    assert "key_secret" not in data
+    assert "secret" not in data
+
+def test_dynamic_inr_custom_amount_paise_conversion(client, monkeypatch):
+    """Verify arbitrary configured INR amounts convert correctly to smallest unit (paise)."""
+    monkeypatch.setitem(client.application.config, "CURRENCY", "INR")
+    monkeypatch.setitem(client.application.config, "ENTRY_FEE_INR", 75.50)
+    monkeypatch.setitem(client.application.config, "LISTING_PRICE", 75.50)
+
+    res = client.post("/entry/create-order", data=json.dumps({
+        "username": "Custom INR",
+        "platform": "website",
+        "profile_url": f"https://example.com/custom_inr_{uuid.uuid4().hex[:6]}"
+    }), content_type="application/json")
+
+    assert res.status_code == 200
+    data = res.get_json()
+    # ₹75.50 = 7550 paise
+    assert data["amount"] == 7550
+    assert data["currency"] == "INR"
+
+
 
 
 
